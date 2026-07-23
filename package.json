@@ -1,7 +1,7 @@
 {
   "name": "aux-command",
   "version": "0.1.0",
-  "description": "Auxillo's Linux-native remote operations workstation for SSH, SFTP, tunnels, RDP, VNC, Mosh, Telnet, serial consoles and local shells.",
+  "description": "Auxillo's Linux-native remote operations workstation for SSH, SFTP, FTP, FTPS, tunnels, RDP, VNC, Mosh, Telnet, serial consoles and local shells.",
   "main": "src/main/index.cjs",
   "desktopName": "aux-command.desktop",
   "author": "Auxillo <https://auxillo.tech>",
@@ -28,6 +28,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "6.0.0",
+    "basic-ftp": "6.0.1",
     "electron-updater": "6.8.9",
     "ssh2": "1.17.0"
   },
@@ -75,7 +76,7 @@
       "syncDesktopName": true,
       "category": "Network",
       "synopsis": "Secure remote operations workstation",
-      "description": "Manage SSH, SFTP, tunnels, RDP, VNC, Mosh, Telnet and serial sessions from one Linux desktop application.",
+      "description": "Manage SSH, SFTP, FTP, FTPS, tunnels, RDP, VNC, Mosh, Telnet and serial sessions from one Linux desktop application.",
       "icon": "build/icons",
       "target": [
         {
@@ -121,6 +122,8 @@
   "keywords": [
     "ssh",
     "sftp",
+    "ftp",
+    "ftps",
     "terminal",
     "linux",
     "rdp",

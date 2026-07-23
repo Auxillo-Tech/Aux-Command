@@ -56,7 +56,7 @@ test('tunnel feedback distinguishes starting from evidence-backed running', () =
 test('session controls derive enabled state from active protocol and tab count', () => {
   assert.equal((renderer.match(/function updateSessionActions\(\)/gu) || []).length, 1);
   assert.match(renderer, /function updateSessionActions\(\)/u);
-  assert.match(renderer, /elements\.sftpToggle\.disabled = !ssh/u);
+  assert.match(renderer, /elements\.sftpToggle\.disabled = !fileTransfer/u);
   assert.match(renderer, /elements\.broadcastToggle\.disabled = tabCount < 2/u);
 });
 
@@ -115,10 +115,19 @@ test('primary text inputs have explicit accessible names and motion can be reduc
 });
 
 test('welcome copy advertises every supported quick-connect protocol', () => {
-  assert.match(indexHtml, /SSH, Mosh, Telnet, RDP, VNC or serial/u);
+  assert.match(indexHtml, /SSH, Mosh, Telnet, FTP, FTPS, RDP, VNC or serial/u);
+  assert.match(indexHtml, /<option value="ftp">FTP<\/option>/u);
+  assert.match(indexHtml, /<option value="ftps">FTPS<\/option>/u);
   assert.match(indexHtml, /<option value="serial">Serial<\/option>/u);
   assert.match(renderer, /if \(protocol === 'serial'\) \{/u);
   assert.match(renderer, /device: value/u);
+});
+
+test('renderer routes FTP and FTPS profiles to the file browser with insecure FTP warning', () => {
+  assert.match(renderer, /function isFileTransferProfile\(profile\)/u);
+  assert.match(renderer, /profile\.protocol === 'ftp' \|\| profile\.protocol === 'ftps'/u);
+  assert.match(renderer, /Plain FTP is not encrypted/u);
+  assert.match(renderer, /Opening FTP file browser/u);
 });
 
 test('renderer exposes a command snippets manager that can run snippets in the active terminal', () => {
@@ -317,6 +326,13 @@ test('graphical SFTP exposes drag-and-drop upload with main-process path validat
   assert.match(renderer, /function bindSftpDragAndDrop\(\)/u);
   assert.match(renderer, /handleSftpDrop\(event\)/u);
   assert.match(renderer, /Drag files here to upload/u);
+});
+
+test('main process routes FTP and FTPS profiles through the FTP service', () => {
+  assert.match(ipc, /function fileTransferServiceFor\(profile, sftpService, ftpService\)/u);
+  assert.match(ipc, /profile\?\.protocol === 'ftp' \|\| profile\?\.protocol === 'ftps'/u);
+  assert.match(ipc, /fileTransferServiceFor\(profile, sftpService, ftpService\)\.list\(profile, remotePath\)/u);
+  assert.match(ipc, /sftp:upload-paths/u);
 });
 
 test('UI separates session navigation from contextual commands and labels global actions', () => {

@@ -354,6 +354,10 @@
     return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
   }
 
+  function isFileTransferProfile(profile) {
+    return profile?.protocol === 'ssh' || profile?.protocol === 'ftp' || profile?.protocol === 'ftps';
+  }
+
   function normalizeRemotePath(raw) {
     const parts = String(raw || '/').replaceAll('\\', '/').split('/');
     const stack = [];
@@ -741,6 +745,28 @@
       return;
     }
 
+    if (profile.protocol === 'ftp' || profile.protocol === 'ftps') {
+      if (profile.protocol === 'ftp') {
+        const confirmed = await confirmAction({
+          title: 'Open insecure FTP?',
+          message: 'Plain FTP is not encrypted. Credentials and file contents can be observed on the network. Use FTPS unless this is a trusted legacy target.',
+          confirmLabel: 'Open FTP file browser'
+        });
+        if (!confirmed) return;
+      }
+      state.sftp.open = true;
+      state.sftp.profile = profile;
+      state.sftp.ownerTabId = '';
+      elements.appShell.classList.add('sftp-open');
+      elements.sftpPanel.setAttribute('aria-hidden', 'false');
+      elements.sftpTitle.textContent = `${profile.name} · ${profile.protocol.toUpperCase()}`;
+      const openingTitle = profile.protocol === 'ftp' ? 'Opening FTP file browser' : 'Opening FTPS file browser';
+      toast(openingTitle, profile.host, profile.protocol === 'ftp' ? 'info' : 'success');
+      await loadSftp(profile.sftpRoot || '/');
+      updateSessionActions();
+      return;
+    }
+
     if (!window.Terminal || !window.FitAddon?.FitAddon || !window.SearchAddon?.SearchAddon) {
       toast('Terminal runtime unavailable', 'Install dependencies with npm install before starting Aux Command.', 'error');
       return;
@@ -1109,7 +1135,7 @@
   function updateSessionActions() {
     const tab = activeTab();
     const tabCount = state.tabs.size;
-    const ssh = tab?.profile?.protocol === 'ssh';
+    const fileTransfer = isFileTransferProfile(tab?.profile);
     elements.layoutToggle.disabled = tabCount < 2 && state.layout !== 'grid';
     elements.broadcastToggle.disabled = tabCount < 2;
     elements.terminalSearchToggle.disabled = !tab;
@@ -1124,8 +1150,9 @@
     elements.reconnectSessionButton.disabled = !tab;
     elements.paneShrinkButton.disabled = state.layout !== 'grid';
     elements.paneGrowButton.disabled = state.layout !== 'grid';
-    elements.sftpToggle.disabled = !ssh;
-    elements.sftpToggle.title = ssh ? 'Toggle SFTP panel (Ctrl+Shift+F)' : 'SFTP requires an active SSH session';
+    elements.sftpToggle.disabled = !fileTransfer;
+    elements.sftpToggle.textContent = tab?.profile?.protocol === 'ftp' || tab?.profile?.protocol === 'ftps' ? 'Files' : 'SFTP';
+    elements.sftpToggle.title = fileTransfer ? 'Toggle file browser (Ctrl+Shift+F)' : 'File browser requires an SSH, FTP, or FTPS session';
   }
 
   function applyTerminalLayout() {
@@ -1399,7 +1426,7 @@
     if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(value)) {
       const url = new URL(value);
       protocol = url.protocol.replace(':', '').toLowerCase();
-      if (!['ssh', 'mosh', 'telnet', 'rdp', 'vnc'].includes(protocol)) throw new Error(`Unsupported protocol: ${protocol}`);
+      if (!['ssh', 'mosh', 'telnet', 'ftp', 'ftps', 'rdp', 'vnc'].includes(protocol)) throw new Error(`Unsupported protocol: ${protocol}`);
       username = decodeURIComponent(url.username || '');
       host = url.hostname;
       port = url.port ? Number(url.port) : 0;
@@ -1427,7 +1454,7 @@
       }
     }
     if (!host) throw new Error('A hostname is required');
-    const defaultPorts = { ssh: 22, mosh: 22, telnet: 23, rdp: 3389, vnc: 5900 };
+    const defaultPorts = { ssh: 22, mosh: 22, telnet: 23, ftp: 21, ftps: 990, rdp: 3389, vnc: 5900 };
     return {
       id: self.crypto.randomUUID(),
       name: `${protocol.toUpperCase()} · ${host}`,
@@ -1484,7 +1511,7 @@
     };
     const hasCredential = profile.credentialId ? await api.vault.has(profile.credentialId).catch(() => false) : false;
     const protocol = selectInput('protocol', [
-      ['ssh', 'SSH'], ['mosh', 'Mosh'], ['rdp', 'RDP'], ['vnc', 'VNC'], ['telnet', 'Telnet'], ['serial', 'Serial'], ['local', 'Local shell']
+      ['ssh', 'SSH'], ['mosh', 'Mosh'], ['ftp', 'FTP'], ['ftps', 'FTPS'], ['rdp', 'RDP'], ['vnc', 'VNC'], ['telnet', 'Telnet'], ['serial', 'Serial'], ['local', 'Local shell']
     ], profile.protocol);
     if (existing?.id === 'local-shell') protocol.disabled = true;
     const name = textInput('name', profile.name, { required: true, placeholder: 'Production gateway' });
@@ -1515,7 +1542,7 @@
     const credentialKind = selectInput('credentialKind', [
       ['password', 'Account password'], ['passphrase', 'Private-key passphrase']
     ], profile.credentialKind || (profile.identityFile ? 'passphrase' : 'password'));
-    const secret = textInput('secret', '', { type: 'password', autocomplete: 'new-password', placeholder: hasCredential ? 'Stored credential exists — leave blank to keep' : 'Optional SFTP credential' });
+    const secret = textInput('secret', '', { type: 'password', autocomplete: 'new-password', placeholder: hasCredential ? 'Stored credential exists — leave blank to keep' : 'Optional file-transfer credential' });
     const persistentAvailable = Boolean(state.vault?.persistentEncryptionAvailable);
 
     const optionsRow = node('div', { className: 'checkbox-row full', attrs: { 'data-when': 'ssh,mosh' } }, [
@@ -1524,9 +1551,9 @@
       checkbox('agentForwarding', 'Agent forwarding', profile.agentForwarding),
       checkbox('x11Forwarding', 'X11 forwarding', profile.x11Forwarding)
     ]);
-    const credentialRow = node('div', { className: 'credential-grid full', attrs: { 'data-when': 'ssh' } }, [
+    const credentialRow = node('div', { className: 'credential-grid full', attrs: { 'data-when': 'ssh,ftp,ftps' } }, [
       field('Credential type', credentialKind, 'Prevents a private-key passphrase from being sent as an account password.'),
-      field('SFTP credential', secret, 'Used only by graphical SFTP. Terminal SSH authentication remains interactive through OpenSSH.'),
+      field('File-transfer credential', secret, 'Used by graphical SFTP/FTP/FTPS. Terminal SSH authentication remains interactive through OpenSSH.'),
       node('div', { className: 'checkbox-column' }, [
         checkbox('persistentSecret', persistentAvailable ? 'Store encrypted on this desktop' : 'Encrypted storage unavailable', persistentAvailable, !persistentAvailable),
         hasCredential ? checkbox('clearSecret', 'Remove stored credential', false) : null
@@ -1561,13 +1588,13 @@
     ]);
 
     const conditional = new Map([
-      [host.closest('.field'), 'ssh,mosh,rdp,vnc,telnet'],
-      [port.closest('.field'), 'ssh,mosh,rdp,vnc,telnet'],
-      [username.closest('.field'), 'ssh,mosh,rdp'],
+      [host.closest('.field'), 'ssh,mosh,rdp,vnc,telnet,ftp,ftps'],
+      [port.closest('.field'), 'ssh,mosh,rdp,vnc,telnet,ftp,ftps'],
+      [username.closest('.field'), 'ssh,mosh,rdp,ftp,ftps'],
       [identityFile.closest('.field'), 'ssh,mosh'],
       [proxyJump.closest('.field'), 'ssh'],
       [keepAlive.closest('.field'), 'ssh'],
-      [sftpRoot.closest('.field'), 'ssh'],
+      [sftpRoot.closest('.field'), 'ssh,ftp,ftps'],
       [device.closest('.field'), 'serial'],
       [baudRate.closest('.field'), 'serial'],
       [rdpDomain.closest('.field'), 'rdp'],
@@ -1582,9 +1609,9 @@
         element.hidden = !visible;
         element.querySelectorAll('input, select, textarea').forEach((control) => { control.disabled = !visible; });
       }
-      const defaultPorts = { ssh: 22, mosh: 22, telnet: 23, rdp: 3389, vnc: 5900 };
+      const defaultPorts = { ssh: 22, mosh: 22, telnet: 23, ftp: 21, ftps: 990, rdp: 3389, vnc: 5900 };
       if (defaultPorts[selected] && (!port.value || Object.values(defaultPorts).includes(Number(port.value)))) port.value = defaultPorts[selected];
-      host.required = ['ssh', 'mosh', 'rdp', 'vnc', 'telnet'].includes(selected);
+      host.required = ['ssh', 'mosh', 'rdp', 'vnc', 'telnet', 'ftp', 'ftps'].includes(selected);
     };
     protocol.addEventListener('change', updateConditionalFields);
     updateConditionalFields();
@@ -2018,7 +2045,7 @@
     if (options.reset) resetSftpState(options.message, options.status);
     if (!profileId) return;
     try {
-      await api.sftp.disconnect(profileId);
+      await api.sftp.disconnect(profileId, profile?.protocol);
     } catch (error) {
       toast('SFTP disconnect failed', errorMessage(error), 'error');
     }
@@ -2036,8 +2063,8 @@
       return;
     }
     const tab = activeTab();
-    if (!tab || tab.profile.protocol !== 'ssh') {
-      toast('SFTP requires an SSH session', 'Activate an SSH tab before opening the file browser.', 'error');
+    if (!tab || !isFileTransferProfile(tab.profile)) {
+      toast('File browser unavailable', 'Activate an SSH, FTP, or FTPS session before opening the file browser.', 'error');
       return;
     }
     state.sftp.open = true;
@@ -2052,9 +2079,9 @@
     const syncToken = ++state.sftp.syncToken;
     const tab = activeTab();
     const previousProfile = state.sftp.profile;
-    if (!tab || tab.profile.protocol !== 'ssh') {
-      if (previousProfile) await disconnectSftp(previousProfile, { reset: true, message: 'Activate an SSH session to browse files.' });
-      else resetSftpState('Activate an SSH session to browse files.');
+    if (!tab || !isFileTransferProfile(tab.profile)) {
+      if (previousProfile) await disconnectSftp(previousProfile, { reset: true, message: 'Activate an SSH, FTP, or FTPS session to browse files.' });
+      else resetSftpState('Activate an SSH, FTP, or FTPS session to browse files.');
       return;
     }
     const profileChanged = previousProfile?.id !== tab.profile.id;
@@ -2064,7 +2091,7 @@
     }
     state.sftp.profile = tab.profile;
     state.sftp.ownerTabId = tab.id;
-    elements.sftpTitle.textContent = tab.profile.name;
+    elements.sftpTitle.textContent = `${tab.profile.name} · ${tab.profile.protocol.toUpperCase()}`;
     await loadSftp(profileChanged ? (tab.profile.sftpRoot || '/') : state.sftp.path);
   }
 

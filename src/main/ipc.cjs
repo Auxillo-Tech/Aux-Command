@@ -15,6 +15,7 @@ function registerIpc({
   externalService,
   tunnelService,
   sftpService,
+  ftpService,
   vaultService,
   promptBroker,
   systemService,
@@ -132,18 +133,18 @@ function registerIpc({
   handle('tunnel:stop', (id) => tunnelService.stop(id));
   handle('tunnel:list', () => tunnelService.list());
 
-  handle('sftp:list', (profile, remotePath) => sftpService.list(profile, remotePath));
-  handle('sftp:mkdir', (profile, remotePath) => sftpService.mkdir(profile, remotePath));
-  handle('sftp:rename', (profile, oldPath, newPath) => sftpService.rename(profile, oldPath, newPath));
-  handle('sftp:remove', (profile, remotePath, directory) => sftpService.remove(profile, remotePath, directory));
-  handle('sftp:read-text', (profile, remotePath) => sftpService.readText(profile, remotePath));
-  handle('sftp:write-text', (profile, remotePath, content) => sftpService.writeText(profile, remotePath, content));
+  handle('sftp:list', (profile, remotePath) => fileTransferServiceFor(profile, sftpService, ftpService).list(profile, remotePath));
+  handle('sftp:mkdir', (profile, remotePath) => fileTransferServiceFor(profile, sftpService, ftpService).mkdir(profile, remotePath));
+  handle('sftp:rename', (profile, oldPath, newPath) => fileTransferServiceFor(profile, sftpService, ftpService).rename(profile, oldPath, newPath));
+  handle('sftp:remove', (profile, remotePath, directory) => fileTransferServiceFor(profile, sftpService, ftpService).remove(profile, remotePath, directory));
+  handle('sftp:read-text', (profile, remotePath) => fileTransferServiceFor(profile, sftpService, ftpService).readText(profile, remotePath));
+  handle('sftp:write-text', (profile, remotePath, content) => fileTransferServiceFor(profile, sftpService, ftpService).writeText(profile, remotePath, content));
   handle('sftp:upload', async (profile, remoteDirectory) => {
     const result = await dialog.showOpenDialog(getWindow(), { title: 'Select file to upload', properties: ['openFile'] });
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
     const localPath = result.filePaths[0];
     const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-    await sftpService.upload(profile, localPath, remotePath);
+    await fileTransferServiceFor(profile, sftpService, ftpService).upload(profile, localPath, remotePath);
     return { canceled: false, localPath, remotePath };
   });
   handle('sftp:upload-paths', async (profile, remoteDirectory, localPaths) => {
@@ -152,7 +153,7 @@ function registerIpc({
     for (const localPath of localPaths.slice(0, 32)) {
       if (typeof localPath !== 'string' || !path.isAbsolute(localPath)) throw new Error('Dropped upload paths must be absolute local files');
       const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-      await sftpService.upload(profile, localPath, remotePath);
+      await fileTransferServiceFor(profile, sftpService, ftpService).upload(profile, localPath, remotePath);
       uploaded.push({ localPath, remotePath });
     }
     return { uploaded };
@@ -163,10 +164,10 @@ function registerIpc({
       defaultPath: path.join(app.getPath('downloads'), path.posix.basename(remotePath))
     });
     if (result.canceled || !result.filePath) return { canceled: true };
-    await sftpService.download(profile, remotePath, result.filePath);
+    await fileTransferServiceFor(profile, sftpService, ftpService).download(profile, remotePath, result.filePath);
     return { canceled: false, localPath: result.filePath };
   });
-  handle('sftp:disconnect', (profileId) => sftpService.disconnect(profileId));
+  handle('sftp:disconnect', (profileId, protocol) => protocol === 'ftp' || protocol === 'ftps' ? ftpService.disconnect(profileId) : sftpService.disconnect(profileId));
 
   handle('vault:status', () => vaultService.status());
   handle('vault:has', (id) => vaultService.has(id));
@@ -187,6 +188,10 @@ function registerIpc({
     return true;
   });
   handle('system:open-website', () => shell.openExternal('https://auxillo.tech'));
+}
+
+function fileTransferServiceFor(profile, sftpService, ftpService) {
+  return profile?.protocol === 'ftp' || profile?.protocol === 'ftps' ? ftpService : sftpService;
 }
 
 function escapeHtml(value) {

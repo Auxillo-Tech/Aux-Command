@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { randomUUID } = require('node:crypto');
 
-const PROTOCOLS = new Set(['local', 'ssh', 'mosh', 'telnet', 'serial', 'rdp', 'vnc']);
+const PROTOCOLS = new Set(['local', 'ssh', 'mosh', 'telnet', 'serial', 'ftp', 'ftps', 'rdp', 'vnc']);
 const TUNNEL_TYPES = new Set(['local', 'remote', 'dynamic']);
 const CREDENTIAL_KINDS = new Set(['password', 'passphrase']);
 const TERMINAL_THEMES = new Set(['aux-dark', 'light', 'high-contrast']);
@@ -92,7 +92,7 @@ function normalizeProfile(input = {}, existingId = '') {
     protocol,
     group: cleanString(input.group || 'Connections', 'group', { max: 80 }) || 'Connections',
     host: rejectOptionLike(cleanString(input.host, 'host', { required: !['local', 'serial'].includes(protocol), max: 255 }), 'host', { rejectWhitespace: true }),
-    port: protocol === 'local' ? 0 : cleanPort(input.port, 'port', protocol === 'rdp' ? 3389 : protocol === 'vnc' ? 5900 : protocol === 'telnet' ? 23 : 22),
+    port: protocol === 'local' ? 0 : cleanPort(input.port, 'port', protocol === 'rdp' ? 3389 : protocol === 'vnc' ? 5900 : protocol === 'telnet' ? 23 : protocol === 'ftp' ? 21 : protocol === 'ftps' ? 990 : 22),
     username: rejectOptionLike(cleanString(input.username, 'username', { max: 128 }), 'username'),
     identityFile,
     knownHostsFile,

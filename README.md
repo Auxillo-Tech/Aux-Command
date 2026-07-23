@@ -164,6 +164,14 @@ Install optional runtime tools with:
 - Unsafe Electron `basic_text` secret storage is rejected.
 - Profile exports omit secrets and credential identifiers.
 
+### FTP / FTPS
+
+- FTP and FTPS file-browser profiles backed by `basic-ftp`.
+- FTPS uses encrypted TLS transport.
+- Plain FTP is guarded by an explicit insecure-transport warning because credentials and file contents are not encrypted.
+- FTP/FTPS reuse the graphical file-browser operations for browse, upload, drag-and-drop upload, download, inline UTF-8 text edit, mkdir, rename, and delete.
+- Persistent FTP/FTPS secrets use the same encrypted Linux safe-storage checks as SFTP secrets.
+
 ### SSH tunnels
 
 - Local forwards.
