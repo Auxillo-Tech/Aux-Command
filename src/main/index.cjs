@@ -136,6 +136,7 @@ function initializeServices() {
 
   registerIpc({
     ipcMain,
+    BrowserWindow,
     dialog,
     clipboard,
     shell,
