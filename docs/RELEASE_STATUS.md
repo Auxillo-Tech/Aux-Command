@@ -1,6 +1,6 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T12:12:27Z**
+Validated: **2026-07-23T16:26:43Z**
 Scope: **Free/open-source Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
@@ -34,8 +34,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **119/119 tests passed**
-- JavaScript syntax: 50 files passed
+- `npm run check`: **124/124 tests passed**
+- JavaScript syntax: 52 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
 - `npm audit --omit=dev --audit-level=moderate`: zero vulnerabilities
@@ -86,6 +86,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
 - Graphical SFTP supports drag-and-drop local file upload through Electron `webUtils.getPathForFile` and a main-process absolute-path validation gate.
+- FTP and FTPS profiles now use the graphical file-browser flow through `basic-ftp`; plain FTP is guarded by an explicit insecure-transport warning before credentials or files are sent.
 - SFTP now clears stale directory selections and ignores late responses when switching profiles or paths, so transfers/actions cannot target the wrong SSH profile after a fast tab switch.
 - Workstation tiled/single layout and pane-size toolbar choices persist through a validated local settings store.
 - CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.

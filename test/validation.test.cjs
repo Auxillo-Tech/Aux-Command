@@ -40,8 +40,17 @@ test('serial profiles require a device', () => {
 });
 
 test('rejects unsupported protocols and invalid ports', () => {
-  assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'ftp', host: 'host' }), /unsupported protocol/u);
+  assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'smtp', host: 'mail' }), /unsupported protocol/u);
   assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'ssh', host: 'host', port: 70000 }), /between 1 and 65535/u);
+});
+
+test('normalizes FTP and FTPS file-transfer profiles', () => {
+  const ftp = normalizeProfile({ name: 'FTP', protocol: 'ftp', host: 'ftp.example' });
+  const ftps = normalizeProfile({ name: 'FTPS', protocol: 'ftps', host: 'secure.example' });
+  assert.equal(ftp.port, 21);
+  assert.equal(ftps.port, 990);
+  assert.equal(ftp.sftpRoot, '/');
+  assert.equal(ftps.sftpRoot, '/');
 });
 
 test('preserves supplied timestamps while stores can explicitly update them', () => {

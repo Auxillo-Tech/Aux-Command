@@ -16,6 +16,7 @@ const { ProfileStore } = require('./lib/profile-store.cjs');
 const { SettingsStore } = require('./lib/settings-store.cjs');
 const { PromptBroker } = require('./lib/prompt-broker.cjs');
 const { ExternalService } = require('./services/external-service.cjs');
+const { FtpService } = require('./services/ftp-service.cjs');
 const { KnownHostService } = require('./services/known-host-service.cjs');
 const { SftpService } = require('./services/sftp-service.cjs');
 const { SystemService } = require('./services/system-service.cjs');
@@ -116,6 +117,7 @@ function initializeServices() {
   const terminalService = new TerminalService(getWindow);
   const tunnelService = new TunnelService(profileStore, getWindow);
   const sftpService = new SftpService(vaultService, knownHostService, promptBroker, getWindow);
+  const ftpService = new FtpService(vaultService, getWindow);
   const externalService = new ExternalService();
   const systemService = new SystemService();
   const updateService = new UpdateService(app, getWindow);
@@ -129,6 +131,7 @@ function initializeServices() {
     terminalService,
     tunnelService,
     sftpService,
+    ftpService,
     externalService,
     systemService,
     updateService
@@ -169,6 +172,7 @@ app.on('before-quit', () => {
   services?.terminalService.closeAll();
   services?.tunnelService.stopAll();
   services?.sftpService.disconnectAll();
+  services?.ftpService.disconnectAll();
   services?.vaultService.clearMemory();
   services?.promptBroker.cancelAll();
 });
