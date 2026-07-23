@@ -10,6 +10,7 @@ const renderer = fs.readFileSync(path.join(root, 'src/renderer/renderer.js'), 'u
 const indexHtml = fs.readFileSync(path.join(root, 'src/renderer/index.html'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'src/renderer/styles.css'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'src/preload/index.cjs'), 'utf8');
+const logoPng = fs.statSync(path.join(root, 'src/renderer/assets/logo.png'));
 
 test('renderer reattaches or closes existing main-process terminal sessions after reload', () => {
   assert.match(renderer, /function restoreInitialSessions\(sessions = \[\]\)/u);
@@ -126,6 +127,12 @@ test('renderer exposes a command snippets manager that can run snippets in the a
   assert.match(renderer, /api\.terminal\.write\(tab\.id, `\$\{snippet\.command\}\\r`\)/u);
   assert.match(renderer, /api\.snippets\.save/u);
   assert.match(renderer, /api\.snippets\.delete/u);
+});
+
+test('renderer uses the supplied Auxillo logo raster asset', () => {
+  assert.match(indexHtml, /src="\.\/assets\/logo\.png"/u);
+  assert.doesNotMatch(indexHtml, /logo\.svg/u);
+  assert.ok(logoPng.size > 1024, 'logo asset should be a real PNG, not a placeholder');
 });
 
 test('renderer exposes a tiled multi-session layout for split-pane operations', () => {
