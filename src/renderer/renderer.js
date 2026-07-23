@@ -375,6 +375,17 @@
     return node('label', {}, [input, node('span', { text })]);
   }
 
+  function modalFocusableElements(modal) {
+    return [...modal.querySelectorAll('button:not([disabled]):not([hidden]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+  }
+
+  function isEditableShortcutTarget(target) {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('[contenteditable=""], [contenteditable="true"]')) return true;
+    return target.matches('input, textarea, select');
+  }
+
   function showModal({ title, description = '', body, className = '', closeable = true, actions = [] }) {
     const previousFocus = document.activeElement;
     const backdrop = node('div', { className: 'modal-backdrop' });
@@ -386,7 +397,7 @@
       node('h2', { text: title }),
       description ? node('p', { text: description }) : null
     ]);
-    const closeButton = node('button', { type: 'button', className: 'modal-close', text: '×', title: 'Close' });
+    const closeButton = node('button', { type: 'button', className: 'modal-close', text: '×', title: 'Close', attrs: { 'aria-label': 'Close dialog' } });
     if (!closeable) closeButton.hidden = true;
     const header = node('header', { className: 'modal-header' }, [headerCopy, closeButton]);
     const bodyElement = node('div', { className: 'modal-body' }, body);
@@ -437,8 +448,7 @@
 
     modal.addEventListener('keydown', (event) => {
       if (event.key !== 'Tab') return;
-      const focusable = [...modal.querySelectorAll('button:not([disabled]):not([hidden]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-        .filter((element) => !element.hidden);
+      const focusable = modalFocusableElements(modal);
       if (!focusable.length) {
         event.preventDefault();
         modal.focus();
@@ -478,7 +488,7 @@
     }
 
     window.setTimeout(() => {
-      const focusTarget = modal.querySelector('[autofocus], input:not([type="hidden"]), select, textarea, button');
+      const focusTarget = modal.querySelector('[autofocus]:not([disabled]):not([hidden])') || modalFocusableElements(modal)[0];
       focusTarget?.focus();
     }, 0);
 
@@ -1651,23 +1661,45 @@
 
   async function openCommandPalette() {
     try { await refreshSnippets(); } catch { /* palette can still show static actions and profiles */ }
-    const input = node('input', { type: 'search', placeholder: 'Search actions, profiles, snippets…', attrs: { 'aria-label': 'Search command palette', spellcheck: 'false' } });
-    const list = node('div', { className: 'palette-list' });
+    const listId = `palette-list-${self.crypto.randomUUID()}`;
+    const input = node('input', {
+      type: 'search',
+      placeholder: 'Search actions, profiles, snippets…',
+      attrs: {
+        'aria-label': 'Search command palette',
+        'aria-controls': listId,
+        'aria-expanded': 'true',
+        role: 'combobox',
+        spellcheck: 'false'
+      }
+    });
+    const list = node('div', { id: listId, className: 'palette-list', attrs: { role: 'listbox' } });
     const body = node('div', { className: 'palette-shell' }, [input, list]);
     let controller;
+    const updatePaletteSelection = (rows, selectedIndex) => {
+      rows.forEach((row, index) => {
+        const selected = index === selectedIndex;
+        row.classList.toggle('selected', selected);
+        row.setAttribute('aria-selected', selected ? 'true' : 'false');
+        if (selected) input.setAttribute('aria-activedescendant', row.id);
+      });
+      if (!rows.length) input.removeAttribute('aria-activedescendant');
+    };
     const render = () => {
       const query = input.value.trim().toLowerCase();
       const actions = paletteActions().filter((action) => `${action.label} ${action.category} ${action.detail}`.toLowerCase().includes(query)).slice(0, 80);
       list.replaceChildren();
       if (!actions.length) {
+        input.removeAttribute('aria-activedescendant');
         list.append(node('div', { className: 'list-empty', text: 'No matching commands.' }));
         return;
       }
       for (const [index, action] of actions.entries()) {
         const row = node('button', {
           type: 'button',
+          id: `${listId}-option-${index}`,
           className: `palette-row${index === 0 ? ' selected' : ''}`,
-          attrs: { 'data-action-index': String(index) }
+          attrs: { 'data-action-index': String(index), role: 'option', 'aria-selected': index === 0 ? 'true' : 'false' }
         }, [
           node('span', { className: 'palette-copy' }, [node('strong', { text: action.label }), node('small', { text: action.detail })]),
           node('span', { className: 'palette-category', text: action.category })
@@ -1679,6 +1711,7 @@
         });
         list.append(row);
       }
+      updatePaletteSelection([...list.querySelectorAll('.palette-row')], 0);
     };
     input.addEventListener('input', render);
     input.addEventListener('keydown', (event) => {
@@ -1688,7 +1721,7 @@
         event.preventDefault();
         if (!rows.length) return;
         const next = event.key === 'ArrowDown' ? Math.min(rows.length - 1, current + 1) : Math.max(0, current - 1);
-        rows.forEach((row, index) => row.classList.toggle('selected', index === next));
+        updatePaletteSelection(rows, next);
         rows[next]?.scrollIntoView({ block: 'nearest' });
       }
       if (event.key === 'Enter') {
@@ -2269,6 +2302,7 @@
     window.addEventListener('keydown', (event) => {
       const modalOpen = Boolean(elements.modalRoot.querySelector('.modal-backdrop'));
       if (modalOpen && event.key !== 'Escape') return;
+      if (isEditableShortcutTarget(event.target)) return;
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === 'k') {
         event.preventDefault();
