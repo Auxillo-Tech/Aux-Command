@@ -80,6 +80,18 @@ function registerIpc({
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
   handle('terminal:export-transcript', (id) => terminalService.exportTranscript(id));
+  handle('terminal:save-transcript', async (id) => {
+    const transcript = terminalService.exportTranscript(id);
+    const safeTitle = String(transcript.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
+    const result = await dialog.showSaveDialog(getWindow(), {
+      title: 'Save terminal transcript',
+      defaultPath: path.join(app.getPath('documents'), `${safeTitle}-transcript.txt`),
+      filters: [{ name: 'Text files', extensions: ['txt', 'log'] }]
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    systemService.writeTextFile(result.filePath, transcript.text || '');
+    return { canceled: false, filePath: result.filePath, bytes: Buffer.byteLength(transcript.text || '', 'utf8') };
+  });
   handle('terminal:start-logging', async (id) => {
     const session = terminalService.exportTranscript(id);
     const safeTitle = String(session.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';

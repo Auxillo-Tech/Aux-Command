@@ -12,7 +12,7 @@
 
 ### Added
 
-- Added active-session terminal transcript export with bounded main-process transcript capture and a renderer review/copy modal.
+- Added active-session terminal transcript export with bounded main-process transcript capture and a renderer review/copy/save modal.
 - Added explicit per-session terminal logging with a renderer Log/Stop log control, local save dialog, bounded transcript backfill, and mode `0600` log files.
 - Added per-profile terminal appearance controls for theme, font stack, font size, cursor style, cursor blink, and scrollback depth.
 - Added Serial to Quick Connect with `/dev/...` device-path handling.

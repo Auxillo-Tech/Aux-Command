@@ -197,8 +197,11 @@ test('renderer exposes terminal search using xterm search addon and shortcuts', 
 test('renderer exposes terminal transcript export from the session toolbar', () => {
   assert.match(indexHtml, /id="export-transcript-button"/u);
   assert.match(preload, /exportTranscript: \(id\) => invoke\('terminal:export-transcript', id\)/u);
+  assert.match(preload, /saveTranscript: \(id\) => invoke\('terminal:save-transcript', id\)/u);
   assert.match(renderer, /async function exportActiveTranscript\(\)/u);
   assert.match(renderer, /await api\.terminal\.exportTranscript\(tab\.id\)/u);
+  assert.match(renderer, /await api\.terminal\.saveTranscript\(tab\.id\)/u);
+  assert.match(renderer, /Save transcript/u);
 });
 
 test('renderer exposes explicit terminal logging controls from the session toolbar', () => {

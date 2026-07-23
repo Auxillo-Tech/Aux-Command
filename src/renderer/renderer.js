@@ -1000,6 +1000,11 @@
           toast('Transcript copied', `${output.value.length} characters copied to clipboard.`, 'success');
           return false;
         } },
+        { label: 'Save transcript', busy: false, run: async () => {
+          const result = await api.terminal.saveTranscript(tab.id);
+          if (!result?.canceled) toast('Transcript saved', result.filePath, 'success');
+          return false;
+        } },
         { label: 'Close', busy: false }
       ]
     });
