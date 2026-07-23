@@ -217,6 +217,16 @@ test('renderer exposes explicit terminal logging controls from the session toolb
   assert.match(renderer, /Terminal logs may capture secrets/u);
 });
 
+test('renderer exposes guarded macro recording and replay through snippets', () => {
+  assert.match(indexHtml, /id="macro-record-button"/u);
+  assert.match(renderer, /macroRecording: null/u);
+  assert.match(renderer, /async function toggleMacroRecording\(\)/u);
+  assert.match(renderer, /Macro recording may capture secrets/u);
+  assert.match(renderer, /recordTerminalMacroInput\(data\)/u);
+  assert.match(renderer, /await api\.snippets\.save\(\{/u);
+  assert.match(renderer, /Macro recorded/u);
+});
+
 test('renderer exposes a command palette for actions, profiles and snippets', () => {
   assert.match(renderer, /function paletteActions\(\)/u);
   assert.match(renderer, /function openCommandPalette\(\)/u);
