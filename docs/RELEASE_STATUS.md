@@ -7,7 +7,7 @@ Scope: **Linux x64 engineering release candidate with GitHub release/update path
 
 The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for the next live-protocol and GitHub-publication phase.
 
-This is **not yet a signed public production release**. GitHub Releases are now configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, but no real GitHub Release has been published from a tag, and artifacts are unsigned. Live endpoint/hardware qualification remains incomplete for optional integrations.
+This is **not yet a signed public production release**. GitHub Releases are now configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, but no real GitHub Release has been published from a tag, artifacts are unsigned, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
 
 ## Distribution decision
 

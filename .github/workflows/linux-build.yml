@@ -41,7 +41,7 @@ jobs:
           npm run release:manifest -- --no-sign
           npm run release:verify -- --allow-unsigned
       - name: Attest build provenance
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.event.repository.private == false
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: |

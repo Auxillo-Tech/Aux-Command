@@ -33,7 +33,7 @@ Aux Command desktop release artifacts are distributed from GitHub Releases, not 
 3. Push the repository source.
 4. Create and push an immutable semver tag, for example `v0.1.0`.
 5. Let the `release` workflow build artifacts from the tag.
-6. Review workflow logs, uploaded artifacts, `release-manifest.json`, `SHA256SUMS`, and attestations.
+6. Review workflow logs, uploaded artifacts, `release-manifest.json`, `SHA256SUMS`, and attestations when the repository is public and GitHub enables artifact attestations for the org plan.
 7. Publish the drafted GitHub Release only after the artifact set and release notes are correct.
 
 ## Manual local verification commands
@@ -53,4 +53,4 @@ npm run release:verify -- --allow-unsigned
 
 ## Remaining trust gap
 
-The current release path is checksum-verified and GitHub-attested when run in Actions, but it is still unsigned unless an Auxillo-controlled signing key is configured. Checksums detect corruption; signatures authenticate publisher identity. Public production should not be called fully authenticated until signing is implemented and documented.
+The current release path is checksum-verified in Actions. GitHub artifact attestations are enabled only when the repository/org plan supports them; this private repository currently skips attestation because GitHub reports the feature unavailable. The release is still unsigned unless an Auxillo-controlled signing key is configured. Checksums detect corruption; signatures authenticate publisher identity. Public production should not be called fully authenticated until signing is implemented and documented.
