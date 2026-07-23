@@ -4,6 +4,7 @@ const path = require('node:path');
 
 function registerIpc({
   ipcMain,
+  BrowserWindow,
   dialog,
   clipboard,
   shell,
@@ -92,6 +93,26 @@ function registerIpc({
     systemService.writeTextFile(result.filePath, transcript.text || '');
     return { canceled: false, filePath: result.filePath, bytes: Buffer.byteLength(transcript.text || '', 'utf8') };
   });
+  handle('terminal:print-transcript', async (id) => {
+    const transcript = terminalService.exportTranscript(id);
+    const title = `${transcript.title || 'Terminal'} transcript`;
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+    try {
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#111}pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.4}header{border-bottom:1px solid #ccc;margin-bottom:16px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px}.meta{font-size:12px;color:#555}</style></head><body><header><h1>${escapeHtml(title)}</h1><div class="meta">${escapeHtml(transcript.exportedAt || new Date().toISOString())}</div></header><pre>${escapeHtml(transcript.text || '')}</pre></body></html>`;
+      await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const printed = await win.webContents.print({ silent: false, printBackground: true });
+      return { printed: Boolean(printed) };
+    } finally {
+      if (!win.isDestroyed()) win.destroy();
+    }
+  });
   handle('terminal:start-logging', async (id) => {
     const session = terminalService.exportTranscript(id);
     const safeTitle = String(session.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
@@ -155,6 +176,16 @@ function registerIpc({
     return true;
   });
   handle('system:open-website', () => shell.openExternal('https://auxillo.tech'));
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/gu, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
 }
 
 module.exports = { registerIpc };

@@ -1005,6 +1005,11 @@
           if (!result?.canceled) toast('Transcript saved', result.filePath, 'success');
           return false;
         } },
+        { label: 'Print transcript', busy: false, run: async () => {
+          const result = await api.terminal.printTranscript(tab.id);
+          toast(result?.printed ? 'Print job sent' : 'Print canceled', transcript.title || tab.title, result?.printed ? 'success' : 'info');
+          return false;
+        } },
         { label: 'Close', busy: false }
       ]
     });
