@@ -10,6 +10,7 @@ const mainSource = fs.readFileSync(path.join(root, 'src/main/index.cjs'), 'utf8'
 const ipcSource = fs.readFileSync(path.join(root, 'src/main/ipc.cjs'), 'utf8');
 const preloadSource = fs.readFileSync(path.join(root, 'src/preload/index.cjs'), 'utf8');
 const updateSource = fs.readFileSync(path.join(root, 'src/main/services/update-service.cjs'), 'utf8');
+const smokeSource = fs.readFileSync(path.join(root, 'scripts/e2e-cdp-smoke.py'), 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 test('main process handles renderer crash and hang recovery paths', () => {
@@ -38,6 +39,13 @@ test('main process denies Chromium permission requests by default', () => {
 test('package exposes a CDP soak validation script', () => {
   assert.equal(packageJson.scripts['soak:cdp'], 'python3 scripts/soak-cdp.py');
   assert.equal(fs.existsSync(path.join(root, 'scripts/soak-cdp.py')), true);
+});
+
+test('CDP smoke keeps screenshot capture diagnostic-only', () => {
+  assert.match(smokeSource, /def capture_screenshot\(cdp: CDP\) -> dict:/u);
+  assert.match(smokeSource, /screenshot capture skipped after functional smoke passed/u);
+  assert.match(smokeSource, /screenshotWarning/u);
+  assert.match(smokeSource, /if \(!document\.getElementById\('terminal-stack'\)\.classList\.contains\('layout-grid'\)\)/u);
 });
 
 test('package exposes GitHub release update configuration', () => {

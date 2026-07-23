@@ -124,6 +124,7 @@ test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { sk
       port: fixture.port,
       username: fixture.user,
       identityFile: fixture.clientKey,
+      knownHostsFile: path.join(fixture.directory, 'known_hosts'),
       useSshConfig: false,
       keepAliveSeconds: 0,
       startupCommand: 'printf AUX_SSH_TERMINAL_OK; exit'

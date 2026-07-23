@@ -106,6 +106,9 @@ test('primary text inputs have explicit accessible names and motion can be reduc
 
 test('welcome copy advertises every supported quick-connect protocol', () => {
   assert.match(indexHtml, /SSH, Mosh, Telnet, RDP, VNC or serial/u);
+  assert.match(indexHtml, /<option value="serial">Serial<\/option>/u);
+  assert.match(renderer, /if \(protocol === 'serial'\) \{/u);
+  assert.match(renderer, /device: value/u);
 });
 
 test('renderer exposes a command snippets manager that can run snippets in the active terminal', () => {
@@ -270,4 +273,17 @@ test('diagnostics modal renders protocol capabilities and avoids stale host-tool
   assert.match(renderer, /Protocol capabilities/u);
   assert.match(renderer, /capability\.mode/u);
   assert.doesNotMatch(renderer, /Picocom and Telnet clients/u);
+});
+
+test('renderer exposes and applies per-profile terminal appearance settings', () => {
+  assert.match(renderer, /const terminalThemes = Object\.freeze/u);
+  assert.match(renderer, /function terminalOptionsForProfile\(profile\)/u);
+  assert.match(renderer, /theme: terminalThemes\[themeName\]/u);
+  assert.match(renderer, /terminalFontFamily/u);
+  assert.match(renderer, /terminalFontSize/u);
+  assert.match(renderer, /terminalCursorStyle/u);
+  assert.match(renderer, /terminalScrollback/u);
+  assert.match(renderer, /field\('Terminal theme'/u);
+  assert.match(renderer, /field\('Terminal font'/u);
+  assert.match(renderer, /field\('Scrollback lines'/u);
 });

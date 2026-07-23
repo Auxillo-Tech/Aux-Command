@@ -21,10 +21,12 @@
 - AppImage, Debian and RPM build configuration.
 - GitHub Releases update path and release workflow wiring.
 - Manual packaged update-check surface in diagnostics.
+- Per-profile terminal theme, font, cursor and scrollback settings.
+- Serial quick connect for absolute Linux device paths such as `/dev/ttyUSB0`.
 
 ## 0.2 — daily-driver terminal polish
 
-- Themes, fonts, cursor options and per-profile terminal settings.
+- Global terminal appearance presets and import/exportable workspace-level defaults.
 - Persistent workspace layouts and per-profile pane defaults.
 - Drag-and-drop SFTP and resumable transfer queue.
 - SSH config Include parsing and stronger ProxyJump chain support.

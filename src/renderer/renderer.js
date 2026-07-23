@@ -101,30 +101,81 @@
     }
   };
 
-  const terminalTheme = {
-    background: '#050b10',
-    foreground: '#dcecf4',
-    cursor: '#59dfff',
-    cursorAccent: '#050b10',
-    selectionBackground: '#24576b',
-    selectionInactiveBackground: '#183744',
-    black: '#061016',
-    red: '#ff7185',
-    green: '#55efb5',
-    yellow: '#ffca6a',
-    blue: '#66a9ff',
-    magenta: '#c28cff',
-    cyan: '#59dfff',
-    white: '#dcecf4',
-    brightBlack: '#748d9b',
-    brightRed: '#ff9aa8',
-    brightGreen: '#83f7cb',
-    brightYellow: '#ffdc98',
-    brightBlue: '#91c2ff',
-    brightMagenta: '#d9b5ff',
-    brightCyan: '#94ecff',
-    brightWhite: '#ffffff'
-  };
+  const defaultTerminalFont = 'JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, monospace';
+  const terminalThemes = Object.freeze({
+    'aux-dark': Object.freeze({
+      background: '#050b10',
+      foreground: '#dcecf4',
+      cursor: '#59dfff',
+      cursorAccent: '#050b10',
+      selectionBackground: '#24576b',
+      selectionInactiveBackground: '#183744',
+      black: '#061016',
+      red: '#ff7185',
+      green: '#55efb5',
+      yellow: '#ffca6a',
+      blue: '#66a9ff',
+      magenta: '#c28cff',
+      cyan: '#59dfff',
+      white: '#dcecf4',
+      brightBlack: '#748d9b',
+      brightRed: '#ff9aa8',
+      brightGreen: '#83f7cb',
+      brightYellow: '#ffdc98',
+      brightBlue: '#91c2ff',
+      brightMagenta: '#d9b5ff',
+      brightCyan: '#94ecff',
+      brightWhite: '#ffffff'
+    }),
+    light: Object.freeze({
+      background: '#f6fafc',
+      foreground: '#152833',
+      cursor: '#007399',
+      cursorAccent: '#f6fafc',
+      selectionBackground: '#b8e7f5',
+      selectionInactiveBackground: '#d8e8ee',
+      black: '#0d1c26',
+      red: '#b4233c',
+      green: '#087b52',
+      yellow: '#8a5a00',
+      blue: '#155db1',
+      magenta: '#7047a8',
+      cyan: '#007399',
+      white: '#e7eef2',
+      brightBlack: '#637985',
+      brightRed: '#d93452',
+      brightGreen: '#0a9f6a',
+      brightYellow: '#a66f00',
+      brightBlue: '#2476d6',
+      brightMagenta: '#8e62cf',
+      brightCyan: '#0096c7',
+      brightWhite: '#ffffff'
+    }),
+    'high-contrast': Object.freeze({
+      background: '#000000',
+      foreground: '#f7fbff',
+      cursor: '#00ffff',
+      cursorAccent: '#000000',
+      selectionBackground: '#005f73',
+      selectionInactiveBackground: '#263238',
+      black: '#000000',
+      red: '#ff4d6d',
+      green: '#00ff99',
+      yellow: '#ffe066',
+      blue: '#66b3ff',
+      magenta: '#d28cff',
+      cyan: '#00ffff',
+      white: '#f7fbff',
+      brightBlack: '#8a99a6',
+      brightRed: '#ff879b',
+      brightGreen: '#78ffc4',
+      brightYellow: '#fff1a8',
+      brightBlue: '#a8d4ff',
+      brightMagenta: '#e6c7ff',
+      brightCyan: '#9cffff',
+      brightWhite: '#ffffff'
+    })
+  });
 
   function node(tag, options = {}, children = []) {
     const element = document.createElement(tag);
@@ -254,6 +305,32 @@
     const path = normalizeRemotePath(remotePath);
     if (path === '/') return '/';
     return normalizeRemotePath(path.split('/').slice(0, -1).join('/'));
+  }
+
+  function terminalOptionsForProfile(profile) {
+    const themeName = terminalThemes[profile?.terminalTheme] ? profile.terminalTheme : 'aux-dark';
+    const cursorStyle = ['block', 'underline', 'bar'].includes(profile?.terminalCursorStyle) ? profile.terminalCursorStyle : 'block';
+    const fontSize = Number.isInteger(Number(profile?.terminalFontSize)) ? Math.min(32, Math.max(8, Number(profile.terminalFontSize))) : 13;
+    const scrollback = Number.isInteger(Number(profile?.terminalScrollback)) ? Math.min(200_000, Math.max(1_000, Number(profile.terminalScrollback))) : 20_000;
+    return {
+      allowProposedApi: false,
+      allowTransparency: false,
+      convertEol: true,
+      cursorBlink: profile?.terminalCursorBlink !== false,
+      cursorStyle,
+      drawBoldTextInBrightColors: true,
+      fontFamily: String(profile?.terminalFontFamily || defaultTerminalFont).trim().slice(0, 240) || defaultTerminalFont,
+      fontSize,
+      fontWeight: '400',
+      fontWeightBold: '700',
+      letterSpacing: 0,
+      lineHeight: 1.12,
+      minimumContrastRatio: 4.5,
+      rightClickSelectsWord: true,
+      scrollback,
+      smoothScrollDuration: 80,
+      theme: terminalThemes[themeName]
+    };
   }
 
   function field(labelText, control, help = '', className = '') {
@@ -601,25 +678,7 @@
   }
 
   function createTerminalTab(session, profile) {
-    const terminal = new window.Terminal({
-      allowProposedApi: false,
-      allowTransparency: false,
-      convertEol: true,
-      cursorBlink: true,
-      cursorStyle: 'block',
-      drawBoldTextInBrightColors: true,
-      fontFamily: 'JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, monospace',
-      fontSize: 13,
-      fontWeight: '400',
-      fontWeightBold: '700',
-      letterSpacing: 0,
-      lineHeight: 1.12,
-      minimumContrastRatio: 4.5,
-      rightClickSelectsWord: true,
-      scrollback: 20_000,
-      smoothScrollDuration: 80,
-      theme: terminalTheme
-    });
+    const terminal = new window.Terminal(terminalOptionsForProfile(profile));
     const fitAddon = new window.FitAddon.FitAddon();
     const searchAddon = new window.SearchAddon.SearchAddon();
     terminal.loadAddon(fitAddon);
@@ -1059,6 +1118,18 @@
     let host = '';
     let port = 0;
 
+    if (protocol === 'serial') {
+      if (!value.startsWith('/dev/')) throw new Error('Enter an absolute serial device path such as /dev/ttyUSB0');
+      return {
+        id: self.crypto.randomUUID(),
+        name: `SERIAL · ${value}`,
+        group: 'Quick connections',
+        protocol,
+        device: value,
+        baudRate: 115200
+      };
+    }
+
     if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(value)) {
       const url = new URL(value);
       protocol = url.protocol.replace(':', '').toLowerCase();
@@ -1137,7 +1208,13 @@
       agentForwarding: false,
       x11Forwarding: false,
       credentialId: '',
-      credentialKind: 'password'
+      credentialKind: 'password',
+      terminalTheme: 'aux-dark',
+      terminalFontFamily: defaultTerminalFont,
+      terminalFontSize: 13,
+      terminalCursorStyle: 'block',
+      terminalCursorBlink: true,
+      terminalScrollback: 20_000
     };
     const hasCredential = profile.credentialId ? await api.vault.has(profile.credentialId).catch(() => false) : false;
     const protocol = selectInput('protocol', [
@@ -1158,6 +1235,15 @@
     const device = textInput('device', profile.device || '/dev/ttyUSB0', { placeholder: '/dev/ttyUSB0' });
     const baudRate = textInput('baudRate', profile.baudRate || 115200, { type: 'number', min: 50, max: 4000000 });
     const rdpDomain = textInput('rdpDomain', profile.rdpDomain, { placeholder: 'CORP' });
+    const terminalTheme = selectInput('terminalTheme', [
+      ['aux-dark', 'Aux dark'], ['light', 'Light'], ['high-contrast', 'High contrast']
+    ], profile.terminalTheme || 'aux-dark');
+    const terminalFontFamily = textInput('terminalFontFamily', profile.terminalFontFamily || defaultTerminalFont, { placeholder: defaultTerminalFont });
+    const terminalFontSize = textInput('terminalFontSize', profile.terminalFontSize || 13, { type: 'number', min: 8, max: 32 });
+    const terminalCursorStyle = selectInput('terminalCursorStyle', [
+      ['block', 'Block'], ['underline', 'Underline'], ['bar', 'Bar']
+    ], profile.terminalCursorStyle || 'block');
+    const terminalScrollback = textInput('terminalScrollback', profile.terminalScrollback || 20000, { type: 'number', min: 1000, max: 200000 });
     const notes = node('textarea', { name: 'notes', placeholder: 'Operational notes' });
     notes.value = profile.notes || '';
     const credentialKind = selectInput('credentialKind', [
@@ -1196,6 +1282,13 @@
       field('RDP domain', rdpDomain, '', '',),
       field('Startup command', startupCommand, 'Runs after connecting.', 'full'),
       optionsRow,
+      node('div', { className: 'section-title full', text: 'Terminal appearance' }),
+      field('Terminal theme', terminalTheme, 'Applied to new terminal tabs for this profile.'),
+      field('Terminal font', terminalFontFamily, 'Font family stack used by xterm.js.'),
+      field('Font size', terminalFontSize, '8–32 px.'),
+      field('Cursor style', terminalCursorStyle),
+      field('Scrollback lines', terminalScrollback, '1,000–200,000 lines.'),
+      node('div', { className: 'checkbox-column' }, checkbox('terminalCursorBlink', 'Blinking cursor', profile.terminalCursorBlink !== false)),
       credentialRow,
       node('div', { className: 'checkbox-row full' }, checkbox('favorite', 'Favorite connection', profile.favorite)),
       field('Notes', notes, '', 'full')
@@ -1259,7 +1352,13 @@
         agentForwarding: values.has('agentForwarding'),
         x11Forwarding: values.has('x11Forwarding'),
         credentialId: existing?.credentialId || '',
-        credentialKind: String(values.get('credentialKind') || 'password')
+        credentialKind: String(values.get('credentialKind') || 'password'),
+        terminalTheme: String(values.get('terminalTheme') || 'aux-dark'),
+        terminalFontFamily: String(values.get('terminalFontFamily') || defaultTerminalFont).trim(),
+        terminalFontSize: Number(values.get('terminalFontSize') || 13),
+        terminalCursorStyle: String(values.get('terminalCursorStyle') || 'block'),
+        terminalCursorBlink: values.has('terminalCursorBlink'),
+        terminalScrollback: Number(values.get('terminalScrollback') || 20000)
       };
 
       const previousCredentialId = existing?.credentialId || '';

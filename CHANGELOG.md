@@ -9,6 +9,12 @@
 - Corrected release and architecture documentation to state the current Linux x86_64 package scope and GitHub repository readiness accurately.
 - Documented the current private-repository GitHub limitations for branch protection and artifact attestations.
 
+### Added
+
+- Added per-profile terminal appearance controls for theme, font stack, font size, cursor style, cursor blink, and scrollback depth.
+- Added Serial to Quick Connect with `/dev/...` device-path handling.
+- Added an advanced per-profile OpenSSH known-hosts-file override for isolated lab/fixture profiles.
+
 ## 0.1.0 — 2026-07-22
 
 Initial Aux Command engineering release.

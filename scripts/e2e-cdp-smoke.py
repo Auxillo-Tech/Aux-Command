@@ -80,6 +80,16 @@ def require(condition: bool, message: str, details=None) -> None:
         raise AssertionError(json.dumps({'message': message, 'details': details}, indent=2))
 
 
+def capture_screenshot(cdp: CDP) -> dict:
+    try:
+        screenshot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': False}, timeout=30)
+        with open(SCREENSHOT_PATH, 'wb') as handle:
+            handle.write(base64.b64decode(screenshot['data']))
+        return {'path': SCREENSHOT_PATH, 'warning': None}
+    except Exception as exc:  # pragma: no cover - diagnostic artifact path depends on compositor/CDP timing
+        return {'path': None, 'warning': f'screenshot capture skipped after functional smoke passed: {exc}'}
+
+
 def main() -> int:
     cdp = CDP(get_ws_url())
     try:
@@ -167,8 +177,10 @@ def main() -> int:
             document.getElementById('local-button').click();
             await new Promise(r => setTimeout(r, 1000));
             const sessionCount = (await window.auxCommand.app.getState()).sessions.length;
-            document.getElementById('layout-toggle').click();
-            await new Promise(r => setTimeout(r, 250));
+            if (!document.getElementById('terminal-stack').classList.contains('layout-grid')) {
+              document.getElementById('layout-toggle').click();
+              await new Promise(r => setTimeout(r, 250));
+            }
             const tiled = document.getElementById('terminal-stack').classList.contains('layout-grid');
             const visibleTerminals = [...document.querySelectorAll('.terminal-view.active')].length;
             document.getElementById('broadcast-toggle').click();
@@ -180,7 +192,7 @@ def main() -> int:
             const broadcastOn = document.getElementById('broadcast-toggle').classList.contains('active');
             const broadcastWarningVisible = !document.getElementById('broadcast-warning').hidden;
             document.getElementById('broadcast-toggle').click();
-            document.getElementById('layout-toggle').click();
+            if (document.getElementById('terminal-stack').classList.contains('layout-grid')) document.getElementById('layout-toggle').click();
             return { ok: sessionCount >= 2 && tiled && visibleTerminals >= 2 && Boolean(confirmBroadcast) && broadcastOn && broadcastWarningVisible, sessionCount, tiled, visibleTerminals, confirmed: Boolean(confirmBroadcast), broadcastOn, broadcastWarningVisible };
           })()
         """, timeout=20)
@@ -305,9 +317,7 @@ def main() -> int:
         require(diagnostics_smoke.get('opened'), 'diagnostics modal smoke failed', diagnostics_smoke)
 
         state_after = cdp.eval('(async () => await window.auxCommand.app.getState())()', timeout=10)
-        screenshot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': False}, timeout=10)
-        with open(SCREENSHOT_PATH, 'wb') as handle:
-            handle.write(base64.b64decode(screenshot['data']))
+        screenshot = capture_screenshot(cdp)
 
         print(json.dumps({
             'baseline': baseline,
@@ -317,7 +327,8 @@ def main() -> int:
             'snippetSmoke': snippet_smoke,
             'diagnosticsModalSmoke': diagnostics_smoke,
             'stateAfter': state_after,
-            'screenshot': SCREENSHOT_PATH,
+            'screenshot': screenshot['path'],
+            'screenshotWarning': screenshot['warning'],
             'eventsCaptured': len(cdp.events),
         }, indent=2))
         return 0

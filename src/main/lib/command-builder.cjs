@@ -19,6 +19,7 @@ function sshBaseArgs(profileInput, options = {}) {
   if (!profile.useSshConfig || profile.port !== 22) args.push('-p', String(profile.port));
   if (profile.username) args.push('-l', profile.username);
   if (profile.identityFile) args.push('-i', expandHome(profile.identityFile));
+  if (profile.knownHostsFile) args.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
   if (profile.proxyJump) args.push('-J', profile.proxyJump);
   if (profile.keepAliveSeconds > 0) {
     args.push('-o', `ServerAliveInterval=${profile.keepAliveSeconds}`);
