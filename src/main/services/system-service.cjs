@@ -45,6 +45,18 @@ function protocolCapabilities(tools) {
       detail: 'Graphical SFTP uses the bundled ssh2 dependency; external sftp/scp tools are optional diagnostics.'
     },
     {
+      protocol: 'ftp',
+      mode: 'builtin-basic-ftp-insecure',
+      available: true,
+      detail: 'Plain FTP uses the bundled basic-ftp dependency and requires an insecure-transport warning before use.'
+    },
+    {
+      protocol: 'ftps',
+      mode: 'builtin-basic-ftp-tls',
+      available: true,
+      detail: 'FTPS uses the bundled basic-ftp dependency with TLS enabled.'
+    },
+    {
       protocol: 'mosh',
       mode: 'external-client',
       available: has('Mosh'),

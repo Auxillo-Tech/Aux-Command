@@ -22,6 +22,8 @@
       { protocol: 'local', mode: 'builtin-python-pty', available: true, detail: 'Local shells run through the bundled Python PTY bridge.' },
       { protocol: 'ssh', mode: 'builtin-node-ssh2-and-openssh', available: true, detail: 'Terminal SSH uses OpenSSH.' },
       { protocol: 'sftp', mode: 'builtin-node-ssh2', available: true, detail: 'Graphical SFTP uses bundled ssh2.' },
+      { protocol: 'ftp', mode: 'builtin-basic-ftp-insecure', available: true, detail: 'Plain FTP warns before use.' },
+      { protocol: 'ftps', mode: 'builtin-basic-ftp-tls', available: true, detail: 'FTPS uses TLS.' },
       { protocol: 'telnet', mode: 'bundled-python-bridge', available: true, detail: 'No host telnet binary required.' },
       { protocol: 'serial', mode: 'bundled-python-bridge', available: true, detail: 'No host picocom binary required.' },
       { protocol: 'rdp', mode: 'external-client', available: true, detail: 'Launches FreeRDP.' },
