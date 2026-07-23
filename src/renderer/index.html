@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>Aux Command</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app-shell">
+    <header class="topbar">
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle connections sidebar" aria-expanded="false">☰</button>
+      <button id="brand-button" class="brand" type="button" title="Aux Command home">
+        <img src="./assets/logo.svg" alt="">
+        <span class="brand-copy"><strong>Aux Command</strong><small>Remote operations</small></span>
+      </button>
+      <div class="quick-connect">
+        <span class="quick-prefix">›_</span>
+        <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22 or user@host">
+        <select id="quick-protocol" aria-label="Quick connect protocol">
+          <option value="ssh">SSH</option>
+          <option value="mosh">Mosh</option>
+          <option value="telnet">Telnet</option>
+          <option value="rdp">RDP</option>
+          <option value="vnc">VNC</option>
+        </select>
+        <button id="quick-button" class="button primary" type="button">Connect</button>
+      </div>
+      <nav class="top-actions" aria-label="Application actions">
+        <button id="local-button" class="top-action" type="button" title="New local shell (Ctrl+Shift+T)"><span class="action-icon">›_</span><span class="action-label">Local shell</span></button>
+        <button id="snippets-button" class="top-action" type="button" title="Command snippets (Ctrl+Shift+S)"><span class="action-icon">⌘</span><span class="action-label">Snippets</span></button>
+        <button id="tunnels-button" class="top-action" type="button" title="SSH tunnels"><span class="action-icon">⇄</span><span class="action-label">Tunnels</span></button>
+        <button id="diagnostics-button" class="top-action" type="button" title="System diagnostics"><span class="action-icon">◉</span><span class="action-label">Diagnostics</span></button>
+        <button id="website-button" class="avatar-button" type="button" title="auxillo.tech">AUX</button>
+      </nav>
+    </header>
+
+    <aside class="sidebar">
+      <div class="sidebar-heading">
+        <div><span class="eyebrow">Workspace</span><h2>Connections</h2></div>
+        <button id="new-profile-button" class="icon-button small" type="button" title="New connection">＋</button>
+      </div>
+      <label class="search-box">
+        <span>⌕</span>
+        <input id="profile-search" type="search" autocomplete="off" aria-label="Filter connections" placeholder="Filter connections">
+      </label>
+      <div class="sidebar-tools">
+        <button id="import-ssh-button" type="button">Import ~/.ssh/config</button>
+        <button id="profile-menu-button" type="button">Import / Export</button>
+      </div>
+      <div id="profile-list" class="profile-list" role="list"></div>
+      <div class="sidebar-footer">
+        <span id="connection-count">0 profiles</span>
+        <span id="agent-status" class="status-chip">Agent unknown</span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <div id="tabbar" class="tabbar">
+        <div id="session-tabs" class="session-tabs" role="tablist" aria-label="Terminal sessions">
+          <div class="tabbar-spacer"></div>
+        </div>
+        <div class="session-toolbar" role="toolbar" aria-label="Active session controls">
+          <div class="toolbar-group" aria-label="View">
+            <button id="layout-toggle" class="tab-action" type="button" title="Switch to tiled-session view (Ctrl+Shift+L)" disabled>Single</button>
+            <button id="pane-shrink-button" class="tab-action compact-action" type="button" title="Decrease tiled pane size (Ctrl+Shift+-)" aria-label="Decrease tiled pane size" disabled>−</button>
+            <button id="pane-grow-button" class="tab-action compact-action" type="button" title="Increase tiled pane size (Ctrl+Shift+=)" aria-label="Increase tiled pane size" disabled>+</button>
+          </div>
+          <div class="toolbar-group" aria-label="Session">
+            <button id="terminal-search-toggle" class="tab-action" type="button" title="Find in active terminal (Ctrl+F)" disabled>Find</button>
+            <button id="duplicate-session-button" class="tab-action" type="button" title="Duplicate active session (Ctrl+Shift+D)" disabled>Duplicate</button>
+            <button id="reconnect-session-button" class="tab-action" type="button" title="Reconnect active session (Ctrl+Shift+R)" disabled>Reconnect</button>
+            <button id="sftp-toggle" class="tab-action" type="button" title="SFTP requires an active SSH session" disabled>SFTP</button>
+          </div>
+          <div id="terminal-search-host" class="terminal-search-host"></div>
+          <div class="toolbar-group danger-group" aria-label="Multi-session input">
+            <button id="broadcast-toggle" class="tab-action" type="button" title="Broadcast keyboard input to every open terminal (Ctrl+Shift+B)" disabled>Broadcast</button>
+          </div>
+        </div>
+      </div>
+      <div id="broadcast-warning" class="broadcast-warning" role="alert" hidden>
+        <strong>Broadcast input active</strong>
+        <span>Keyboard input is being sent to every open terminal.</span>
+      </div>
+      <section id="welcome" class="welcome">
+        <div class="welcome-mark"><img src="./assets/logo.svg" alt=""></div>
+        <span class="eyebrow">Auxillo infrastructure tools</span>
+        <h1>Control every remote system from one Linux workspace.</h1>
+        <p>Native OpenSSH sessions, file transfer, tunnels and remote desktop launchers without hiding the Linux tools you already trust.</p>
+        <div class="welcome-actions">
+          <button id="welcome-local" class="action-card" type="button"><span>›_</span><strong>Local terminal</strong><small>Start an interactive shell</small></button>
+          <button id="welcome-profile" class="action-card" type="button"><span>＋</span><strong>New connection</strong><small>SSH, Mosh, Telnet, RDP, VNC or serial</small></button>
+          <button id="welcome-import" class="action-card" type="button"><span>⇣</span><strong>Import SSH config</strong><small>Use existing hosts and identities</small></button>
+        </div>
+        <div class="shortcut-strip">
+          <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick connect</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> Local shell</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd> Palette</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd> Duplicate</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd> Reconnect</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>±</kbd> Pane size</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd> Tile sessions</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd> Broadcast input</span>
+          <span><kbd>Ctrl</kbd><kbd>F</kbd> Find terminal</span>
+          <span><kbd>Ctrl</kbd><kbd>W</kbd> Close tab</span>
+        </div>
+      </section>
+      <section id="terminal-stack" class="terminal-stack" aria-label="Terminal sessions"></section>
+      <section id="initialization-error" class="initialization-error" role="alert" hidden>
+        <span class="eyebrow">Startup failure</span>
+        <h1>Aux Command could not initialize.</h1>
+        <p id="initialization-error-detail">The application state could not be loaded.</p>
+        <div class="welcome-actions compact-actions">
+          <button id="retry-initialization" class="action-card" type="button"><span>↻</span><strong>Reload application</strong><small>Retry initialization from a clean renderer state</small></button>
+          <button id="error-diagnostics" class="action-card" type="button"><span>◉</span><strong>Open diagnostics</strong><small>Inspect runtime tools and environment</small></button>
+        </div>
+      </section>
+    </main>
+
+    <aside id="sftp-panel" class="sftp-panel" aria-hidden="true">
+      <div class="panel-heading">
+        <div><span class="eyebrow">Secure transfer</span><h2 id="sftp-title">SFTP</h2></div>
+        <button id="sftp-close" class="icon-button small" type="button" title="Close SFTP">×</button>
+      </div>
+      <div class="pathbar">
+        <button id="sftp-up" type="button" title="Parent directory">↑</button>
+        <input id="sftp-path" type="text" value="/" spellcheck="false" aria-label="Remote path">
+        <button id="sftp-refresh" type="button" title="Refresh">↻</button>
+      </div>
+      <div class="sftp-actions">
+        <button id="sftp-upload" type="button">Upload</button>
+        <button id="sftp-download" type="button" disabled>Download</button>
+        <button id="sftp-mkdir" type="button">New folder</button>
+        <button id="sftp-more" type="button" disabled>Rename / Delete</button>
+      </div>
+      <div class="file-header"><span>Name</span><span>Size</span></div>
+      <div id="file-list" class="file-list" aria-busy="false"></div>
+      <div id="sftp-empty" class="panel-empty">Open an SSH session, then enable SFTP.</div>
+      <div id="transfer-status" class="transfer-status" role="status" aria-live="polite">No active transfer</div>
+    </aside>
+
+    <footer class="statusbar">
+      <div><span id="global-status-dot" class="status-dot"></span><span id="global-status" role="status" aria-live="polite">Ready</span></div>
+      <div class="statusbar-right"><span id="active-session-label">No active session</span><span id="app-version"></span></div>
+    </footer>
+  </div>
+
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <div id="modal-root"></div>
+
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+  <script src="./renderer.js"></script>
+</body>
+</html>

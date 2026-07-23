@@ -1,0 +1,329 @@
+
+> aux-command@0.1.0 check
+> node scripts/check-syntax.cjs && node --test test/*.test.cjs
+
+Syntax validated for 37 JavaScript files.
+Syntax validated for the Python PTY bridge.
+Syntax validated for 3 shell scripts.
+TAP version 13
+# Subtest: builds OpenSSH terminal arguments without a shell
+ok 1 - builds OpenSSH terminal arguments without a shell
+  ---
+  duration_ms: 6.460038
+  type: 'test'
+  ...
+# Subtest: uses literal startup commands as a single OpenSSH argument
+ok 2 - uses literal startup commands as a single OpenSSH argument
+  ---
+  duration_ms: 1.135363
+  type: 'test'
+  ...
+# Subtest: builds local, mosh, telnet and serial sessions
+ok 3 - builds local, mosh, telnet and serial sessions
+  ---
+  duration_ms: 6.927816
+  type: 'test'
+  ...
+# Subtest: builds local and dynamic OpenSSH tunnels
+ok 4 - builds local and dynamic OpenSSH tunnels
+  ---
+  duration_ms: 2.451002
+  type: 'test'
+  ...
+# Subtest: builds native remote desktop launcher arguments
+ok 5 - builds native remote desktop launcher arguments
+  ---
+  duration_ms: 0.707175
+  type: 'test'
+  ...
+# Subtest: builds Mosh destinations with usernames and safely quoted SSH options
+ok 6 - builds Mosh destinations with usernames and safely quoted SSH options
+  ---
+  duration_ms: 1.243544
+  type: 'test'
+  ...
+# Subtest: finds an executable in PATH without invoking a shell
+ok 7 - finds an executable in PATH without invoking a shell
+  ---
+  duration_ms: 6.158864
+  type: 'test'
+  ...
+# Subtest: waits for a native desktop client to spawn before reporting success
+ok 8 - waits for a native desktop client to spawn before reporting success
+  ---
+  duration_ms: 14.688788
+  type: 'test'
+  ...
+# Subtest: reports a missing native desktop client
+ok 9 - reports a missing native desktop client
+  ---
+  duration_ms: 1.994801
+  type: 'test'
+  ...
+# Subtest: persists atomic JSON updates and returns defensive copies
+ok 10 - persists atomic JSON updates and returns defensive copies
+  ---
+  duration_ms: 7.811741
+  type: 'test'
+  ...
+# Subtest: recovers from malformed JSON with defaults
+ok 11 - recovers from malformed JSON with defaults
+  ---
+  duration_ms: 2.973993
+  type: 'test'
+  ...
+# Subtest: does not change in-memory state when persistence fails
+ok 12 - does not change in-memory state when persistence fails
+  ---
+  duration_ms: 1.29466
+  type: 'test'
+  ...
+# Subtest: formats SHA-256 host fingerprints for display
+ok 13 - formats SHA-256 host fingerprints for display
+  ---
+  duration_ms: 3.611716
+  type: 'test'
+  ...
+# Subtest: remembers accepted host keys and flags changed keys
+ok 14 - remembers accepted host keys and flags changed keys
+  ---
+  duration_ms: 6.763128
+  type: 'test'
+  ...
+# Subtest: rejects an unaccepted host key without persisting it
+ok 15 - rejects an unaccepted host key without persisting it
+  ---
+  duration_ms: 0.861515
+  type: 'test'
+  ...
+# Subtest: rejects malformed fingerprints and safely stores prototype-like host names
+ok 16 - rejects malformed fingerprints and safely stores prototype-like host names
+  ---
+  duration_ms: 2.073037
+  type: 'test'
+  ...
+# Subtest: creates, updates, exports and deletes profiles without exporting credentials
+ok 17 - creates, updates, exports and deletes profiles without exporting credentials
+  ---
+  duration_ms: 12.936124
+  type: 'test'
+  ...
+# Subtest: protects the default local shell profile
+ok 18 - protects the default local shell profile
+  ---
+  duration_ms: 0.99299
+  type: 'test'
+  ...
+# Subtest: rejects invalid save input through normal validation
+ok 19 - rejects invalid save input through normal validation
+  ---
+  duration_ms: 0.911871
+  type: 'test'
+  ...
+# Subtest: assigns unique IDs to colliding imported profiles
+ok 20 - assigns unique IDs to colliding imported profiles
+  ---
+  duration_ms: 1.865363
+  type: 'test'
+  ...
+# Subtest: resolves the PTY helper outside an Electron ASAR archive
+ok 21 - resolves the PTY helper outside an Electron ASAR archive
+  ---
+  duration_ms: 3.183551
+  type: 'test'
+  ...
+# Subtest: serializes PTY specifications without shell interpolation
+ok 22 - serializes PTY specifications without shell interpolation
+  ---
+  duration_ms: 2.534692
+  type: 'test'
+  ...
+# Subtest: runs an interactive command in a PTY, resizes it and preserves exit status
+ok 23 - runs an interactive command in a PTY, resizes it and preserves exit status
+  ---
+  duration_ms: 270.445762
+  type: 'test'
+  ...
+# Subtest: terminates a running PTY process
+ok 24 - terminates a running PTY process
+  ---
+  duration_ms: 41.109183
+  type: 'test'
+  ...
+# Subtest: renderer reattaches or closes existing main-process terminal sessions after reload
+ok 25 - renderer reattaches or closes existing main-process terminal sessions after reload
+  ---
+  duration_ms: 2.805652
+  type: 'test'
+  ...
+# Subtest: renderer disconnects graphical SFTP on panel close and owning tab close
+ok 26 - renderer disconnects graphical SFTP on panel close and owning tab close
+  ---
+  duration_ms: 0.318153
+  type: 'test'
+  ...
+# Subtest: renderer scopes SFTP progress events to the visible profile
+ok 27 - renderer scopes SFTP progress events to the visible profile
+  ---
+  duration_ms: 0.36578
+  type: 'test'
+  ...
+# Subtest: renderer prevents modal-global shortcut collisions and disables impossible tunnel start
+ok 28 - renderer prevents modal-global shortcut collisions and disables impossible tunnel start
+  ---
+  duration_ms: 0.25875
+  type: 'test'
+  ...
+# Subtest: welcome copy advertises every supported quick-connect protocol
+ok 29 - welcome copy advertises every supported quick-connect protocol
+  ---
+  duration_ms: 0.194553
+  type: 'test'
+  ...
+# Subtest: formats SFTP modes and safely handles timestamps
+ok 30 - formats SFTP modes and safely handles timestamps
+  ---
+  duration_ms: 3.597807
+  type: 'test'
+  ...
+# Subtest: changes the SFTP connection signature when authentication or transport settings change
+ok 31 - changes the SFTP connection signature when authentication or transport settings change
+  ---
+  duration_ms: 0.490214
+  type: 'test'
+  ...
+# Subtest: parses one ProxyJump hop including usernames, ports and IPv6
+ok 32 - parses one ProxyJump hop including usernames, ports and IPv6
+  ---
+  duration_ms: 3.56747
+  type: 'test'
+  ...
+# Subtest: imports every concrete alias on a multi-host line
+ok 33 - imports every concrete alias on a multi-host line
+  ---
+  duration_ms: 7.675126
+  type: 'test'
+  ...
+# Subtest: supports equals syntax, quoted values and inline comments
+ok 34 - supports equals syntax, quoted values and inline comments
+  ---
+  duration_ms: 0.620356
+  type: 'test'
+  ...
+# Subtest: uses the first obtained value for repeated keywords
+ok 35 - uses the first obtained value for repeated keywords
+  ---
+  duration_ms: 0.37419
+  type: 'test'
+  ...
+# Subtest: tokenizer and inline comments respect quotes
+ok 36 - tokenizer and inline comments respect quotes
+  ---
+  duration_ms: 0.257169
+  type: 'test'
+  ...
+# Subtest: does not apply Match directives to the preceding Host block
+ok 37 - does not apply Match directives to the preceding Host block
+  ---
+  duration_ms: 0.352505
+  type: 'test'
+  ...
+# Subtest: skips malformed aliases without blocking valid SSH config imports
+ok 38 - skips malformed aliases without blocking valid SSH config imports
+  ---
+  duration_ms: 0.461768
+  type: 'test'
+  ...
+# Subtest: recovers from a spawn failure and cleanly reuses the tunnel ID
+ok 39 - recovers from a spawn failure and cleanly reuses the tunnel ID
+  ---
+  duration_ms: 143.655138
+  type: 'test'
+  ...
+# Subtest: does not mark a delayed SSH tunnel failure as running before exit
+ok 40 - does not mark a delayed SSH tunnel failure as running before exit
+  ---
+  duration_ms: 1612.628391
+  type: 'test'
+  ...
+# Subtest: normalizes a standard SSH profile
+ok 41 - normalizes a standard SSH profile
+  ---
+  duration_ms: 6.375217
+  type: 'test'
+  ...
+# Subtest: local profiles do not retain a network endpoint
+ok 42 - local profiles do not retain a network endpoint
+  ---
+  duration_ms: 1.038157
+  type: 'test'
+  ...
+# Subtest: serial profiles require a device
+ok 43 - serial profiles require a device
+  ---
+  duration_ms: 0.919536
+  type: 'test'
+  ...
+# Subtest: rejects unsupported protocols and invalid ports
+ok 44 - rejects unsupported protocols and invalid ports
+  ---
+  duration_ms: 0.524477
+  type: 'test'
+  ...
+# Subtest: preserves supplied timestamps while stores can explicitly update them
+ok 45 - preserves supplied timestamps while stores can explicitly update them
+  ---
+  duration_ms: 0.320535
+  type: 'test'
+  ...
+# Subtest: normalizes remote paths without escaping root
+ok 46 - normalizes remote paths without escaping root
+  ---
+  duration_ms: 0.260115
+  type: 'test'
+  ...
+# Subtest: normalizes dynamic and local tunnels
+ok 47 - normalizes dynamic and local tunnels
+  ---
+  duration_ms: 0.538941
+  type: 'test'
+  ...
+# Subtest: rejects option-like connection targets and relative serial devices
+ok 48 - rejects option-like connection targets and relative serial devices
+  ---
+  duration_ms: 0.760755
+  type: 'test'
+  ...
+# Subtest: separates account passwords from private-key passphrases
+ok 49 - separates account passwords from private-key passphrases
+  ---
+  duration_ms: 1.003804
+  type: 'test'
+  ...
+# Subtest: stores and retrieves encrypted persistent credentials
+ok 50 - stores and retrieves encrypted persistent credentials
+  ---
+  duration_ms: 8.842756
+  type: 'test'
+  ...
+# Subtest: memory-only credential replacement clears stale persistent secret
+ok 51 - memory-only credential replacement clears stale persistent secret
+  ---
+  duration_ms: 3.750906
+  type: 'test'
+  ...
+# Subtest: rejects basic_text persistence and prototype-like credential IDs
+ok 52 - rejects basic_text persistence and prototype-like credential IDs
+  ---
+  duration_ms: 2.004258
+  type: 'test'
+  ...
+1..52
+# tests 52
+# suites 0
+# pass 52
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2151.666458

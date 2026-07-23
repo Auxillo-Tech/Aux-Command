@@ -1,0 +1,131 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish artifacts to the matching GitHub Release
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+
+jobs:
+  linux-x64:
+    name: Linux x64 release artifacts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Linux packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libarchive-tools \
+            rpm \
+            xz-utils
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependency graph
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Audit complete dependency graph
+        run: npm audit --audit-level=moderate
+
+      - name: Verify npm registry signatures
+        run: npm audit signatures
+
+      - name: Run validation suite
+        run: npm run check
+
+      - name: Build AppImage, deb and rpm without publishing
+        run: npm run dist:x64 -- --publish never
+
+      - name: Build source archives
+        run: bash scripts/source-archives.sh
+
+      - name: Generate release manifest and checksums
+        run: npm run release:manifest -- --no-sign
+
+      - name: Verify release integrity
+        run: npm run release:verify -- --allow-unsigned
+
+      - name: Verify source archive exclusions
+        run: |
+          tar -tzf dist/aux-command-0.1.0-source.tar.gz | grep -E '(^|/)(node_modules|dist|\.cache)(/|$)' && exit 1 || true
+          unzip -Z1 dist/aux-command-0.1.0-source.zip | grep -E '(^|/)(node_modules|dist|\.cache)(/|$)' && exit 1 || true
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: |
+            dist/Aux-Command-*.AppImage
+            dist/Aux-Command-*.deb
+            dist/Aux-Command-*.rpm
+            dist/aux-command-*-sbom.cdx.json
+            dist/aux-command-*-source.tar.gz
+            dist/aux-command-*-source.zip
+            dist/latest*.yml
+            dist/release-manifest.json
+            dist/SHA256SUMS
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aux-command-linux-x64-${{ github.ref_name }}
+          if-no-files-found: error
+          path: |
+            dist/Aux-Command-*.AppImage
+            dist/Aux-Command-*.deb
+            dist/Aux-Command-*.rpm
+            dist/aux-command-*-sbom.cdx.json
+            dist/aux-command-*-source.tar.gz
+            dist/aux-command-*-source.zip
+            dist/latest*.yml
+            dist/release-manifest.json
+            dist/SHA256SUMS
+            dist/*.asc
+
+      - name: Publish GitHub Release assets
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "$tag" --notes "Aux Command $tag release candidate."
+          assets=(
+            dist/Aux-Command-*.AppImage
+            dist/Aux-Command-*.deb
+            dist/Aux-Command-*.rpm
+            dist/aux-command-*-sbom.cdx.json
+            dist/aux-command-*-source.tar.gz
+            dist/aux-command-*-source.zip
+            dist/latest*.yml
+            dist/release-manifest.json
+            dist/SHA256SUMS
+          )
+          if compgen -G 'dist/*.asc' >/dev/null; then
+            assets+=(dist/*.asc)
+          fi
+          gh release upload "$tag" "${assets[@]}" --clobber

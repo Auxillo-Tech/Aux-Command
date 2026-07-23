@@ -1,0 +1,114 @@
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { findExecutable } = require('../lib/executable-finder.cjs');
+
+const TOOLS = [
+  ['Python PTY', ['python3']],
+  ['ssh', ['ssh']],
+  ['sftp', ['sftp']],
+  ['scp', ['scp']],
+  ['Mosh', ['mosh']],
+  ['RDP', ['xfreerdp3', 'xfreerdp']],
+  ['VNC', ['vncviewer', 'tigervncviewer']],
+  ['Serial bridge', ['python3']],
+  ['Telnet bridge', ['python3']]
+];
+
+function toolStatus(name, candidates) {
+  const executable = findExecutable(candidates);
+  return { name, available: Boolean(executable), executable, candidates };
+}
+
+function protocolCapabilities(tools) {
+  const byName = new Map(tools.map((tool) => [tool.name, tool]));
+  const has = (name) => Boolean(byName.get(name)?.available);
+  return [
+    {
+      protocol: 'local',
+      mode: 'builtin-python-pty',
+      available: has('Python PTY'),
+      detail: 'Local shells run through the bundled Python PTY bridge.'
+    },
+    {
+      protocol: 'ssh',
+      mode: 'builtin-node-ssh2-and-openssh',
+      available: has('ssh'),
+      detail: 'Terminal SSH uses OpenSSH; SFTP and host-key workflows use ssh2-backed services.'
+    },
+    {
+      protocol: 'sftp',
+      mode: 'builtin-node-ssh2',
+      available: true,
+      detail: 'Graphical SFTP uses the bundled ssh2 dependency; external sftp/scp tools are optional diagnostics.'
+    },
+    {
+      protocol: 'mosh',
+      mode: 'external-client',
+      available: has('Mosh'),
+      detail: 'Mosh still requires the host mosh client and a reachable mosh-server target.'
+    },
+    {
+      protocol: 'telnet',
+      mode: 'bundled-python-bridge',
+      available: has('Telnet bridge'),
+      detail: 'Telnet runs through the bundled stdlib TCP/Telnet bridge; no host telnet binary is required.'
+    },
+    {
+      protocol: 'serial',
+      mode: 'bundled-python-bridge',
+      available: has('Serial bridge'),
+      detail: 'Serial runs through the bundled stdlib raw TTY bridge; no host picocom binary is required.'
+    },
+    {
+      protocol: 'rdp',
+      mode: 'external-client',
+      available: has('RDP'),
+      detail: 'RDP launches the installed FreeRDP client; embedded rendering is not bundled.'
+    },
+    {
+      protocol: 'vnc',
+      mode: 'external-client',
+      available: has('VNC'),
+      detail: 'VNC launches an installed VNC viewer; embedded rendering is not bundled.'
+    },
+    {
+      protocol: 'x11-forwarding',
+      mode: 'openssh-x11-forwarding',
+      available: has('ssh') && Boolean(process.env.DISPLAY),
+      detail: 'X11 forwarding uses OpenSSH -X and the host X/Wayland Xwayland display.'
+    }
+  ];
+}
+
+class SystemService {
+  diagnostics() {
+    const tools = TOOLS.map(([name, candidates]) => toolStatus(name, candidates));
+    return {
+      platform: process.platform,
+      architecture: process.arch,
+      hostname: os.hostname(),
+      shell: process.env.SHELL || '',
+      sshAgent: Boolean(process.env.SSH_AUTH_SOCK),
+      display: process.env.DISPLAY || '',
+      tools,
+      protocols: protocolCapabilities(tools)
+    };
+  }
+
+  readTextFile(filename, limit = 5_000_000) {
+    const stat = fs.statSync(filename);
+    if (!stat.isFile() || stat.size > limit) throw new Error('File is not a supported profile export');
+    return fs.readFileSync(filename, 'utf8');
+  }
+
+  writeTextFile(filename, content) {
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, content, { mode: 0o600 });
+    return true;
+  }
+}
+
+module.exports = { SystemService };
