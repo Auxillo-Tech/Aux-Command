@@ -1,6 +1,8 @@
 'use strict';
 
 const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { PythonPty } = require('../lib/python-pty.cjs');
 const { buildTerminalCommand } = require('../lib/command-builder.cjs');
@@ -16,6 +18,12 @@ function appendTranscript(session, data) {
     session.transcript = session.transcript.slice(-MAX_TRANSCRIPT_BYTES);
     session.transcriptTruncated = true;
   }
+  if (session.logging?.stream) session.logging.stream.write(text);
+}
+
+function safeLogPath(filePath) {
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) throw new Error('Terminal log path must be absolute');
+  return filePath;
 }
 
 class TerminalService {
@@ -46,7 +54,8 @@ class TerminalService {
       terminal,
       startedAt: new Date().toISOString(),
       transcript: '',
-      transcriptTruncated: false
+      transcriptTruncated: false,
+      logging: null
     };
     this.sessions.set(id, session);
 
@@ -62,8 +71,10 @@ class TerminalService {
         profileId: session.profileId,
         startedAt: session.startedAt,
         transcript: session.transcript,
-        transcriptTruncated: session.transcriptTruncated
+        transcriptTruncated: session.transcriptTruncated,
+        logging: session.logging ? { filePath: session.logging.filePath, active: false } : null
       });
+      this.#closeLogStream(session);
       this.sessions.delete(id);
       this.#send('terminal:exit', { id, exitCode, signal });
     });
@@ -103,6 +114,32 @@ class TerminalService {
     };
   }
 
+  startLogging(id, filePath) {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error('Terminal session not found');
+    const target = safeLogPath(filePath);
+    if (session.logging?.stream) this.#closeLogStream(session);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, session.transcript || '', { mode: 0o600 });
+    const stream = fs.createWriteStream(target, { flags: 'a', mode: 0o600 });
+    session.logging = { filePath: target, stream };
+    return { id, filePath: target, active: true };
+  }
+
+  stopLogging(id) {
+    const session = this.sessions.get(id);
+    if (!session) {
+      const closed = this.closedTranscripts.get(id);
+      if (!closed?.logging) return { id, active: false };
+      const filePath = closed.logging.filePath;
+      closed.logging = { filePath, active: false };
+      return { id, filePath, active: false };
+    }
+    const filePath = session.logging?.filePath;
+    this.#closeLogStream(session);
+    return { id, filePath, active: false };
+  }
+
   close(id) {
     const session = this.sessions.get(id);
     if (!session) {
@@ -110,6 +147,7 @@ class TerminalService {
     }
     this.sessions.delete(id);
     this.closedTranscripts.delete(id);
+    this.#closeLogStream(session);
     try { session.terminal.kill(); } catch { /* process already exited */ }
     return true;
   }
@@ -119,7 +157,17 @@ class TerminalService {
   }
 
   list() {
-    return [...this.sessions.values()].map(({ terminal, transcript, ...metadata }) => metadata);
+    return [...this.sessions.values()].map(({ terminal, transcript, logging, ...metadata }) => ({
+      ...metadata,
+      logging: logging ? { filePath: logging.filePath, active: true } : null
+    }));
+  }
+
+  #closeLogStream(session) {
+    if (!session?.logging?.stream) return;
+    const filePath = session.logging.filePath;
+    try { session.logging.stream.end(); } catch { /* best-effort log close */ }
+    session.logging = { filePath, active: false };
   }
 
   #send(channel, payload) {
