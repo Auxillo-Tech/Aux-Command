@@ -157,7 +157,7 @@ Install optional runtime tools with:
 
 - Graphical SFTP browser backed by `ssh2`.
 - Explicit host-key fingerprint confirmation.
-- Upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
+- Upload, drag-and-drop upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
 - Inline remote editing uses a temporary upload plus OpenSSH POSIX rename where supported, with a 1 MB safety limit for in-app edits.
 - Separate treatment for account passwords and private-key passphrases.
 - Persistent SFTP secrets only when Linux desktop safe storage is encrypted.

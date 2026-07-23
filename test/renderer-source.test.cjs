@@ -10,6 +10,7 @@ const renderer = fs.readFileSync(path.join(root, 'src/renderer/renderer.js'), 'u
 const indexHtml = fs.readFileSync(path.join(root, 'src/renderer/index.html'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'src/renderer/styles.css'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'src/preload/index.cjs'), 'utf8');
+const ipc = fs.readFileSync(path.join(root, 'src/main/ipc.cjs'), 'utf8');
 const logoPng = fs.statSync(path.join(root, 'src/renderer/assets/logo.png'));
 
 test('renderer reattaches or closes existing main-process terminal sessions after reload', () => {
@@ -305,6 +306,17 @@ test('graphical SFTP exposes remote text file view and edit actions', () => {
   assert.match(renderer, /await api\.sftp\.writeText\(state\.sftp\.profile, entry\.path, editor\.value\)/u);
   assert.match(renderer, /elements\.sftpEdit\.addEventListener\('click', openRemoteTextEditor\)/u);
   assert.match(renderer, /else openRemoteTextEditor\(\)/u);
+});
+
+test('graphical SFTP exposes drag-and-drop upload with main-process path validation', () => {
+  assert.match(preload, /const \{ contextBridge, ipcRenderer, webUtils \} = require\('electron'\)/u);
+  assert.match(preload, /uploadPaths: \(profile, remoteDirectory, localPaths\) => invoke\('sftp:upload-paths', profile, remoteDirectory, localPaths\)/u);
+  assert.match(preload, /filePath: \(file\) => webUtils\.getPathForFile\(file\)/u);
+  assert.match(ipc, /sftp:upload-paths/u);
+  assert.match(ipc, /path\.isAbsolute\(localPath\)/u);
+  assert.match(renderer, /function bindSftpDragAndDrop\(\)/u);
+  assert.match(renderer, /handleSftpDrop\(event\)/u);
+  assert.match(renderer, /Drag files here to upload/u);
 });
 
 test('UI separates session navigation from contextual commands and labels global actions', () => {

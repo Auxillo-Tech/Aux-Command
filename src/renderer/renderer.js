@@ -2174,6 +2174,46 @@
     } catch (error) { toast('Upload failed', errorMessage(error), 'error'); }
   }
 
+  async function handleSftpDrop(event) {
+    event.preventDefault();
+    elements.sftpPanel.classList.remove('drag-over');
+    if (!state.sftp.profile) {
+      toast('Open SFTP first', 'Drag files onto an active SFTP panel to upload.', 'error');
+      return;
+    }
+    const files = [...(event.dataTransfer?.files || [])];
+    const localPaths = files.map((file) => api.system.filePath(file)).filter(Boolean);
+    if (!localPaths.length) {
+      toast('No uploadable files', 'Aux Command could not resolve local paths for the dropped files.', 'error');
+      return;
+    }
+    try {
+      elements.transferStatus.textContent = `Uploading ${localPaths.length} dropped file${localPaths.length === 1 ? '' : 's'}…`;
+      const result = await api.sftp.uploadPaths(state.sftp.profile, state.sftp.path, localPaths);
+      const count = result.uploaded?.length || 0;
+      toast('Drag files here to upload', `${count} file${count === 1 ? '' : 's'} uploaded`, 'success');
+      await loadSftp(state.sftp.path);
+    } catch (error) {
+      toast('Drop upload failed', errorMessage(error), 'error');
+    }
+  }
+
+  function bindSftpDragAndDrop() {
+    for (const target of [elements.sftpPanel, elements.fileList]) {
+      target.addEventListener('dragover', (event) => {
+        if (!state.sftp.profile) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        elements.sftpPanel.classList.add('drag-over');
+        elements.transferStatus.textContent = 'Drag files here to upload';
+      });
+      target.addEventListener('dragleave', (event) => {
+        if (!elements.sftpPanel.contains(event.relatedTarget)) elements.sftpPanel.classList.remove('drag-over');
+      });
+      target.addEventListener('drop', (event) => handleSftpDrop(event));
+    }
+  }
+
   async function downloadSelected() {
     const entry = selectedSftpEntry();
     if (!entry || entry.directory || !state.sftp.profile) return;
@@ -2581,6 +2621,7 @@
     elements.sftpEdit.addEventListener('click', openRemoteTextEditor);
     elements.sftpMkdir.addEventListener('click', makeRemoteDirectory);
     elements.sftpMore.addEventListener('click', openSftpMore);
+    bindSftpDragAndDrop();
 
     window.addEventListener('resize', () => {
       fitVisibleTerminals();
