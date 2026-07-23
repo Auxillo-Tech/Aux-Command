@@ -13,7 +13,9 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - External FreeRDP and TigerVNC launchers.
 - Secure SFTP credential vault and host-key verification.
 - Command snippets manager.
-- Guarded macro recording and replay through reviewed command snippets.
+- Active terminal transcript printing.
+- Guarded macro recording and replay through command snippets.
+- Drag-and-drop SFTP uploads.
 - Active-session terminal transcript export with local review/copy/save/print controls.
 - Explicit per-session terminal logging to a local operator-selected file.
 - Terminal search and command palette.
@@ -33,7 +35,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 
 - Global terminal appearance presets and import/exportable workspace-level defaults.
 - Persistent workspace layouts and per-profile pane defaults.
-- Drag-and-drop SFTP and resumable transfer queue.
+- Resumable SFTP transfer queue.
 - SSH config Include parsing and stronger ProxyJump chain support.
 - Terminal output logging profiles/presets for operator-selected local directories with explicit privacy warnings.
 - Detached terminal windows and fullscreen terminal workspace mode.

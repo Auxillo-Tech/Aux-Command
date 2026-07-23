@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 function invoke(channel, ...args) {
   return ipcRenderer.invoke(channel, ...args);
@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     readText: (profile, remotePath) => invoke('sftp:read-text', profile, remotePath),
     writeText: (profile, remotePath, content) => invoke('sftp:write-text', profile, remotePath, content),
     upload: (profile, remoteDirectory) => invoke('sftp:upload', profile, remoteDirectory),
+    uploadPaths: (profile, remoteDirectory, localPaths) => invoke('sftp:upload-paths', profile, remoteDirectory, localPaths),
     download: (profile, remotePath) => invoke('sftp:download', profile, remotePath),
     disconnect: (profileId) => invoke('sftp:disconnect', profileId),
     onProgress: (callback) => subscribe('sftp:progress', callback),
@@ -83,6 +84,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   }),
   system: Object.freeze({
     diagnostics: () => invoke('system:diagnostics'),
+    filePath: (file) => webUtils.getPathForFile(file),
     clipboardRead: () => invoke('clipboard:read-text'),
     clipboardWrite: (text) => invoke('clipboard:write-text', text),
     openWebsite: () => invoke('system:open-website')

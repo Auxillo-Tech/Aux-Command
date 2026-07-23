@@ -85,6 +85,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
+- Graphical SFTP supports drag-and-drop local file upload through Electron `webUtils.getPathForFile` and a main-process absolute-path validation gate.
+- SFTP now clears stale directory selections and ignores late responses when switching profiles or paths, so transfers/actions cannot target the wrong SSH profile after a fast tab switch.
 - Workstation tiled/single layout and pane-size toolbar choices persist through a validated local settings store.
 - CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
 

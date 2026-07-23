@@ -146,6 +146,17 @@ function registerIpc({
     await sftpService.upload(profile, localPath, remotePath);
     return { canceled: false, localPath, remotePath };
   });
+  handle('sftp:upload-paths', async (profile, remoteDirectory, localPaths) => {
+    if (!Array.isArray(localPaths) || !localPaths.length) return { uploaded: [] };
+    const uploaded = [];
+    for (const localPath of localPaths.slice(0, 32)) {
+      if (typeof localPath !== 'string' || !path.isAbsolute(localPath)) throw new Error('Dropped upload paths must be absolute local files');
+      const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
+      await sftpService.upload(profile, localPath, remotePath);
+      uploaded.push({ localPath, remotePath });
+    }
+    return { uploaded };
+  });
   handle('sftp:download', async (profile, remotePath) => {
     const result = await dialog.showSaveDialog(getWindow(), {
       title: 'Save remote file',

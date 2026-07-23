@@ -185,6 +185,7 @@ kbd { margin-right: 2px; padding: 2px 5px; border: 1px solid var(--line-strong);
 .file-header { display: grid; grid-template-columns: minmax(0, 1fr) 74px; padding: 7px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--faint); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .file-header span:last-child { text-align: right; }
 .file-list { min-height: 0; overflow: auto; padding: 4px 5px; }
+.sftp-panel.drag-over { outline: 2px solid rgba(89, 223, 255, .62); outline-offset: -5px; background: rgba(9, 34, 46, .98); }
 .file-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr) 74px; align-items: center; gap: 6px; padding: 7px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; text-align: left; cursor: pointer; }
 .file-row:hover { background: rgba(18, 38, 51, .66); }
 .file-row.selected { border-color: rgba(89, 223, 255, .23); background: rgba(32, 95, 113, .2); }
