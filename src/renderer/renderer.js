@@ -34,6 +34,7 @@
     broadcastToggle: $('#broadcast-toggle'),
     broadcastWarning: $('#broadcast-warning'),
     terminalSearchToggle: $('#terminal-search-toggle'),
+    exportTranscriptButton: $('#export-transcript-button'),
     terminalSearchHost: $('#terminal-search-host'),
     duplicateSessionButton: $('#duplicate-session-button'),
     reconnectSessionButton: $('#reconnect-session-button'),
@@ -963,6 +964,46 @@
     input.select();
   }
 
+  async function exportActiveTranscript() {
+    const tab = activeTab();
+    if (!tab) {
+      toast('Open a terminal first', 'Transcript export needs an active session.', 'error');
+      return;
+    }
+    let transcript;
+    try {
+      transcript = await api.terminal.exportTranscript(tab.id);
+    } catch (error) {
+      toast('Transcript export failed', errorMessage(error), 'error');
+      return;
+    }
+    const output = node('textarea', {
+      className: 'remote-editor transcript-export',
+      attrs: { readonly: '', spellcheck: 'false' }
+    });
+    output.value = transcript.text || '';
+    const body = node('div', { className: 'form-grid compact-form' }, [
+      node('div', { className: 'warning-box full', text: transcript.truncated ? 'This transcript was bounded to the most recent 1 MB of output.' : 'This transcript is captured locally from the active session output stream.' }),
+      field('Session', textInput('session', `${transcript.title || tab.title} · ${transcript.protocol || tab.profile.protocol}`, { required: false }), '', 'full'),
+      field('Transcript', output, 'Review before copying. Transcripts may contain secrets, commands, hostnames, or customer data.', 'full')
+    ]);
+    showModal({
+      title: 'Export terminal transcript',
+      description: `${transcript.title || tab.title} · ${transcript.exportedAt || ''}`,
+      body,
+      className: 'wide',
+      actions: [
+        { label: 'Copy transcript', className: 'primary', busy: false, run: async () => {
+          await api.system.clipboardWrite(output.value);
+          toast('Transcript copied', `${output.value.length} characters copied to clipboard.`, 'success');
+          return false;
+        } },
+        { label: 'Close', busy: false }
+      ]
+    });
+    window.setTimeout(() => output.focus(), 0);
+  }
+
   function fitVisibleTerminals() {
     const tabs = state.layout === 'grid' ? [...state.tabs.values()] : [activeTab()].filter(Boolean);
     for (const tab of tabs) {
@@ -1031,6 +1072,7 @@
     elements.layoutToggle.disabled = tabCount < 2 && state.layout !== 'grid';
     elements.broadcastToggle.disabled = tabCount < 2;
     elements.terminalSearchToggle.disabled = !tab;
+    elements.exportTranscriptButton.disabled = !tab;
     elements.duplicateSessionButton.disabled = !tab;
     elements.reconnectSessionButton.disabled = !tab;
     elements.paneShrinkButton.disabled = state.layout !== 'grid';
@@ -2396,6 +2438,7 @@
     elements.layoutToggle.addEventListener('click', toggleTerminalLayout);
     elements.broadcastToggle.addEventListener('click', toggleBroadcastInput);
     elements.terminalSearchToggle.addEventListener('click', openTerminalSearch);
+    elements.exportTranscriptButton.addEventListener('click', () => exportActiveTranscript().catch((error) => toast('Transcript export failed', errorMessage(error), 'error')));
     elements.duplicateSessionButton.addEventListener('click', () => duplicateActiveSession().catch((error) => toast('Duplicate failed', errorMessage(error), 'error')));
     elements.reconnectSessionButton.addEventListener('click', () => reconnectActiveSession().catch((error) => toast('Reconnect failed', errorMessage(error), 'error')));
     elements.paneShrinkButton.addEventListener('click', () => adjustPaneSize(-40));

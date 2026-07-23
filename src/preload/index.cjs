@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     create: (request) => invoke('terminal:create', request),
     write: (id, data) => invoke('terminal:write', id, data),
     resize: (id, cols, rows) => invoke('terminal:resize', id, cols, rows),
+    exportTranscript: (id) => invoke('terminal:export-transcript', id),
     close: (id) => invoke('terminal:close', id),
     onData: (callback) => subscribe('terminal:data', callback),
     onExit: (callback) => subscribe('terminal:exit', callback)

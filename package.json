@@ -5,8 +5,8 @@
   "main": "src/main/index.cjs",
   "desktopName": "aux-command.desktop",
   "author": "Auxillo <https://auxillo.tech>",
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "private": false,
   "engines": {
     "node": ">=22.0.0"
   },
