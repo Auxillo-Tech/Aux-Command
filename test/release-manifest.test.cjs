@@ -60,7 +60,7 @@ test('release manifest script writes deterministic artifact metadata and checksu
 });
 
 test('package exposes release manifest script', () => {
-  assert.equal(packageJson.scripts['release:manifest'], 'node scripts/release-metadata.cjs && node scripts/release-manifest.cjs');
+  assert.equal(packageJson.scripts['release:manifest'], 'node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs');
   assert.equal(packageJson.scripts['release:metadata'], 'node scripts/release-metadata.cjs');
 });
 

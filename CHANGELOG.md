@@ -17,6 +17,7 @@
 - Added a top-level Updates toolbar control for GitHub release update checks, downloads, and install restart.
 - Added inline graphical SFTP UTF-8 text file editing with live OpenSSH fixture coverage and remote overwrite via POSIX rename when supported.
 - Added persistent workstation layout settings so tiled/single layout and pane size toolbar choices survive app restart.
+- Replaced the temporary app mark with the supplied Auxillo gradient logo across renderer branding and Linux package icons.
 
 ### Fixed
 

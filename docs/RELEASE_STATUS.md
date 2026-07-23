@@ -1,6 +1,6 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T07:59:15Z**
+Validated: **2026-07-23T12:12:27Z**
 Scope: **Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
@@ -34,8 +34,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **109/109 tests passed**
-- JavaScript syntax: 48 files passed
+- `npm run check`: **114/114 tests passed**
+- JavaScript syntax: 50 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
 - `npm audit --omit=dev --audit-level=moderate`: zero vulnerabilities
@@ -77,6 +77,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Per-profile terminal theme, font stack, font size, cursor style, cursor blink, and scrollback settings are validated and applied when terminal tabs open.
 - Quick Connect now includes Serial and routes `/dev/...` device paths through the bundled serial bridge.
 - Advanced per-profile OpenSSH known-hosts-file overrides allow isolated lab/fixture profiles without touching the operator's real `~/.ssh/known_hosts`.
+- Renderer branding and Linux package icons now use the supplied Auxillo gradient logo; packaged smoke verified `./assets/logo.png` is loaded from the AppImage.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.

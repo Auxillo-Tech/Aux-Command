@@ -21,7 +21,7 @@
     "smoke:cdp": "python3 scripts/e2e-cdp-smoke.py",
     "soak:cdp": "python3 scripts/soak-cdp.py",
     "release:metadata": "node scripts/release-metadata.cjs",
-    "release:manifest": "node scripts/release-metadata.cjs && node scripts/release-manifest.cjs",
+    "release:manifest": "node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs",
     "release:verify": "node scripts/verify-release.cjs"
   },
   "dependencies": {
