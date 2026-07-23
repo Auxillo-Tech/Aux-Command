@@ -29,7 +29,7 @@ npm run dist
 To create the verified x64 Linux artifacts on this Fedora workstation:
 
 ```bash
-npm run dist:x64
+npm run dist:x64 -- --publish never
 ```
 
 `dist:x64` wraps Electron Builder with local compatibility handling for build-host gaps seen on current Fedora: missing `libcrypt.so.1` for Electron Builder's bundled `fpm`, and missing `rpmbuild` for RPM creation. The wrapper downloads/extracts only the required Fedora build packages under `.cache/` when needed; it does not install system packages.
