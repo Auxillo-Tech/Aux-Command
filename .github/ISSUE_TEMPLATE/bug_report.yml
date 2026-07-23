@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible Aux Command defect.
+title: "bug: "
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use local fixtures or redacted hosts where possible. Do not paste secrets.
+      placeholder: |
+        1. Start Aux Command ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        Aux Command version:
+        Package format: AppImage/deb/rpm/source
+        Linux distribution/version:
+        Desktop environment:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Redact hostnames, usernames, keys, tokens, passwords, and customer data.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I have not included passwords, private keys, tokens, customer data, or production-only host details.
+          required: true
