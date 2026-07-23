@@ -32,8 +32,8 @@ jobs:
         run: |
           npm audit --omit=dev --audit-level=high
           npm audit signatures
-      - name: Build x64 Linux packages and production SBOM
-        run: npm run dist:x64
+      - name: Build x64 Linux packages and production SBOM without publishing
+        run: npm run dist:x64 -- --publish never
       - name: Build source archives
         run: bash scripts/source-archives.sh
       - name: Generate and verify unsigned CI release metadata
