@@ -1,75 +1,287 @@
 # Aux Command
 
-Aux Command is an Auxillo-branded Linux remote-operations workstation for SSH, SFTP, tunnels, RDP, VNC, Mosh, Telnet, serial consoles and local shells.
+**Aux Command** is Auxillo’s Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.
 
-This repository is a working **0.1 engineering release**, not a finished one-to-one replacement for every MobaXterm feature. It provides the complete core architecture and primary workflows needed to run and extend the product without copying MobaXterm code or branding.
+It is built as an original Auxillo product with native Linux tooling, explicit trust boundaries, modern Electron hardening, and verifiable release engineering.
 
-## What works
+> Current status: **0.1.x Linux x86_64 engineering release candidate**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, and source validation are in place. It is not yet a signed public production release until release signing, publication, and broader live protocol qualification are complete.
 
-- Real PTY-backed terminal tabs using xterm.js and a bundled Python 3 PTY bridge.
-- Native OpenSSH sessions with SSH agent, `~/.ssh/config`, identities, ProxyJump, compression, keepalives, X11 forwarding and agent forwarding.
-- Quick connect for SSH, Mosh, Telnet, RDP and VNC.
-- Persistent connection profiles, favorites, groups, search, import/export and SSH-config import.
-- Graphical SFTP browser with host-key verification, keyboard-interactive authentication, upload, download, folder creation, rename and delete.
-- Separate SFTP account-password or encrypted-key-passphrase storage through the Linux desktop secret service; unsafe `basic_text` storage is rejected.
-- Local, remote and dynamic OpenSSH tunnels with live status and stop controls.
-- FreeRDP and TigerVNC launchers.
-- Mosh sessions, plus bundled Python 3 Telnet bridge and bundled Python 3 raw serial bridge sessions.
-- Host-tool diagnostics and Linux package build targets.
+---
 
-## Requirements
+## Product overview
 
-- A current x64 or arm64 Linux desktop.
-- Node.js 22 or newer and npm for source builds.
-- Python 3 for the bundled PTY, Telnet and raw serial bridges. No native Node module compilation is required.
-- OpenSSH client for SSH and tunnels.
-- Optional: Mosh, FreeRDP and TigerVNC for protocols that intentionally launch external clients.
-- A desktop secret service such as GNOME Keyring or KWallet for persistent SFTP credentials.
+Aux Command is designed for technical operators, infrastructure teams, and security engineers who need to move quickly across local and remote systems without scattering work between many uncoordinated tools.
 
-Install optional host tools on supported distributions:
+It provides:
+
+- a tabbed terminal workspace;
+- persistent connection profiles;
+- quick-connect workflows;
+- native OpenSSH terminal sessions;
+- graphical SFTP file operations;
+- local, remote, and dynamic SSH tunnels;
+- local shell sessions;
+- Mosh, Telnet, serial, RDP, and VNC entry points;
+- keyboard-oriented workflow controls;
+- update/release diagnostics;
+- security-first storage and process-lifecycle behavior.
+
+The design is intentionally conservative where security matters. Aux Command delegates mature protocol behavior to audited Linux tools when that is safer than embedding a protocol surface inside Electron, and it uses bundled helpers only where a small controlled bridge is safer and more portable.
+
+---
+
+## Supported operating systems
+
+Aux Command is currently a **Linux desktop application**.
+
+| Operating system family | Status | Recommended package | Notes |
+|---|---:|---|---|
+| Fedora Workstation / Fedora KDE x86_64 | Supported engineering target | `.rpm` or AppImage | Primary local development and package-build environment. |
+| Ubuntu LTS x86_64 | Supported engineering target | `.deb` or AppImage | CI builds on Ubuntu 24.04. Runtime tools install through `apt`. |
+| Debian 12+ x86_64 | Expected supported | `.deb` or AppImage | Uses the Debian package dependency model; verify on the target desktop before production rollout. |
+| RHEL / Rocky / AlmaLinux x86_64 | Expected supported | `.rpm` or AppImage | Requires modern desktop libraries and OpenSSH/Python runtime packages. |
+| openSUSE x86_64 | Expected supported | `.rpm` or AppImage | Runtime tools install through `zypper`; validate package policy locally. |
+| Arch Linux / EndeavourOS / Manjaro x86_64 | Source/AppImage path | AppImage or source | No native pacman package is produced yet; runtime tools install through `pacman`. |
+| Other modern x86_64 Linux desktops | Best effort | AppImage | Requires a graphical session and standard Electron/Linux desktop dependencies. |
+| Windows | Not supported | — | No Windows package is currently produced. |
+| macOS | Not supported | — | No macOS package is currently produced. |
+| Linux ARM64 | Not currently shipped | — | The code is not intentionally x86-only, but current release artifacts are x86_64 only. |
+
+Desktop environments expected to work include GNOME, KDE Plasma, Xfce, Cinnamon, and other modern X11/Wayland desktops with the normal Electron runtime stack. Wayland and X11 both require target-distro validation before a public production claim.
+
+---
+
+## Installation
+
+Full instructions are in [`INSTALL.md`](INSTALL.md).
+
+### AppImage — portable Linux install
+
+Use this when you want the least invasive installation path.
+
+```bash
+chmod +x Aux-Command-0.1.0-x86_64.AppImage
+./Aux-Command-0.1.0-x86_64.AppImage
+```
+
+If the host does not support AppImage FUSE mounting, extract and run it:
+
+```bash
+./Aux-Command-0.1.0-x86_64.AppImage --appimage-extract
+./squashfs-root/AppRun
+```
+
+### Debian / Ubuntu
+
+```bash
+sudo apt install ./Aux-Command-0.1.0-amd64.deb
+aux-command
+```
+
+The Debian package declares the core runtime dependencies:
+
+- `python3`
+- `openssh-client`
+
+### Fedora / RHEL / Rocky / AlmaLinux / openSUSE
+
+Fedora / RHEL-style systems:
+
+```bash
+sudo dnf install ./Aux-Command-0.1.0-x86_64.rpm
+aux-command
+```
+
+openSUSE-style systems:
+
+```bash
+sudo zypper install ./Aux-Command-0.1.0-x86_64.rpm
+aux-command
+```
+
+The RPM declares the core runtime dependencies:
+
+- `python3`
+- `openssh-clients`
+
+### Optional protocol tools
+
+Aux Command can run core local, SSH, SFTP, tunnel, Telnet, and serial workflows with Python/OpenSSH plus bundled helpers. Some protocols intentionally use external Linux clients:
+
+| Feature | External tool | Why |
+|---|---|---|
+| Mosh | `mosh` | Mosh requires the host client and a compatible remote `mosh-server`. |
+| RDP | FreeRDP (`xfreerdp`) | Keeps RDP certificate, clipboard, and display behavior at the distro-managed client boundary. |
+| VNC | TigerVNC (`vncviewer`) | Keeps VNC rendering and auth behavior at the distro-managed client boundary. |
+| X11 forwarding | OpenSSH + local X11/Xwayland | Trust-expanding SSH feature, disabled by default. |
+
+Install optional runtime tools with:
 
 ```bash
 ./scripts/install-runtime-tools.sh
 ```
 
-## Run from source
+---
+
+## What Aux Command does
+
+### Terminal workspace
+
+- PTY-backed terminal tabs rendered with xterm.js.
+- Local shell sessions.
+- Terminal tab lifecycle with close confirmations for live sessions.
+- Split/tiled multi-session layouts.
+- Terminal search.
+- Command palette.
+- Command snippets.
+- Guarded broadcast input across terminal sessions.
+- Keyboard-first navigation and accessible tab/panel relationships.
+
+### SSH operations
+
+- Native OpenSSH sessions.
+- SSH agent support through the user’s existing environment.
+- `~/.ssh/config` import support.
+- Identity files.
+- ProxyJump support.
+- Compression, keepalive, X11 forwarding, and agent forwarding controls.
+- Literal remote startup commands passed safely as OpenSSH arguments.
+- No local shell interpolation of profile values.
+
+### SFTP
+
+- Graphical SFTP browser backed by `ssh2`.
+- Explicit host-key fingerprint confirmation.
+- Upload, download, folder creation, rename, and delete operations.
+- Separate treatment for account passwords and private-key passphrases.
+- Persistent SFTP secrets only when Linux desktop safe storage is encrypted.
+- Unsafe Electron `basic_text` secret storage is rejected.
+- Profile exports omit secrets and credential identifiers.
+
+### SSH tunnels
+
+- Local forwards.
+- Remote forwards.
+- Dynamic SOCKS forwards.
+- Evidence-based tunnel readiness using OpenSSH readiness behavior, not elapsed-time guessing.
+- Stop controls and lifecycle tracking.
+- Background tunnel runs use `BatchMode=yes`, so invisible password prompts do not hang in the background.
+
+### Protocol launchers and bridges
+
+- Mosh launcher with safely constructed SSH transport options.
+- RDP launcher through FreeRDP.
+- VNC launcher through TigerVNC.
+- Bundled Python Telnet bridge.
+- Bundled Python raw serial bridge.
+- Bundled Python PTY helper.
+- Parent-death process guard so abnormal Electron exit does not leave helpers unmanaged.
+
+### Release and diagnostics
+
+- GitHub Releases update path wired through `electron-updater`.
+- Diagnostics UI for update state and package behavior.
+- GitHub Actions Linux build pipeline.
+- AppImage, `.deb`, and `.rpm` package outputs for x86_64.
+- CycloneDX SBOM generation.
+- Release manifest and SHA-256 checksum verification.
+- Source archive generation with dependency/build/cache directories excluded.
+
+---
+
+## Security model
+
+Aux Command is built for security-sensitive operations. The implementation favors explicit boundaries over invisible convenience.
+
+Key controls:
+
+- Electron renderer sandbox enabled.
+- `contextIsolation` enabled.
+- Node integration disabled in the renderer.
+- Chromium permission requests denied by default.
+- External navigation and popup creation denied by default.
+- Privileged IPC validates sender window and frame.
+- Direct process spawning with argument arrays; no profile values are passed through a local shell.
+- Managed helper processes use an exact-parent Linux death-signal guard.
+- Graphical SFTP host keys are explicitly verified and stored separately from OpenSSH.
+- SFTP secrets are stored persistently only when encrypted desktop safe storage is available.
+- Profile exports exclude secret material.
+- Telnet and some VNC deployments are recognized as potentially unencrypted legacy paths.
+
+Security documentation:
+
+- [`SECURITY.md`](SECURITY.md) — vulnerability reporting policy.
+- [`docs/SECURITY.md`](docs/SECURITY.md) — detailed security model.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — trust boundaries and process architecture.
+
+---
+
+## Build from source
+
+Requirements:
+
+- Linux x86_64 desktop.
+- Node.js `>=22`.
+- npm.
+- Python 3.
+- OpenSSH client.
+
+Bootstrap and run:
 
 ```bash
 ./scripts/bootstrap.sh
 npm start
 ```
 
-Development mode opens Electron DevTools:
+Development mode:
 
 ```bash
 npm run dev
 ```
 
-## Validate
+Validate source:
 
 ```bash
 npm run check
 ```
 
-The validation command checks JavaScript, Python and shell syntax, then runs the Node test suite, including real PTY integration tests.
-
-## Build Linux packages
+Build x86_64 Linux packages without publishing:
 
 ```bash
-npm run dist
+npm run dist:x64 -- --publish never
 ```
 
-Artifacts are generated under `dist/` as AppImage, `.deb` and `.rpm` packages for the configured architectures. Build each architecture on matching hardware or a correctly configured cross-build environment.
+The Fedora build wrapper handles common local packaging gaps by downloading build helpers under the ignored `.cache/` directory instead of installing system packages automatically.
 
-For the current x64 Linux release build, use:
+---
 
-```bash
-npm run dist:x64
+## Verification status
+
+Current source validation passes:
+
+```text
+Syntax validated for 48 JavaScript files.
+Syntax validated for 5 Python files.
+Syntax validated for 5 shell scripts.
+105 tests passed.
 ```
 
-On Fedora hosts without `libcrypt.so.1` or `rpmbuild`, this script downloads the required Fedora build-tool compatibility packages into the local ignored `.cache/` directory and does not require sudo or modify the system package set.
+Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
 
-## Keyboard controls
+The release is still classified as an engineering release candidate because these gates remain open:
+
+- no signed public release yet;
+- no published immutable GitHub Release tag yet;
+- no Auxillo-controlled production signing key configured;
+- artifact attestations are blocked while the repository is private under the current GitHub plan;
+- branch protection is blocked while the repository is private under the current GitHub plan;
+- broader live qualification is still required across representative SSH/SFTP/tunnel/Mosh/RDP/VNC/X11/serial environments.
+
+See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICATION.md`](docs/LIVE_QUALIFICATION.md).
+
+---
+
+## Keyboard shortcuts
 
 | Shortcut | Action |
 |---|---|
@@ -80,37 +292,39 @@ On Fedora hosts without `libcrypt.so.1` or `rpmbuild`, this script downloads the
 | `Ctrl+Shift+C` | Copy terminal selection |
 | `Ctrl+Shift+V` | Paste into terminal |
 
-Right-click copies the selected terminal text; with no selection it pastes clipboard text.
+Right-click copies selected terminal text; with no selection it pastes clipboard text.
 
-## Security behavior
-
-Terminal SSH sessions are native OpenSSH processes. Aux Command does not capture or store their password/MFA prompts. Profile exports exclude credential identifiers and secret material.
-
-The graphical SFTP client has its own explicit known-host fingerprint store. This is separate from OpenSSH's `known_hosts`, so the first SFTP connection can require a second trust decision.
-
-Managed tunnels run in OpenSSH BatchMode and require key or SSH-agent authentication. This avoids invisible password prompts in a background process.
-
-See [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/RELEASE_STATUS.md](docs/RELEASE_STATUS.md).
-
-## Current limitations
-
-- RDP and VNC launch native Linux clients rather than rendering inside an Aux Command tab.
-- The terminal does not yet provide session recording.
-- SFTP supports one explicit ProxyJump hop through OpenSSH; complex chains and all `ssh_config` directives are not yet modeled by the graphical client.
-- Background tunnels cannot satisfy interactive passwords or MFA.
-- Packages are not yet code-signed, auto-updated or qualified across a production distro matrix.
-- Telnet and some VNC configurations are unencrypted legacy protocols.
-
-The implementation sequence for closing these gaps is documented in [docs/ROADMAP.md](docs/ROADMAP.md). Exact handoff and validation status is recorded in [docs/RELEASE_STATUS.md](docs/RELEASE_STATUS.md).
+---
 
 ## Data location
 
-Application data is stored beneath Electron's `userData` location, normally:
+Application data is stored beneath Electron’s Linux `userData` location, normally:
 
 ```text
 ~/.config/Aux Command/aux-command-data/
 ```
 
+Typical data includes profiles, command snippets, SFTP known-host fingerprints, and non-secret application state. Persistent SFTP secrets use the Linux desktop secret storage backend when that backend is encrypted.
+
+---
+
+## Documentation map
+
+| Document | Purpose |
+|---|---|
+| [`INSTALL.md`](INSTALL.md) | End-user installation by Linux distribution/package type. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Runtime architecture, trust boundaries, storage, and protocol delegation. |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Implemented security controls and reporting expectations. |
+| [`docs/GITHUB_RELEASES.md`](docs/GITHUB_RELEASES.md) | GitHub Releases and updater publication runbook. |
+| [`docs/VALIDATION.md`](docs/VALIDATION.md) | Local validation and packaging commands. |
+| [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) | Current engineering release evidence and remaining gates. |
+| [`docs/LIVE_QUALIFICATION.md`](docs/LIVE_QUALIFICATION.md) | Live protocol qualification checklist. |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Forward plan for closing remaining product gaps. |
+
+---
+
 ## License
 
-Copyright © Auxillo. All rights reserved. This source release is proprietary unless Auxillo publishes a different license in writing. Third-party components retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Copyright © Auxillo. All rights reserved.
+
+This source release is proprietary unless Auxillo publishes a different license in writing. Third-party components retain their own licenses; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`THIRD_PARTY_LICENSES.txt`](THIRD_PARTY_LICENSES.txt).

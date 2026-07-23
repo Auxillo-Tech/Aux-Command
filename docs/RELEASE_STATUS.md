@@ -1,13 +1,13 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T03:32:24Z**
-Scope: **Linux x64 engineering release candidate with GitHub release/update path wired locally**
+Validated: **2026-07-23T04:42:52Z**
+Scope: **Linux x86_64 engineering release candidate with GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
 
 The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for the next live-protocol and GitHub-publication phase.
 
-This is **not yet a signed public production release**. GitHub Releases are now configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, but no real GitHub Release has been published from a tag, artifacts are unsigned, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
+This is **not yet a signed public production release**. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, and Linux CI is green on `main`. No real GitHub Release has been published from a tag yet, artifacts are unsigned, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
 
 ## Distribution decision
 
@@ -16,6 +16,7 @@ Aux Command desktop binaries and update metadata should live on **GitHub Release
 - GitHub owns versioned desktop release assets, release notes, checksums, and update metadata.
 - The Auxillo server does not need to host desktop installer/update files.
 - GitHub release/update configuration targets `Auxillo-Tech/Aux-Command`; update `package.json` `build.publish.owner` and `build.publish.repo` if the repository changes before tagging.
+- GitHub repository readiness is complete for private development: metadata, topics, issue templates, pull request template, Dependabot config, security policy, and Linux CI are configured.
 
 See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
@@ -111,6 +112,8 @@ Packaged accessibility/source assertions passed:
 - Production CycloneDX SBOM and runtime dependency licenses are generated before release manifest creation.
 - GitHub Actions workflows are present for CI build and tag/manual release publication.
 - Workflow YAML parse check passed for `.github/workflows/linux-build.yml` and `.github/workflows/release.yml`.
+- Latest GitHub Actions `Linux build` on `main` completed successfully for commit `a52e0fa` and produced the `aux-command-linux-x64` workflow artifact.
+- Public-facing GitHub documentation now includes professional README content, supported operating system/package guidance, and a dedicated `INSTALL.md`.
 
 ## Current artifacts from latest local build
 
@@ -131,11 +134,10 @@ Exact byte sizes and SHA-256 digests are canonical in `dist/release-manifest.jso
 
 ### External trust/provenance blockers
 
-1. **Git repository:** this directory is not a Git repository, so JD still needs to create/push the GitHub repo before real release tagging.
-2. **Immutable release tag:** no `v0.1.0` GitHub tag/release exists yet from this source tree.
-3. **Production signing identity:** no controlled Auxillo signing key is available locally. The verifier supports full-fingerprint-pinned GPG validation, but unsigned releases currently require `--allow-unsigned`.
-4. **CI provenance execution:** workflows are configured, but the latest artifacts were produced locally, not yet by GitHub Actions.
-5. **Published updater validation:** update checks are wired for GitHub Releases, but cannot be end-to-end proven until a GitHub release exists.
+1. **Immutable release tag:** no `v0.1.0` GitHub tag/release exists yet from this source tree.
+2. **Production signing identity:** no controlled Auxillo signing key is available locally. The verifier supports full-fingerprint-pinned GPG validation, but unsigned releases currently require `--allow-unsigned`.
+3. **Public/private GitHub feature gate:** branch protection and artifact attestations are blocked while the repository remains private under the current GitHub plan. JD intends to make the repository public after private preparation is complete.
+4. **Published updater validation:** update checks are wired for GitHub Releases, but cannot be end-to-end proven until a GitHub release exists.
 
 ### Product/live qualification still required
 

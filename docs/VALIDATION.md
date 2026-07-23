@@ -20,7 +20,7 @@ For a clean source checkout with network access:
 npm start
 ```
 
-To create Linux packages:
+To create Linux packages for the configured Linux x86_64 release targets:
 
 ```bash
 npm run dist
@@ -34,4 +34,4 @@ npm run dist:x64 -- --publish never
 
 `dist:x64` wraps Electron Builder with local compatibility handling for build-host gaps seen on current Fedora: missing `libcrypt.so.1` for Electron Builder's bundled `fpm`, and missing `rpmbuild` for RPM creation. The wrapper downloads/extracts only the required Fedora build packages under `.cache/` when needed; it does not install system packages.
 
-The GitHub Actions workflow at `.github/workflows/linux-build.yml` performs validation and creates x64 AppImage, Debian and RPM artifacts.
+The GitHub Actions workflow at `.github/workflows/linux-build.yml` performs validation and creates x86_64 AppImage, Debian and RPM artifacts without publishing them from normal branch CI.

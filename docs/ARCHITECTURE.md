@@ -82,4 +82,4 @@ Managed tunnels use `ssh -N` with `BatchMode=yes` and `ExitOnForwardFailure=yes`
 
 ## Packaging
 
-Electron Builder produces AppImage, Debian and RPM artifacts for x64 and arm64. The package declares Python 3 and OpenSSH as runtime dependencies; optional Mosh, FreeRDP and TigerVNC clients remain distribution-managed.
+Electron Builder currently produces AppImage, Debian and RPM artifacts for Linux x86_64. The package declares Python 3 and OpenSSH as runtime dependencies; optional Mosh, FreeRDP and TigerVNC clients remain distribution-managed. Windows, macOS and Linux ARM64 packages are not currently produced.
