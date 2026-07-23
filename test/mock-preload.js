@@ -66,6 +66,8 @@
             { name: 'compose.yaml', path: `${path}/compose.yaml`.replace('//', '/'), permissions: '-rw-r-----', size: 4216, modifiedAt: new Date().toISOString(), directory: false }
           ],
       mkdir: async () => true, rename: async () => true, remove: async () => true,
+      readText: async (_profile, remotePath) => `# Remote file: ${remotePath}\nAUX_COMMAND_REMOTE_EDIT_PREVIEW=1\n`,
+      writeText: async () => true,
       upload: async () => ({ canceled: true }), download: async () => ({ canceled: true }), disconnect: async () => true,
       onProgress: (callback) => on('sftp:progress', callback), onError: (callback) => on('sftp:error', callback)
     },

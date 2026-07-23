@@ -167,19 +167,28 @@ test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { sk
       webContents: { send: (channel, payload) => sftpEvents.push({ channel, payload }) }
     }));
 
-    fs.writeFileSync(path.join(fixture.rootDir, 'upload.txt'), 'AUX_SFTP_UPLOAD\n');
-    await sftpService.mkdir(profile, path.join(fixture.rootDir, 'remote-dir'));
-    await sftpService.upload(profile, path.join(fixture.rootDir, 'upload.txt'), path.join(fixture.rootDir, 'remote-dir', 'upload.txt'));
-    const entries = await sftpService.list(profile, path.join(fixture.rootDir, 'remote-dir'));
-    assert.equal(entries.some((entry) => entry.name === 'upload.txt' && !entry.directory), true);
-    const downloadPath = path.join(fixture.rootDir, 'download.txt');
-    await sftpService.download(profile, path.join(fixture.rootDir, 'remote-dir', 'upload.txt'), downloadPath);
-    assert.equal(fs.readFileSync(downloadPath, 'utf8'), 'AUX_SFTP_UPLOAD\n');
-    assert.equal(fs.statSync(downloadPath).mode & 0o777, 0o600);
-    assert.equal(sftpEvents.some((event) => event.channel === 'sftp:progress' && event.payload.profileId === profile.id), true);
-    await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir', 'upload.txt'), false);
-    await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir'), true);
-    sftpService.disconnect(profile.id);
+    try {
+      fs.writeFileSync(path.join(fixture.rootDir, 'upload.txt'), 'AUX_SFTP_UPLOAD\n');
+      await assert.doesNotReject(() => sftpService.mkdir(profile, path.join(fixture.rootDir, 'remote-dir')), 'mkdir remote-dir');
+      await assert.doesNotReject(() => sftpService.upload(profile, path.join(fixture.rootDir, 'upload.txt'), path.join(fixture.rootDir, 'remote-dir', 'upload.txt')), 'upload fixture file');
+      const entries = await sftpService.list(profile, path.join(fixture.rootDir, 'remote-dir'));
+      assert.equal(entries.some((entry) => entry.name === 'upload.txt' && !entry.directory), true);
+      const remoteEditPath = path.join(fixture.rootDir, 'remote-dir', 'editable.txt');
+      await assert.doesNotReject(() => sftpService.writeText(profile, remoteEditPath, 'AUX_SFTP_EDIT_BEFORE\n'), 'write editable.txt before content');
+      assert.equal(await sftpService.readText(profile, remoteEditPath), 'AUX_SFTP_EDIT_BEFORE\n');
+      await assert.doesNotReject(() => sftpService.writeText(profile, remoteEditPath, 'AUX_SFTP_EDIT_AFTER\n'), 'write editable.txt after content');
+      assert.equal(await sftpService.readText(profile, remoteEditPath), 'AUX_SFTP_EDIT_AFTER\n');
+      const downloadPath = path.join(fixture.rootDir, 'download.txt');
+      await sftpService.download(profile, path.join(fixture.rootDir, 'remote-dir', 'upload.txt'), downloadPath);
+      assert.equal(fs.readFileSync(downloadPath, 'utf8'), 'AUX_SFTP_UPLOAD\n');
+      assert.equal(fs.statSync(downloadPath).mode & 0o777, 0o600);
+      assert.equal(sftpEvents.some((event) => event.channel === 'sftp:progress' && event.payload.profileId === profile.id), true);
+      await sftpService.remove(profile, remoteEditPath, false);
+      await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir', 'upload.txt'), false);
+      await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir'), true);
+    } finally {
+      sftpService.disconnect(profile.id);
+    }
   } finally {
     process.env.HOME = originalHome;
     fixture.close();

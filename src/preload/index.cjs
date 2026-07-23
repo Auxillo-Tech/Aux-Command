@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     mkdir: (profile, remotePath) => invoke('sftp:mkdir', profile, remotePath),
     rename: (profile, oldPath, newPath) => invoke('sftp:rename', profile, oldPath, newPath),
     remove: (profile, remotePath, directory) => invoke('sftp:remove', profile, remotePath, directory),
+    readText: (profile, remotePath) => invoke('sftp:read-text', profile, remotePath),
+    writeText: (profile, remotePath, content) => invoke('sftp:write-text', profile, remotePath, content),
     upload: (profile, remoteDirectory) => invoke('sftp:upload', profile, remoteDirectory),
     download: (profile, remotePath) => invoke('sftp:download', profile, remotePath),
     disconnect: (profileId) => invoke('sftp:disconnect', profileId),

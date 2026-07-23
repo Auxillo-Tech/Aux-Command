@@ -18,6 +18,7 @@
     localButton: $('#local-button'),
     snippetsButton: $('#snippets-button'),
     tunnelsButton: $('#tunnels-button'),
+    updatesButton: $('#updates-button'),
     diagnosticsButton: $('#diagnostics-button'),
     websiteButton: $('#website-button'),
     newProfileButton: $('#new-profile-button'),
@@ -56,6 +57,7 @@
     sftpRefresh: $('#sftp-refresh'),
     sftpUpload: $('#sftp-upload'),
     sftpDownload: $('#sftp-download'),
+    sftpEdit: $('#sftp-edit'),
     sftpMkdir: $('#sftp-mkdir'),
     sftpMore: $('#sftp-more'),
     fileList: $('#file-list'),
@@ -227,6 +229,66 @@
     if (status.updateAvailable) return `Available: ${status.latestVersion || 'new version'}`;
     if (status.latestVersion) return `Current: ${status.latestVersion}`;
     return 'Manual check available.';
+  }
+
+  function updateActionButtons(updateStatus = state.updates || {}, afterAction = () => {}) {
+    const checkUpdateButton = node('button', { type: 'button', className: 'mini-button', text: updateStatus.checking ? 'Checking…' : 'Check for updates' });
+    checkUpdateButton.disabled = Boolean(updateStatus.checking);
+    checkUpdateButton.addEventListener('click', async () => {
+      try {
+        updateUpdateState(await api.updates.check());
+        setStatus(describeUpdateState(), state.updates?.error ? 'error' : 'ready');
+      } catch (error) {
+        updateUpdateState({ error: errorMessage(error), checking: false });
+      }
+      afterAction();
+    });
+    const updateActions = [checkUpdateButton];
+    if (updateStatus.updateAvailable && !updateStatus.downloaded) {
+      const downloadButton = node('button', { type: 'button', className: 'mini-button primary', text: 'Download update' });
+      downloadButton.addEventListener('click', async () => {
+        try { updateUpdateState(await api.updates.download()); }
+        catch (error) { updateUpdateState({ error: errorMessage(error), checking: false }); }
+        afterAction();
+      });
+      updateActions.push(downloadButton);
+    }
+    if (updateStatus.downloaded) {
+      const installButton = node('button', { type: 'button', className: 'mini-button primary', text: 'Restart and install' });
+      installButton.addEventListener('click', () => api.updates.quitAndInstall().catch((error) => updateUpdateState({ error: errorMessage(error) })));
+      updateActions.push(installButton);
+    }
+    return updateActions;
+  }
+
+  function updateReleaseSection(updateStatus = state.updates || {}, afterAction = () => {}) {
+    return node('div', {}, [
+      node('div', { className: 'section-title', text: 'GitHub release updates' }),
+      node('div', { className: `diagnostic-row${updateStatus.error ? '' : ' available'}` }, [
+        node('span', { className: 'indicator' }),
+        node('div', {}, [node('strong', { text: 'Update channel' }), node('small', { text: describeUpdateState(updateStatus) })]),
+        node('span', { className: 'diagnostic-state', text: updateStatus.supported ? 'GitHub' : 'Source' })
+      ]),
+      node('div', { className: 'button-row' }, updateActionButtons(updateStatus, afterAction))
+    ]);
+  }
+
+  function openUpdatesModal() {
+    let controller;
+    const body = node('div', { className: 'modal-sections' }, [
+      updateReleaseSection(state.updates || { supported: false }, () => {
+        controller?.close();
+        openUpdatesModal();
+      }),
+      node('div', { className: 'warning-box', text: 'Updates are delivered through GitHub Releases. Draft releases are internal review artifacts; updater discovery requires a published release.' })
+    ]);
+    controller = showModal({
+      title: 'Aux Command updates',
+      description: 'Check the configured GitHub release channel and install downloaded updates.',
+      body,
+      className: 'narrow',
+      actions: [{ label: 'Close', busy: false }]
+    });
   }
 
   async function runTask(message, task, successMessage = '') {
@@ -1889,7 +1951,7 @@
 
   function activateSftpEntry(entry) {
     if (entry.directory) loadSftp(entry.path);
-    else downloadSelected();
+    else openRemoteTextEditor();
   }
 
   function selectedSftpEntry() {
@@ -1902,6 +1964,7 @@
     elements.sftpUpload.disabled = !ready;
     elements.sftpMkdir.disabled = !ready;
     elements.sftpDownload.disabled = !selected || selected.directory;
+    elements.sftpEdit.disabled = !selected || selected.directory;
     elements.sftpMore.disabled = !selected;
     elements.sftpUp.disabled = !ready || state.sftp.path === '/';
   }
@@ -1924,6 +1987,63 @@
       const result = await api.sftp.download(state.sftp.profile, entry.path);
       if (!result.canceled) toast('Download complete', result.localPath, 'success');
     } catch (error) { toast('Download failed', errorMessage(error), 'error'); }
+  }
+
+  async function openRemoteTextEditor() {
+    const entry = selectedSftpEntry();
+    if (!entry || entry.directory || !state.sftp.profile) return;
+    let original = '';
+    try {
+      elements.transferStatus.textContent = `Opening ${entry.path}…`;
+      original = await api.sftp.readText(state.sftp.profile, entry.path);
+      elements.transferStatus.textContent = `Editing ${entry.path}`;
+    } catch (error) {
+      toast('Remote edit failed', errorMessage(error), 'error');
+      return;
+    }
+    const editor = node('textarea', {
+      name: 'content',
+      className: 'remote-editor',
+      attrs: { spellcheck: 'false', autofocus: '' }
+    });
+    editor.value = original;
+    const remotePath = textInput('path', entry.path, { required: true });
+    remotePath.readOnly = true;
+    const form = node('form', { className: 'form-grid compact-form' }, [
+      field('Remote path', remotePath, 'Path is read-only for this editor; use More → Rename to move files.', 'full'),
+      field('File contents', editor, 'Inline editing is limited to UTF-8 text files up to 1 MB. Saving overwrites the remote file atomically via a temporary upload then rename.', 'full'),
+      node('div', { className: 'warning-box full', text: 'Remote edits are live changes. Verify the target file and keep a backup or version-control path for production systems.' })
+    ]);
+    let controller;
+    const save = async () => {
+      if (editor.value === original) {
+        toast('No remote changes', entry.name);
+        return true;
+      }
+      await api.sftp.writeText(state.sftp.profile, entry.path, editor.value);
+      toast('Remote file saved', entry.path, 'success');
+      await loadSftp(state.sftp.path);
+      return true;
+    };
+    controller = showModal({
+      title: `Edit ${entry.name}`,
+      description: entry.path,
+      body: form,
+      className: 'wide',
+      actions: [
+        { label: 'Cancel', busy: false },
+        { label: 'Save remote file', className: 'primary', run: save }
+      ]
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const close = await save();
+        if (close) controller.close();
+      } catch (error) {
+        toast('Remote save failed', errorMessage(error), 'error');
+      }
+    });
   }
 
   async function makeRemoteDirectory() {
@@ -2097,30 +2217,6 @@
       ]));
     }
     const updateStatus = state.updates || { supported: false };
-    const checkUpdateButton = node('button', { type: 'button', className: 'mini-button', text: updateStatus.checking ? 'Checking…' : 'Check for updates' });
-    checkUpdateButton.disabled = Boolean(updateStatus.checking);
-    checkUpdateButton.addEventListener('click', async () => {
-      try {
-        updateUpdateState(await api.updates.check());
-        setStatus(describeUpdateState(), state.updates?.error ? 'error' : 'ready');
-      } catch (error) {
-        updateUpdateState({ error: errorMessage(error), checking: false });
-      }
-    });
-    const updateActions = [checkUpdateButton];
-    if (updateStatus.updateAvailable && !updateStatus.downloaded) {
-      const downloadButton = node('button', { type: 'button', className: 'mini-button primary', text: 'Download update' });
-      downloadButton.addEventListener('click', async () => {
-        try { updateUpdateState(await api.updates.download()); }
-        catch (error) { updateUpdateState({ error: errorMessage(error), checking: false }); }
-      });
-      updateActions.push(downloadButton);
-    }
-    if (updateStatus.downloaded) {
-      const installButton = node('button', { type: 'button', className: 'mini-button primary', text: 'Restart and install' });
-      installButton.addEventListener('click', () => api.updates.quitAndInstall().catch((error) => updateUpdateState({ error: errorMessage(error) })));
-      updateActions.push(installButton);
-    }
     const body = node('div', { className: 'modal-sections' }, [
       node('div', { className: 'system-summary' }, [
         node('div', {}, [node('span', { text: 'Platform' }), node('strong', { text: `${info.platform} · ${info.architecture}` })]),
@@ -2128,15 +2224,7 @@
         node('div', {}, [node('span', { text: 'Shell' }), node('strong', { text: info.shell || 'Unknown' })]),
         node('div', {}, [node('span', { text: 'SSH agent' }), node('strong', { text: info.sshAgent ? 'Available' : 'Not detected' })])
       ]),
-      node('div', {}, [
-        node('div', { className: 'section-title', text: 'GitHub release updates' }),
-        node('div', { className: 'diagnostic-row available' }, [
-          node('span', { className: 'indicator' }),
-          node('div', {}, [node('strong', { text: 'Update channel' }), node('small', { text: describeUpdateState(updateStatus) })]),
-          node('span', { className: 'diagnostic-state', text: updateStatus.supported ? 'GitHub' : 'Source' })
-        ]),
-        node('div', { className: 'button-row' }, updateActions)
-      ]),
+      updateReleaseSection(updateStatus, openDiagnosticsModal),
       node('div', {}, [node('div', { className: 'section-title', text: 'Protocol capabilities' }), protocolList]),
       node('div', {}, [node('div', { className: 'section-title', text: 'Runtime tools' }), list]),
       node('div', { className: 'warning-box', text: 'Aux Command bundles local PTY, graphical SFTP, Telnet and serial bridges. RDP, VNC and Mosh still depend on host-installed clients/servers; X11 forwarding uses OpenSSH -X and the host display.' })
@@ -2269,6 +2357,7 @@
     elements.localButton.addEventListener('click', () => connectProfile(localProfile()));
     elements.snippetsButton.addEventListener('click', openSnippetsModal);
     elements.tunnelsButton.addEventListener('click', openTunnelsModal);
+    elements.updatesButton.addEventListener('click', openUpdatesModal);
     elements.diagnosticsButton.addEventListener('click', openDiagnosticsModal);
     elements.websiteButton.addEventListener('click', () => api.system.openWebsite().catch((error) => toast('Could not open website', errorMessage(error), 'error')));
     elements.newProfileButton.addEventListener('click', () => openProfileModal());
@@ -2292,6 +2381,7 @@
     elements.sftpPath.addEventListener('keydown', (event) => { if (event.key === 'Enter') loadSftp(elements.sftpPath.value); });
     elements.sftpUpload.addEventListener('click', uploadFile);
     elements.sftpDownload.addEventListener('click', downloadSelected);
+    elements.sftpEdit.addEventListener('click', openRemoteTextEditor);
     elements.sftpMkdir.addEventListener('click', makeRemoteDirectory);
     elements.sftpMore.addEventListener('click', openSftpMore);
 

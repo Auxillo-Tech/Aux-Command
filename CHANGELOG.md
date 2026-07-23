@@ -14,12 +14,15 @@
 - Added per-profile terminal appearance controls for theme, font stack, font size, cursor style, cursor blink, and scrollback depth.
 - Added Serial to Quick Connect with `/dev/...` device-path handling.
 - Added an advanced per-profile OpenSSH known-hosts-file override for isolated lab/fixture profiles.
+- Added a top-level Updates toolbar control for GitHub release update checks, downloads, and install restart.
+- Added inline graphical SFTP UTF-8 text file editing with live OpenSSH fixture coverage and remote overwrite via POSIX rename when supported.
 
 ### Fixed
 
 - Prevented global terminal shortcuts from firing while operators type in Quick Connect, profile search, SFTP path, or other editable fields.
 - Improved keyboard focus handling for non-closeable SSH trust/authentication prompts so focus lands on visible controls, not hidden close buttons.
 - Added command-palette combobox/listbox/option ARIA state and explicit icon-button labels for better keyboard and assistive-technology behavior.
+- Fixed graphical SFTP remote text replacement so overwriting existing files uses OpenSSH POSIX rename where available instead of failing on non-overwriting SFTP rename behavior.
 
 ## 0.1.0 — 2026-07-22
 

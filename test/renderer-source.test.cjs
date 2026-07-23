@@ -9,6 +9,7 @@ const root = path.join(__dirname, '..');
 const renderer = fs.readFileSync(path.join(root, 'src/renderer/renderer.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'src/renderer/index.html'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'src/renderer/styles.css'), 'utf8');
+const preload = fs.readFileSync(path.join(root, 'src/preload/index.cjs'), 'utf8');
 
 test('renderer reattaches or closes existing main-process terminal sessions after reload', () => {
   assert.match(renderer, /function restoreInitialSessions\(sessions = \[\]\)/u);
@@ -236,10 +237,26 @@ test('renderer exposes resizable tiled panes with pane size controls', () => {
 test('diagnostics exposes GitHub release update controls', () => {
   assert.match(renderer, /function updateUpdateState\(status = \{\}\)/u);
   assert.match(renderer, /function describeUpdateState\(status = state\.updates \|\| \{\}\)/u);
+  assert.match(indexHtml, /id="updates-button"/u);
+  assert.match(renderer, /elements\.updatesButton/u);
+  assert.match(renderer, /function openUpdatesModal\(\)/u);
+  assert.match(renderer, /elements\.updatesButton\.addEventListener\('click', openUpdatesModal\)/u);
   assert.match(renderer, /GitHub release updates/u);
   assert.match(renderer, /api\.updates\.check\(\)/u);
   assert.match(renderer, /api\.updates\.download\(\)/u);
   assert.match(renderer, /api\.updates\.onStatus\(\(status\) => updateUpdateState\(status\)\)/u);
+});
+
+test('graphical SFTP exposes remote text file view and edit actions', () => {
+  assert.match(indexHtml, /id="sftp-edit"/u);
+  assert.match(indexHtml, /id="sftp-more"[^>]*>More/u);
+  assert.match(preload, /readText: \(profile, remotePath\) => invoke\('sftp:read-text', profile, remotePath\)/u);
+  assert.match(preload, /writeText: \(profile, remotePath, content\) => invoke\('sftp:write-text', profile, remotePath, content\)/u);
+  assert.match(renderer, /async function openRemoteTextEditor\(\)/u);
+  assert.match(renderer, /await api\.sftp\.readText\(state\.sftp\.profile, entry\.path\)/u);
+  assert.match(renderer, /await api\.sftp\.writeText\(state\.sftp\.profile, entry\.path, editor\.value\)/u);
+  assert.match(renderer, /elements\.sftpEdit\.addEventListener\('click', openRemoteTextEditor\)/u);
+  assert.match(renderer, /else openRemoteTextEditor\(\)/u);
 });
 
 test('UI separates session navigation from contextual commands and labels global actions', () => {
