@@ -17,6 +17,7 @@ function fixture() {
     shell: {},
     app: { getVersion: () => '0.1.0', getName: () => 'Aux Command' },
     profileStore: { list: () => [], snippets: () => [] },
+    settingsStore: { get: () => ({ version: 1, workspace: { layout: 'single', paneMinWidth: 320, paneMinHeight: 220 } }), saveWorkspace: (workspace) => ({ version: 1, workspace }) },
     terminalService: { list: () => [] },
     externalService: {},
     tunnelService: { list: () => [] },
@@ -57,4 +58,5 @@ test('IPC accepts the current main window main frame', async () => {
   assert.equal(state.name, 'Aux Command');
   assert.equal(state.version, '0.1.0');
   assert.deepEqual(state.profiles, []);
+  assert.deepEqual(state.settings.workspace, { layout: 'single', paneMinWidth: 320, paneMinHeight: 220 });
 });

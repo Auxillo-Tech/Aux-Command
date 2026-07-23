@@ -296,6 +296,8 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | `Ctrl+Shift+C` | Copy terminal selection |
 | `Ctrl+Shift+V` | Paste into terminal |
 
+Tiled/single-session layout and tiled pane-size toolbar choices are persisted locally and restored on restart.
+
 Right-click copies selected terminal text; with no selection it pastes clipboard text.
 
 ---
@@ -308,7 +310,7 @@ Application data is stored beneath Electron’s Linux `userData` location, norma
 ~/.config/Aux Command/aux-command-data/
 ```
 
-Typical data includes profiles, command snippets, SFTP known-host fingerprints, and non-secret application state. Persistent SFTP secrets use the Linux desktop secret storage backend when that backend is encrypted.
+Typical data includes profiles, command snippets, SFTP known-host fingerprints, workstation layout settings, and non-secret application state. Persistent SFTP secrets use the Linux desktop secret storage backend when that backend is encrypted.
 
 ---
 

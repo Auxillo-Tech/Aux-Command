@@ -13,6 +13,7 @@ const {
   shell
 } = require('electron');
 const { ProfileStore } = require('./lib/profile-store.cjs');
+const { SettingsStore } = require('./lib/settings-store.cjs');
 const { PromptBroker } = require('./lib/prompt-broker.cjs');
 const { ExternalService } = require('./services/external-service.cjs');
 const { KnownHostService } = require('./services/known-host-service.cjs');
@@ -108,6 +109,7 @@ function createWindow() {
 function initializeServices() {
   const dataDir = path.join(app.getPath('userData'), 'aux-command-data');
   const profileStore = new ProfileStore(dataDir);
+  const settingsStore = new SettingsStore(dataDir);
   const promptBroker = new PromptBroker(getWindow);
   const vaultService = new VaultService(dataDir, safeStorage);
   const knownHostService = new KnownHostService(dataDir, promptBroker);
@@ -120,6 +122,7 @@ function initializeServices() {
 
   services = {
     profileStore,
+    settingsStore,
     promptBroker,
     vaultService,
     knownHostService,

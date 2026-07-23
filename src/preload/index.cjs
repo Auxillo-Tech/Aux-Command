@@ -14,7 +14,10 @@ function subscribe(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
-  app: Object.freeze({ getState: () => invoke('app:get-state') }),
+  app: Object.freeze({
+    getState: () => invoke('app:get-state'),
+    saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace)
+  }),
   profiles: Object.freeze({
     list: () => invoke('profiles:list'),
     save: (profile) => invoke('profiles:save', profile),

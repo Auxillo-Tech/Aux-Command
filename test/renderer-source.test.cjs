@@ -139,6 +139,14 @@ test('renderer exposes a tiled multi-session layout for split-pane operations', 
   assert.match(styles, /grid-auto-rows: minmax\(var\(--pane-min-height\), 1fr\)/u);
 });
 
+test('renderer persists workstation layout and pane-size toolbar preferences', () => {
+  assert.match(preload, /saveWorkspaceSettings: \(workspace\) => invoke\('app:save-workspace-settings', workspace\)/u);
+  assert.match(renderer, /function applyPersistedWorkspaceSettings\(settings\)/u);
+  assert.match(renderer, /function persistWorkspaceSettings\(\)/u);
+  assert.match(renderer, /api\.app\.saveWorkspaceSettings\(\{/u);
+  assert.match(renderer, /state\.initializing \? null : persistWorkspaceSettings\(\)/u);
+});
+
 test('renderer exposes guarded broadcast input across terminal sessions', () => {
   assert.match(indexHtml, /id="broadcast-toggle"/u);
   assert.match(indexHtml, /id="broadcast-warning"[^>]*role="alert"/u);
