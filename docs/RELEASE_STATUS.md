@@ -1,6 +1,6 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T07:39:37Z**
+Validated: **2026-07-23T07:59:15Z**
 Scope: **Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
@@ -80,6 +80,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
+- Workstation tiled/single layout and pane-size toolbar choices persist through a validated local settings store.
 - CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
 
 ### Packaged runtime

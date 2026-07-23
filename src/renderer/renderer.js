@@ -79,6 +79,8 @@
     layout: 'single',
     paneMinWidth: 320,
     paneMinHeight: 220,
+    initializing: true,
+    workspacePersistTimer: null,
     broadcastInput: false,
     terminalSearchOpen: false,
     terminalSearchQuery: '',
@@ -991,11 +993,34 @@
     fitVisibleTerminals();
   }
 
+  function applyPersistedWorkspaceSettings(settings) {
+    const workspace = settings?.workspace || {};
+    state.layout = workspace.layout === 'grid' ? 'grid' : 'single';
+    const width = Number(workspace.paneMinWidth);
+    const height = Number(workspace.paneMinHeight);
+    state.paneMinWidth = Number.isFinite(width) ? Math.max(240, Math.min(720, Math.round(width))) : 320;
+    state.paneMinHeight = Number.isFinite(height) ? Math.max(160, Math.min(520, Math.round(height))) : 220;
+    applyTerminalLayout();
+  }
+
+  function persistWorkspaceSettings() {
+    if (state.workspacePersistTimer) clearTimeout(state.workspacePersistTimer);
+    state.workspacePersistTimer = setTimeout(() => {
+      state.workspacePersistTimer = null;
+      api.app.saveWorkspaceSettings({
+        layout: state.layout,
+        paneMinWidth: state.paneMinWidth,
+        paneMinHeight: state.paneMinHeight
+      }).catch((error) => setStatus(`Workspace settings not saved: ${errorMessage(error)}`, 'error'));
+    }, 250);
+  }
+
   function adjustPaneSize(delta) {
     const step = Number(delta) || 0;
     state.paneMinWidth = Math.max(240, Math.min(720, state.paneMinWidth + step));
     state.paneMinHeight = Math.max(160, Math.min(520, state.paneMinHeight + Math.round(step * 0.65)));
     applyPaneSize();
+    state.initializing ? null : persistWorkspaceSettings();
     setStatus(`Pane size ${state.paneMinWidth}px × ${state.paneMinHeight}px`);
   }
 
@@ -1037,6 +1062,7 @@
     }
     state.layout = state.layout === 'single' ? 'grid' : 'single';
     applyTerminalLayout();
+    state.initializing ? null : persistWorkspaceSettings();
   }
 
   function applyBroadcastState(enabled) {
@@ -2465,6 +2491,7 @@
     setStatus('Loading workspace…', 'busy');
     try {
       const initial = await api.app.getState();
+      applyPersistedWorkspaceSettings(initial.settings);
       state.snippets = initial.snippets || [];
       state.diagnostics = initial.diagnostics || null;
       updateUpdateState(initial.updates || {});
@@ -2478,9 +2505,11 @@
       elements.agentStatus.classList.toggle('good', agentAvailable);
       elements.sftpEmpty.classList.add('visible');
       elements.appShell.setAttribute('aria-busy', 'false');
+      state.initializing = false;
       elements.initializationError.hidden = true;
       setStatus('Ready');
     } catch (error) {
+      state.initializing = false;
       const detail = errorMessage(error);
       elements.appShell.setAttribute('aria-busy', 'false');
       elements.welcome.classList.add('hidden');

@@ -9,6 +9,7 @@ function registerIpc({
   shell,
   app,
   profileStore,
+  settingsStore,
   terminalService,
   externalService,
   tunnelService,
@@ -35,6 +36,7 @@ function registerIpc({
     version: app.getVersion(),
     name: app.getName(),
     profiles: profileStore.list(),
+    settings: settingsStore.get(),
     snippets: profileStore.snippets(),
     sessions: terminalService.list(),
     tunnels: tunnelService.list(),
@@ -67,6 +69,8 @@ function registerIpc({
     const payload = JSON.parse(systemService.readTextFile(result.filePaths[0]));
     return { canceled: false, ...profileStore.importSafe(payload) };
   });
+
+  handle('app:save-workspace-settings', (workspace) => settingsStore.saveWorkspace(workspace));
 
   handle('snippets:list', () => profileStore.snippets());
   handle('snippets:save', (snippet) => profileStore.saveSnippet(snippet));

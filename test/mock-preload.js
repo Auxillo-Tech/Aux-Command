@@ -33,7 +33,10 @@
   window.addEventListener('unhandledrejection', (event) => { document.documentElement.dataset.previewError = String(event.reason?.message || event.reason); });
 
   window.auxCommand = {
-    app: { getState: async () => ({ version: '0.1.0', name: 'Aux Command', profiles, snippets: [], sessions: [], tunnels: [], vault: { persistentEncryptionAvailable: true }, diagnostics }) },
+    app: {
+      getState: async () => ({ version: '0.1.0', name: 'Aux Command', profiles, settings: { version: 1, workspace: { layout: 'single', paneMinWidth: 320, paneMinHeight: 220 } }, snippets: [], sessions: [], tunnels: [], vault: { persistentEncryptionAvailable: true }, diagnostics }),
+      saveWorkspaceSettings: async (workspace) => ({ version: 1, workspace })
+    },
     profiles: {
       list: async () => profiles,
       save: async (profile) => profile,
