@@ -1,0 +1,132 @@
+{
+  "name": "aux-command",
+  "version": "0.1.0",
+  "description": "Auxillo's Linux-native remote operations workstation.",
+  "main": "src/main/index.cjs",
+  "desktopName": "aux-command.desktop",
+  "author": "Auxillo <https://auxillo.tech>",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test test/*.test.cjs",
+    "check": "node scripts/check-syntax.cjs && node --test test/*.test.cjs",
+    "pack": "electron-builder --dir --linux",
+    "dist": "electron-builder --linux AppImage deb rpm",
+    "dist:x64": "node scripts/release-metadata.cjs && bash scripts/build-linux-x64.sh",
+    "smoke:cdp": "python3 scripts/e2e-cdp-smoke.py",
+    "soak:cdp": "python3 scripts/soak-cdp.py",
+    "release:metadata": "node scripts/release-metadata.cjs",
+    "release:manifest": "node scripts/release-metadata.cjs && node scripts/release-manifest.cjs",
+    "release:verify": "node scripts/verify-release.cjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/xterm": "6.0.0",
+    "electron-updater": "6.8.9",
+    "ssh2": "1.17.0"
+  },
+  "devDependencies": {
+    "@electron/fuses": "2.1.3",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": false,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": true
+    },
+    "appId": "tech.auxillo.command",
+    "productName": "Aux Command",
+    "artifactName": "Aux-Command-${version}-${arch}.${ext}",
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Auxillo-Tech",
+        "repo": "Aux-Command",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "src/**/*",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "THIRD_PARTY_LICENSES.txt",
+      "build/icons/256x256.png"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "linux": {
+      "executableName": "aux-command",
+      "syncDesktopName": true,
+      "category": "Network",
+      "synopsis": "Secure remote operations workstation",
+      "description": "Manage SSH, SFTP, tunnels, RDP, VNC, Mosh, Telnet and serial sessions from one Linux desktop application.",
+      "icon": "build/icons",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "deb": {
+      "depends": [
+        "openssh-client",
+        "python3"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "openssh-clients",
+        "python3"
+      ]
+    },
+    "asarUnpack": [
+      "src/main/helpers/process_guard.py",
+      "src/main/helpers/pty_bridge.py",
+      "src/main/helpers/serial_bridge.py",
+      "src/main/helpers/telnet_bridge.py"
+    ]
+  },
+  "homepage": "https://auxillo.tech",
+  "keywords": [
+    "ssh",
+    "sftp",
+    "terminal",
+    "linux",
+    "rdp",
+    "vnc",
+    "mosh",
+    "tunnel",
+    "serial"
+  ]
+}

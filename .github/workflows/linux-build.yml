@@ -1,0 +1,70 @@
+name: Linux build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3 rpm
+      - name: Install JavaScript dependencies deterministically
+        run: npm ci
+      - name: Validate source and tests
+        run: npm run check
+      - name: Audit dependency vulnerabilities and registry signatures
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit signatures
+      - name: Build x64 Linux packages and production SBOM
+        run: npm run dist:x64
+      - name: Build source archives
+        run: bash scripts/source-archives.sh
+      - name: Generate and verify unsigned CI release metadata
+        run: |
+          npm run release:manifest -- --no-sign
+          npm run release:verify -- --allow-unsigned
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*-sbom.cdx.json
+            dist/*-source.tar.gz
+            dist/*-source.zip
+            dist/latest*.yml
+            dist/SHA256SUMS
+            dist/release-manifest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aux-command-linux-x64
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*-sbom.cdx.json
+            dist/*-source.tar.gz
+            dist/*-source.zip
+            dist/latest*.yml
+            dist/SHA256SUMS
+            dist/release-manifest.json
+          if-no-files-found: error
