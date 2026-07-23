@@ -1,6 +1,6 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T16:26:43Z**
+Validated: **2026-07-23T16:49:55Z**
 Scope: **Free/open-source Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
@@ -34,7 +34,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **124/124 tests passed**
+- `npm run check`: **126/126 tests passed**
 - JavaScript syntax: 52 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
@@ -87,6 +87,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
 - Graphical SFTP supports drag-and-drop local file upload through Electron `webUtils.getPathForFile` and a main-process absolute-path validation gate.
 - FTP and FTPS profiles now use the graphical file-browser flow through `basic-ftp`; plain FTP is guarded by an explicit insecure-transport warning before credentials or files are sent.
+- SSH profiles now expose explicit SCP fallback transfer mode for constrained legacy servers; live local OpenSSH fixture coverage verifies SCP upload/download and confirms SCP mode refuses directory browsing.
 - SFTP now clears stale directory selections and ignores late responses when switching profiles or paths, so transfers/actions cannot target the wrong SSH profile after a fast tab switch.
 - Workstation tiled/single layout and pane-size toolbar choices persist through a validated local settings store.
 - CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
@@ -158,7 +159,7 @@ Exact byte sizes and SHA-256 digests are canonical in `dist/release-manifest.jso
 
 Representative live qualification is still needed for:
 
-- real remote SSH/SFTP endpoints beyond local fixtures
+- real remote SSH/SFTP/SCP endpoints beyond local fixtures
 - OpenSSH local, remote, and SOCKS forwarding against representative hosts
 - Mosh
 - RDP

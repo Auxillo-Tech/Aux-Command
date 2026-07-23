@@ -150,3 +150,14 @@ test('preserves optional OpenSSH known-hosts file overrides', () => {
     /knownHostsFile cannot start with a hyphen/u
   );
 });
+
+test('normalizes explicit SSH transfer modes for legacy servers', () => {
+  const sftp = normalizeProfile({ name: 'Modern SSH', protocol: 'ssh', host: 'host' });
+  assert.equal(sftp.transferMode, 'sftp');
+  const scp = normalizeProfile({ name: 'Legacy SSH', protocol: 'ssh', host: 'host', transferMode: 'scp' });
+  assert.equal(scp.transferMode, 'scp');
+  assert.throws(
+    () => normalizeProfile({ name: 'Bad transfer', protocol: 'ssh', host: 'host', transferMode: 'rsync' }),
+    /unsupported transfer mode/u
+  );
+});

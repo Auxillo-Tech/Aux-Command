@@ -12,6 +12,42 @@ const {
   connectionSignature, formatHostPort, isDirectory, modeToString, parseProxyJump, safeTimestampToIso
 } = require('../lib/sftp-utils.cjs');
 
+function quoteRemotePath(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function scpTarget(profile, remotePath) {
+  const destination = profile.useSshConfig && profile.sshAlias ? profile.sshAlias : profile.host;
+  const login = profile.username ? `${profile.username}@${destination}` : destination;
+  return `${login}:${quoteRemotePath(remotePath)}`;
+}
+
+function scpArgs(profile, source, destination) {
+  if (profile.credentialId) throw new Error('SCP fallback supports SSH agent or identity-file authentication only; stored account passwords require SFTP.');
+  const args = ['-O', '-T', '-B', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'StrictHostKeyChecking=accept-new'];
+  if (!profile.useSshConfig || profile.port !== 22) args.push('-P', String(profile.port));
+  if (profile.identityFile) args.push('-i', expandHome(profile.identityFile));
+  if (profile.knownHostsFile) args.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
+  if (profile.proxyJump) args.push('-J', profile.proxyJump);
+  if (profile.compression) args.push('-C');
+  args.push(source, destination);
+  return args;
+}
+
+function runScp(profile, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('scp', args, { stdio: ['ignore', 'ignore', 'pipe'], shell: false, env: process.env });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-8192); });
+    child.once('error', reject);
+    child.once('exit', (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error((stderr.trim() || `scp exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
+    });
+  });
+}
+
 function callSftp(sftp, method, ...args) {
   return new Promise((resolve, reject) => {
     sftp[method](...args, (error, result) => error ? reject(error) : resolve(result));
@@ -101,6 +137,7 @@ class SftpService {
   async connect(profileInput) {
     const profile = normalizeProfile(profileInput, profileInput?.id);
     if (profile.protocol !== 'ssh') throw new Error('SFTP requires an SSH profile');
+    if (profile.transferMode === 'scp') throw new Error('SCP transfer mode does not support directory browsing; use upload/download fallback actions only.');
     const signature = connectionSignature(profile);
     const existing = this.connections.get(profile.id);
     if (existing && existing.signature !== signature) this.disconnect(profile.id);
@@ -217,6 +254,8 @@ class SftpService {
   }
 
   async list(profileInput, remotePath = '/') {
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    if (profile.transferMode === 'scp') throw new Error('SCP transfer mode does not support directory browsing');
     const connection = await this.connect(profileInput);
     const target = normalizeRemotePath(remotePath);
     const entries = await callSftp(connection.sftp, 'readdir', target);
@@ -294,6 +333,8 @@ class SftpService {
   }
 
   async upload(profileInput, localPath, remotePath) {
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    if (profile.transferMode === 'scp') return this.#scpUpload(profile, localPath, remotePath);
     const connection = await this.connect(profileInput);
     if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
     const target = normalizeRemotePath(remotePath);
@@ -312,6 +353,8 @@ class SftpService {
   }
 
   async download(profileInput, remotePath, localPath) {
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    if (profile.transferMode === 'scp') return this.#scpDownload(profile, remotePath, localPath);
     const connection = await this.connect(profileInput);
     if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
     const source = normalizeRemotePath(remotePath);
@@ -335,6 +378,50 @@ class SftpService {
     } catch (error) {
       try { fs.rmSync(partialPath, { force: true }); } catch { /* best effort cleanup */ }
       throw error;
+    }
+    return true;
+  }
+
+  async #scpUpload(profile, localPath, remotePath) {
+    if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
+    const target = normalizeRemotePath(remotePath);
+    const stat = fs.statSync(localPath);
+    if (!stat.isFile()) throw new Error('SCP fallback uploads regular files only');
+    await runScp(profile, scpArgs(profile, localPath, scpTarget(profile, target)));
+    this.#emit('sftp:progress', {
+      profileId: profile.id,
+      direction: 'upload',
+      path: target,
+      transferred: stat.size,
+      total: stat.size
+    });
+    return true;
+  }
+
+  async #scpDownload(profile, remotePath, localPath) {
+    if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
+    const source = normalizeRemotePath(remotePath);
+    const partialPath = `${localPath}.aux-command-${randomUUID()}.part`;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-scp-download-'));
+    const fetchedPath = path.join(tempDir, path.posix.basename(source));
+    try {
+      await runScp(profile, scpArgs(profile, scpTarget(profile, source), tempDir));
+      fs.renameSync(fetchedPath, partialPath);
+      fs.renameSync(partialPath, localPath);
+      fs.chmodSync(localPath, 0o600);
+      const size = fs.statSync(localPath).size;
+      this.#emit('sftp:progress', {
+        profileId: profile.id,
+        direction: 'download',
+        path: source,
+        transferred: size,
+        total: size
+      });
+    } catch (error) {
+      try { fs.rmSync(partialPath, { force: true }); } catch { /* best effort cleanup */ }
+      throw error;
+    } finally {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
     }
     return true;
   }

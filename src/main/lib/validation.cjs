@@ -5,6 +5,7 @@ const os = require('node:os');
 const { randomUUID } = require('node:crypto');
 
 const PROTOCOLS = new Set(['local', 'ssh', 'mosh', 'telnet', 'serial', 'ftp', 'ftps', 'rdp', 'vnc']);
+const TRANSFER_MODES = new Set(['sftp', 'scp']);
 const TUNNEL_TYPES = new Set(['local', 'remote', 'dynamic']);
 const CREDENTIAL_KINDS = new Set(['password', 'passphrase']);
 const TERMINAL_THEMES = new Set(['aux-dark', 'light', 'high-contrast']);
@@ -85,6 +86,8 @@ function normalizeProfile(input = {}, existingId = '') {
   if (!TERMINAL_THEMES.has(terminalTheme)) fail(`unsupported terminal theme: ${terminalTheme}`);
   const terminalCursorStyle = cleanString(input.terminalCursorStyle || 'block', 'terminalCursorStyle', { max: 32 }).toLowerCase();
   if (!TERMINAL_CURSOR_STYLES.has(terminalCursorStyle)) fail(`unsupported terminal cursor style: ${terminalCursorStyle}`);
+  const transferMode = cleanString(input.transferMode || 'sftp', 'transferMode', { max: 16 }).toLowerCase();
+  if (!TRANSFER_MODES.has(transferMode)) fail(`unsupported transfer mode: ${transferMode}`);
 
   const profile = {
     id: cleanString(existingId || input.id || randomUUID(), 'id', { required: true, max: 128 }),
@@ -97,6 +100,7 @@ function normalizeProfile(input = {}, existingId = '') {
     identityFile,
     knownHostsFile,
     sshAlias: rejectOptionLike(cleanString(input.sshAlias, 'sshAlias', { max: 255 }), 'sshAlias', { rejectWhitespace: true }),
+    transferMode: protocol === 'ssh' ? transferMode : 'sftp',
     credentialId: cleanString(input.credentialId, 'credentialId', { max: 128 }),
     credentialKind,
     tags: cleanTags(input.tags),
@@ -183,6 +187,7 @@ module.exports = {
   PROTOCOLS,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_THEMES,
+  TRANSFER_MODES,
   TUNNEL_TYPES,
   cleanBoolean,
   cleanBoundedInteger,

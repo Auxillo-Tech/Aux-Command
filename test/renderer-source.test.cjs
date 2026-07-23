@@ -335,6 +335,13 @@ test('main process routes FTP and FTPS profiles through the FTP service', () => 
   assert.match(ipc, /sftp:upload-paths/u);
 });
 
+test('renderer exposes explicit SCP fallback transfer mode for SSH profiles', () => {
+  assert.match(renderer, /selectInput\('transferMode'/u);
+  assert.match(renderer, /\['scp', 'SCP fallback'/u);
+  assert.match(renderer, /SCP is upload\/download fallback only/u);
+  assert.match(renderer, /transferMode: String\(values\.get\('transferMode'\) \|\| 'sftp'\)/u);
+});
+
 test('UI separates session navigation from contextual commands and labels global actions', () => {
   assert.match(indexHtml, /id="session-tabs"[^>]*role="tablist"/u);
   assert.match(indexHtml, /class="session-toolbar"/u);

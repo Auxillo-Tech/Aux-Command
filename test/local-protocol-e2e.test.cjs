@@ -183,7 +183,18 @@ test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { sk
       assert.equal(fs.readFileSync(downloadPath, 'utf8'), 'AUX_SFTP_UPLOAD\n');
       assert.equal(fs.statSync(downloadPath).mode & 0o777, 0o600);
       assert.equal(sftpEvents.some((event) => event.channel === 'sftp:progress' && event.payload.profileId === profile.id), true);
+      const scpProfile = { ...profile, id: 'fixture-scp', transferMode: 'scp' };
+      const scpUploadSource = path.join(fixture.rootDir, 'scp-upload.txt');
+      const scpRemotePath = path.join(fixture.rootDir, 'remote-dir', 'scp-upload.txt');
+      const scpDownloadPath = path.join(fixture.rootDir, 'scp-download.txt');
+      fs.writeFileSync(scpUploadSource, 'AUX_SCP_UPLOAD\n');
+      await assert.doesNotReject(() => sftpService.upload(scpProfile, scpUploadSource, scpRemotePath), 'scp upload fixture file');
+      await assert.rejects(() => sftpService.list(scpProfile, path.join(fixture.rootDir, 'remote-dir')), /SCP transfer mode does not support directory browsing/u);
+      await assert.doesNotReject(() => sftpService.download(scpProfile, scpRemotePath, scpDownloadPath), 'scp download fixture file');
+      assert.equal(fs.readFileSync(scpDownloadPath, 'utf8'), 'AUX_SCP_UPLOAD\n');
+      assert.equal(fs.statSync(scpDownloadPath).mode & 0o777, 0o600);
       await sftpService.remove(profile, remoteEditPath, false);
+      await sftpService.remove(profile, scpRemotePath, false);
       await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir', 'upload.txt'), false);
       await sftpService.remove(profile, path.join(fixture.rootDir, 'remote-dir'), true);
     } finally {

@@ -9,6 +9,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Local shell, SSH, Mosh, bundled Telnet and bundled serial sessions.
 - SSH profile manager and `~/.ssh/config` import.
 - Graphical SFTP browser with upload, download, mkdir, rename and delete.
+- SCP fallback transfer mode for SSH profiles on constrained legacy servers without SFTP.
 - FTP and FTPS file-browser profiles with explicit insecure-transport warning for plain FTP.
 - Local, remote and dynamic OpenSSH tunnels.
 - External FreeRDP and TigerVNC launchers.
@@ -55,7 +56,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 ## 0.4 — protocol parity
 
 - Deeper FTP/FTPS transfer management, including queue pause/resume/retry and additional TLS policy controls.
-- SCP browser/transfer mode as an SFTP fallback for constrained legacy servers.
+- Deeper SCP workflow polish, including explicit remote-path download prompts and broader legacy-server qualification.
 - Optional XDMCP/remote Unix desktop workflows using a Linux-appropriate design rather than copying Windows-specific embedded X-server behavior.
 - Host X11/Xwayland/Xephyr/Xpra workflow management for remote graphical Unix applications.
 - Legacy Rlogin/RSH only if explicitly justified by real user demand and guarded as insecure legacy transport.

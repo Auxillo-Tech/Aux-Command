@@ -17,6 +17,7 @@
 - Added guarded terminal macro recording that requires a secret-capture warning and saves reviewed input as replayable snippets.
 - Added graphical SFTP drag-and-drop upload with preload path resolution and main-process absolute-path validation.
 - Added FTP and FTPS file-browser profiles through `basic-ftp`, with an explicit insecure-transport warning before opening plain FTP.
+- Added explicit SCP fallback transfer mode for SSH profiles on constrained legacy servers, with local OpenSSH fixture coverage for upload/download and a clear no-directory-browsing boundary.
 - Added per-profile terminal appearance controls for theme, font stack, font size, cursor style, cursor blink, and scrollback depth.
 - Added Serial to Quick Connect with `/dev/...` device-path handling.
 - Added an advanced per-profile OpenSSH known-hosts-file override for isolated lab/fixture profiles.
