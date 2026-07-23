@@ -26,15 +26,23 @@ Aux Command desktop release artifacts are distributed from GitHub Releases, not 
 - `.github/workflows/release.yml` builds, verifies, attests, uploads workflow artifacts, and can publish GitHub Release assets.
 - `.github/workflows/linux-build.yml` runs the same core checks for pushes and pull requests.
 
-## Required GitHub setup before first real release
+## GitHub setup status
 
-1. Create the GitHub repository under the final owner/name.
-2. If the repository name changes from `Auxillo-Tech/Aux-Command`, update `package.json` `build.publish.owner` and `build.publish.repo` before tagging.
-3. Push the repository source.
-4. Create and push an immutable semver tag, for example `v0.1.0`.
-5. Let the `release` workflow build artifacts from the tag.
-6. Review workflow logs, uploaded artifacts, `release-manifest.json`, `SHA256SUMS`, and attestations when the repository is public and GitHub enables artifact attestations for the org plan.
-7. Publish the drafted GitHub Release only after the artifact set and release notes are correct.
+Completed:
+
+- GitHub repository exists at `Auxillo-Tech/Aux-Command`.
+- Source is pushed to `main`.
+- GitHub Actions Linux CI is green on `main`.
+- Repository metadata, topics, issue templates, pull request template, Dependabot config, and security policy are present.
+- Electron Builder publish config targets `Auxillo-Tech/Aux-Command`.
+
+Before the first real public release:
+
+1. Keep or intentionally change the final owner/name. If it changes from `Auxillo-Tech/Aux-Command`, update `package.json` `build.publish.owner` and `build.publish.repo` before tagging.
+2. Create and push an immutable semver tag, for example `v0.1.0`.
+3. Let the `release` workflow build artifacts from the tag.
+4. Review workflow logs, uploaded artifacts, `release-manifest.json`, `SHA256SUMS`, and attestations when the repository is public and GitHub enables artifact attestations for the org plan.
+5. Publish the drafted GitHub Release only after the artifact set and release notes are correct.
 
 ## Manual local verification commands
 

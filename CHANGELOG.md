@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- Rebuilt the GitHub-facing README into a professional product overview covering purpose, operating system support, install paths, feature areas, security model, build commands, validation status, and documentation map.
+- Added `INSTALL.md` with AppImage, Debian/Ubuntu, Fedora/RHEL/Rocky/AlmaLinux, openSUSE, Arch-family, source-build, verification, and troubleshooting guidance.
+- Corrected release and architecture documentation to state the current Linux x86_64 package scope and GitHub repository readiness accurately.
+- Documented the current private-repository GitHub limitations for branch protection and artifact attestations.
+
 ## 0.1.0 — 2026-07-22
 
 Initial Aux Command engineering release.
