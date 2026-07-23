@@ -201,6 +201,16 @@ test('renderer exposes terminal transcript export from the session toolbar', () 
   assert.match(renderer, /await api\.terminal\.exportTranscript\(tab\.id\)/u);
 });
 
+test('renderer exposes explicit terminal logging controls from the session toolbar', () => {
+  assert.match(indexHtml, /id="terminal-log-button"/u);
+  assert.match(preload, /startLogging: \(id\) => invoke\('terminal:start-logging', id\)/u);
+  assert.match(preload, /stopLogging: \(id\) => invoke\('terminal:stop-logging', id\)/u);
+  assert.match(renderer, /async function toggleTerminalLogging\(\)/u);
+  assert.match(renderer, /await api\.terminal\.startLogging\(tab\.id\)/u);
+  assert.match(renderer, /await api\.terminal\.stopLogging\(tab\.id\)/u);
+  assert.match(renderer, /Terminal logs may capture secrets/u);
+});
+
 test('renderer exposes a command palette for actions, profiles and snippets', () => {
   assert.match(renderer, /function paletteActions\(\)/u);
   assert.match(renderer, /function openCommandPalette\(\)/u);

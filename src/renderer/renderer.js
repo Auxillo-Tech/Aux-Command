@@ -35,6 +35,7 @@
     broadcastWarning: $('#broadcast-warning'),
     terminalSearchToggle: $('#terminal-search-toggle'),
     exportTranscriptButton: $('#export-transcript-button'),
+    terminalLogButton: $('#terminal-log-button'),
     terminalSearchHost: $('#terminal-search-host'),
     duplicateSessionButton: $('#duplicate-session-button'),
     reconnectSessionButton: $('#reconnect-session-button'),
@@ -793,6 +794,7 @@
       tabElement,
       tabButton,
       closed: false,
+      logging: session.logging || null,
       resizeTimer: 0
     };
     state.tabs.set(session.id, tab);
@@ -1004,6 +1006,32 @@
     window.setTimeout(() => output.focus(), 0);
   }
 
+  async function toggleTerminalLogging() {
+    const tab = activeTab();
+    if (!tab) {
+      toast('Open a terminal first', 'Terminal logging needs an active session.', 'error');
+      return;
+    }
+    if (tab.logging?.active) {
+      const result = await api.terminal.stopLogging(tab.id);
+      tab.logging = result?.filePath ? { filePath: result.filePath, active: false } : null;
+      updateSessionActions();
+      toast('Terminal logging stopped', result?.filePath || tab.title, 'success');
+      return;
+    }
+    const confirmed = await confirmAction({
+      title: 'Start terminal log?',
+      message: 'Terminal logs may capture secrets, commands, hostnames, customer data, and remote output. Choose the log file carefully and stop logging when finished.',
+      confirmLabel: 'Choose log file'
+    });
+    if (!confirmed) return;
+    const result = await api.terminal.startLogging(tab.id);
+    if (result?.canceled) return;
+    tab.logging = { filePath: result.filePath, active: true };
+    updateSessionActions();
+    toast('Terminal logging started', result.filePath, 'success');
+  }
+
   function fitVisibleTerminals() {
     const tabs = state.layout === 'grid' ? [...state.tabs.values()] : [activeTab()].filter(Boolean);
     for (const tab of tabs) {
@@ -1073,6 +1101,8 @@
     elements.broadcastToggle.disabled = tabCount < 2;
     elements.terminalSearchToggle.disabled = !tab;
     elements.exportTranscriptButton.disabled = !tab;
+    elements.terminalLogButton.disabled = !tab || tab.closed;
+    elements.terminalLogButton.textContent = tab?.logging?.active ? 'Stop log' : 'Log';
     elements.duplicateSessionButton.disabled = !tab;
     elements.reconnectSessionButton.disabled = !tab;
     elements.paneShrinkButton.disabled = state.layout !== 'grid';
@@ -2439,6 +2469,7 @@
     elements.broadcastToggle.addEventListener('click', toggleBroadcastInput);
     elements.terminalSearchToggle.addEventListener('click', openTerminalSearch);
     elements.exportTranscriptButton.addEventListener('click', () => exportActiveTranscript().catch((error) => toast('Transcript export failed', errorMessage(error), 'error')));
+    elements.terminalLogButton.addEventListener('click', () => toggleTerminalLogging().catch((error) => toast('Terminal logging failed', errorMessage(error), 'error')));
     elements.duplicateSessionButton.addEventListener('click', () => duplicateActiveSession().catch((error) => toast('Duplicate failed', errorMessage(error), 'error')));
     elements.reconnectSessionButton.addEventListener('click', () => reconnectActiveSession().catch((error) => toast('Reconnect failed', errorMessage(error), 'error')));
     elements.paneShrinkButton.addEventListener('click', () => adjustPaneSize(-40));

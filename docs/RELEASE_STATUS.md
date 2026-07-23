@@ -34,7 +34,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **117/117 tests passed**
+- `npm run check`: **119/119 tests passed**
 - JavaScript syntax: 50 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
@@ -80,6 +80,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Renderer branding and Linux package icons now use the supplied Auxillo gradient logo; packaged smoke verified `./assets/logo.png` is loaded from the AppImage.
 - Package metadata and `LICENSE` now declare AGPL-3.0-or-later free/open-source distribution rather than proprietary/private packaging.
 - Active terminal sessions now retain a bounded local transcript and expose an Export control so operators can review/copy output after a session exits but before closing the tab.
+- Active terminal sessions expose an explicit Log/Stop log control that writes output to a user-selected local `.log`/`.txt` file with a warning that logs may contain secrets or customer data.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.

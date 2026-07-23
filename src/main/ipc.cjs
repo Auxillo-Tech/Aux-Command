@@ -80,6 +80,18 @@ function registerIpc({
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
   handle('terminal:export-transcript', (id) => terminalService.exportTranscript(id));
+  handle('terminal:start-logging', async (id) => {
+    const session = terminalService.exportTranscript(id);
+    const safeTitle = String(session.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
+    const result = await dialog.showSaveDialog(getWindow(), {
+      title: 'Start terminal log',
+      defaultPath: path.join(app.getPath('documents'), `${safeTitle}.log`),
+      filters: [{ name: 'Terminal logs', extensions: ['log', 'txt'] }]
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    return { canceled: false, ...terminalService.startLogging(id, result.filePath) };
+  });
+  handle('terminal:stop-logging', (id) => terminalService.stopLogging(id));
   handle('terminal:close', (id) => terminalService.close(id));
 
   handle('external:launch', (profile) => externalService.launch(profile));

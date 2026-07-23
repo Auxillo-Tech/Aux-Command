@@ -229,6 +229,61 @@ test('terminal service retains bounded session transcripts for export', async ()
   assert.equal(terminalService.close(session.id), true);
 });
 
+test('terminal service writes explicit per-session terminal logs', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-terminal-log-'));
+  const logPath = path.join(directory, 'session.log');
+  try {
+    const terminalService = new TerminalService(() => ({ isDestroyed: () => false, webContents: { send() {} } }));
+    const session = terminalService.create({
+      cols: 80,
+      rows: 24,
+      profile: {
+        id: 'log-local',
+        name: 'Log Local',
+        protocol: 'local',
+        startupCommand: "printf 'AUX_LOG_FIRST\\n'; sleep 0.2; printf 'AUX_LOG_SECOND\\n'"
+      }
+    });
+
+    await new Promise((resolve, reject) => {
+      const started = Date.now();
+      const poll = () => {
+        try {
+          if (terminalService.exportTranscript(session.id).text.includes('AUX_LOG_FIRST')) return resolve();
+        } catch (error) {
+          return reject(error);
+        }
+        if (Date.now() - started > 5_000) return reject(new Error('Timed out waiting for log fixture output'));
+        setTimeout(poll, 50);
+      };
+      poll();
+    });
+
+    const started = terminalService.startLogging(session.id, logPath);
+    assert.equal(started.filePath, logPath);
+    assert.equal(started.active, true);
+
+    await new Promise((resolve, reject) => {
+      const deadline = Date.now() + 5_000;
+      const poll = () => {
+        const text = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : '';
+        if (text.includes('AUX_LOG_FIRST') && text.includes('AUX_LOG_SECOND')) return resolve();
+        if (Date.now() > deadline) return reject(new Error(`Timed out waiting for terminal log output: ${text}`));
+        setTimeout(poll, 50);
+      };
+      poll();
+    });
+
+    const stopped = terminalService.stopLogging(session.id);
+    assert.equal(stopped.active, false);
+    assert.match(fs.readFileSync(logPath, 'utf8'), /AUX_LOG_FIRST[\s\S]*AUX_LOG_SECOND/u);
+    assert.equal(fs.statSync(logPath).mode & 0o777, 0o600);
+    terminalService.close(session.id);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('local socat fixture supports bundled serial bridge terminal flows', { skip: hasSerialFixtureTools ? false : 'socat is not installed' }, async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-serial-'));
   const left = path.join(directory, 'tty-left');

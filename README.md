@@ -134,6 +134,7 @@ Install optional runtime tools with:
 - Split/tiled multi-session layouts.
 - Terminal search.
 - Active-session transcript export with local review/copy controls.
+- Explicit per-session terminal logging to a local operator-selected file.
 - Command palette.
 - Command snippets.
 - Guarded broadcast input across terminal sessions.
@@ -268,7 +269,7 @@ Current source validation passes:
 Syntax validated for 50 JavaScript files.
 Syntax validated for 5 Python files.
 Syntax validated for 5 shell scripts.
-117 tests passed.
+119 tests passed.
 ```
 
 Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
