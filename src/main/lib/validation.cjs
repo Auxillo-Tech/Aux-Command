@@ -7,6 +7,8 @@ const { randomUUID } = require('node:crypto');
 const PROTOCOLS = new Set(['local', 'ssh', 'mosh', 'telnet', 'serial', 'rdp', 'vnc']);
 const TUNNEL_TYPES = new Set(['local', 'remote', 'dynamic']);
 const CREDENTIAL_KINDS = new Set(['password', 'passphrase']);
+const TERMINAL_THEMES = new Set(['aux-dark', 'light', 'high-contrast']);
+const TERMINAL_CURSOR_STYLES = new Set(['block', 'underline', 'bar']);
 
 function fail(message) {
   const error = new Error(message);
@@ -40,6 +42,13 @@ function cleanBoolean(value, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+function cleanBoundedInteger(value, name, fallback, min, max) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(value);
+  if (!Number.isInteger(number)) fail(`${name} must be an integer`);
+  return Math.min(max, Math.max(min, number));
+}
+
 function rejectOptionLike(value, name, { rejectWhitespace = false } = {}) {
   if (!value) return value;
   if (value.startsWith('-')) fail(`${name} cannot start with a hyphen`);
@@ -64,13 +73,18 @@ function normalizeProfile(input = {}, existingId = '') {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('profile must be an object');
   const protocol = cleanString(input.protocol || 'ssh', 'protocol', { required: true, max: 16 }).toLowerCase();
   if (!PROTOCOLS.has(protocol)) fail(`unsupported protocol: ${protocol}`);
-  const identityFile = expandHome(input.identityFile);
+  const identityFile = rejectOptionLike(expandHome(input.identityFile), 'identityFile');
+  const knownHostsFile = rejectOptionLike(expandHome(input.knownHostsFile), 'knownHostsFile');
   const credentialKind = cleanString(
     input.credentialKind || (identityFile ? 'passphrase' : 'password'),
     'credentialKind',
     { required: true, max: 16 }
   ).toLowerCase();
   if (!CREDENTIAL_KINDS.has(credentialKind)) fail(`unsupported credential kind: ${credentialKind}`);
+  const terminalTheme = cleanString(input.terminalTheme || 'aux-dark', 'terminalTheme', { max: 32 }).toLowerCase();
+  if (!TERMINAL_THEMES.has(terminalTheme)) fail(`unsupported terminal theme: ${terminalTheme}`);
+  const terminalCursorStyle = cleanString(input.terminalCursorStyle || 'block', 'terminalCursorStyle', { max: 32 }).toLowerCase();
+  if (!TERMINAL_CURSOR_STYLES.has(terminalCursorStyle)) fail(`unsupported terminal cursor style: ${terminalCursorStyle}`);
 
   const profile = {
     id: cleanString(existingId || input.id || randomUUID(), 'id', { required: true, max: 128 }),
@@ -81,6 +95,7 @@ function normalizeProfile(input = {}, existingId = '') {
     port: protocol === 'local' ? 0 : cleanPort(input.port, 'port', protocol === 'rdp' ? 3389 : protocol === 'vnc' ? 5900 : protocol === 'telnet' ? 23 : 22),
     username: rejectOptionLike(cleanString(input.username, 'username', { max: 128 }), 'username'),
     identityFile,
+    knownHostsFile,
     sshAlias: rejectOptionLike(cleanString(input.sshAlias, 'sshAlias', { max: 255 }), 'sshAlias', { rejectWhitespace: true }),
     credentialId: cleanString(input.credentialId, 'credentialId', { max: 128 }),
     credentialKind,
@@ -97,6 +112,12 @@ function normalizeProfile(input = {}, existingId = '') {
     device: cleanString(input.device, 'device', { required: protocol === 'serial', max: 4096 }),
     baudRate: Math.min(4_000_000, Math.max(50, Number.isInteger(Number(input.baudRate)) ? Number(input.baudRate) : 115200)),
     rdpDomain: cleanString(input.rdpDomain, 'rdpDomain', { max: 128 }),
+    terminalTheme,
+    terminalFontFamily: cleanString(input.terminalFontFamily || 'JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, monospace', 'terminalFontFamily', { max: 240 }),
+    terminalFontSize: cleanBoundedInteger(input.terminalFontSize, 'terminalFontSize', 13, 8, 32),
+    terminalCursorStyle,
+    terminalCursorBlink: cleanBoolean(input.terminalCursorBlink, true),
+    terminalScrollback: cleanBoundedInteger(input.terminalScrollback, 'terminalScrollback', 20000, 1000, 200000),
     notes: cleanString(input.notes, 'notes', { max: 4096, allowNewlines: true }),
     createdAt: cleanString(input.createdAt, 'createdAt', { max: 64 }) || new Date().toISOString(),
     updatedAt: cleanString(input.updatedAt, 'updatedAt', { max: 64 }) || new Date().toISOString()
@@ -160,8 +181,11 @@ function normalizeRemotePath(value) {
 module.exports = {
   CREDENTIAL_KINDS,
   PROTOCOLS,
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_THEMES,
   TUNNEL_TYPES,
   cleanBoolean,
+  cleanBoundedInteger,
   cleanPort,
   cleanString,
   expandHome,

@@ -18,11 +18,12 @@
       </button>
       <div class="quick-connect">
         <span class="quick-prefix">›_</span>
-        <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22 or user@host">
+        <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22, user@host, or /dev/ttyUSB0">
         <select id="quick-protocol" aria-label="Quick connect protocol">
           <option value="ssh">SSH</option>
           <option value="mosh">Mosh</option>
           <option value="telnet">Telnet</option>
+          <option value="serial">Serial</option>
           <option value="rdp">RDP</option>
           <option value="vnc">VNC</option>
         </select>

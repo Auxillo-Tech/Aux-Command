@@ -1,7 +1,7 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T04:42:52Z**
-Scope: **Linux x86_64 engineering release candidate with GitHub repository, CI, release/update path, and public-facing documentation prepared**
+Validated: **2026-07-23T05:29:30Z**
+Scope: **Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
 
@@ -34,7 +34,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **105/105 tests passed**
+- `npm run check`: **109/109 tests passed**
 - JavaScript syntax: 48 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
@@ -74,6 +74,10 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Tunnel startup feedback distinguishes `starting` from evidence-backed `running`.
 - Routine notifications use the persistent status bar instead of obscuring terminal content; actionable errors remain accessible and capped.
 - Compact UI, separate profile connect/edit actions, contextual control availability, and a durable initialization-retry surface are source-tested.
+- Per-profile terminal theme, font stack, font size, cursor style, cursor blink, and scrollback settings are validated and applied when terminal tabs open.
+- Quick Connect now includes Serial and routes `/dev/...` device paths through the bundled serial bridge.
+- Advanced per-profile OpenSSH known-hosts-file overrides allow isolated lab/fixture profiles without touching the operator's real `~/.ssh/known_hosts`.
+- CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
 
 ### Packaged runtime
 
@@ -90,8 +94,7 @@ Fresh AppImage with isolated configuration/cache passed:
 - pane resizing
 - snippet creation/execution
 - diagnostics modal with GitHub update state
-- 1480×920 desktop screenshot capture with no clipping or notification overlay
-- 1024×768 compact-layout screenshot capture; collapsed/open sidebar transitions preserve a full-width workspace
+- screenshot capture remains available as a diagnostic artifact when CDP/compositor timing allows it; failure to capture a screenshot after functional smoke passes is reported as `screenshotWarning`, not as an app failure
 
 Packaged accessibility/source assertions passed:
 

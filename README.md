@@ -16,7 +16,7 @@ It provides:
 
 - a tabbed terminal workspace;
 - persistent connection profiles;
-- quick-connect workflows;
+- quick-connect workflows for network targets and serial devices;
 - native OpenSSH terminal sessions;
 - graphical SFTP file operations;
 - local, remote, and dynamic SSH tunnels;
@@ -129,6 +129,7 @@ Install optional runtime tools with:
 
 - PTY-backed terminal tabs rendered with xterm.js.
 - Local shell sessions.
+- Per-profile terminal theme, font, cursor, and scrollback settings.
 - Terminal tab lifecycle with close confirmations for live sessions.
 - Split/tiled multi-session layouts.
 - Terminal search.
@@ -143,6 +144,7 @@ Install optional runtime tools with:
 - SSH agent support through the user’s existing environment.
 - `~/.ssh/config` import support.
 - Identity files.
+- Advanced per-profile OpenSSH known-hosts-file override for isolated lab or fixture profiles.
 - ProxyJump support.
 - Compression, keepalive, X11 forwarding, and agent forwarding controls.
 - Literal remote startup commands passed safely as OpenSSH arguments.
@@ -174,6 +176,7 @@ Install optional runtime tools with:
 - VNC launcher through TigerVNC.
 - Bundled Python Telnet bridge.
 - Bundled Python raw serial bridge.
+- Serial quick connect with absolute Linux device paths such as `/dev/ttyUSB0`.
 - Bundled Python PTY helper.
 - Parent-death process guard so abnormal Electron exit does not leave helpers unmanaged.
 

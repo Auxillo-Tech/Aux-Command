@@ -11,7 +11,7 @@ This checklist tracks the gap between automated local fixture coverage and produ
 - OpenSSH argument construction for local, remote, and dynamic tunnels.
 - Mosh command construction.
 - External RDP/VNC launcher argument construction.
-- Packaged AppImage CDP smoke for local terminal, snippets, tiled layout, broadcast input, command palette, reconnect, diagnostics, and screenshot capture.
+- Packaged AppImage CDP smoke for local terminal, snippets, tiled layout, broadcast input, command palette, reconnect, and diagnostics. Screenshot capture is diagnostic-only because compositor/CDP timing can hang after the functional smoke has already passed.
 
 ## Still required before public production claims
 

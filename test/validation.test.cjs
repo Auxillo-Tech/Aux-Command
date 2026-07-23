@@ -96,3 +96,48 @@ test('separates account passwords from private-key passphrases', () => {
     /unsupported credential kind/u
   );
 });
+
+test('normalizes per-profile terminal appearance settings', () => {
+  const profile = normalizeProfile({
+    name: 'Styled host',
+    protocol: 'ssh',
+    host: 'host',
+    terminalTheme: 'light',
+    terminalFontFamily: 'Iosevka Term, monospace',
+    terminalFontSize: 18,
+    terminalCursorStyle: 'underline',
+    terminalCursorBlink: false,
+    terminalScrollback: 50000
+  });
+  assert.equal(profile.terminalTheme, 'light');
+  assert.equal(profile.terminalFontFamily, 'Iosevka Term, monospace');
+  assert.equal(profile.terminalFontSize, 18);
+  assert.equal(profile.terminalCursorStyle, 'underline');
+  assert.equal(profile.terminalCursorBlink, false);
+  assert.equal(profile.terminalScrollback, 50000);
+
+  const defaults = normalizeProfile({ name: 'Default host', protocol: 'ssh', host: 'host' });
+  assert.equal(defaults.terminalTheme, 'aux-dark');
+  assert.equal(defaults.terminalFontSize, 13);
+  assert.equal(defaults.terminalCursorStyle, 'block');
+  assert.equal(defaults.terminalCursorBlink, true);
+  assert.equal(defaults.terminalScrollback, 20000);
+
+  assert.throws(
+    () => normalizeProfile({ name: 'Bad theme', protocol: 'ssh', host: 'host', terminalTheme: 'neon' }),
+    /unsupported terminal theme/u
+  );
+  assert.throws(
+    () => normalizeProfile({ name: 'Bad cursor', protocol: 'ssh', host: 'host', terminalCursorStyle: 'triangle' }),
+    /unsupported terminal cursor style/u
+  );
+});
+
+test('preserves optional OpenSSH known-hosts file overrides', () => {
+  const profile = normalizeProfile({ name: 'Lab SSH', protocol: 'ssh', host: '127.0.0.1', knownHostsFile: '/tmp/aux-command-known-hosts' });
+  assert.equal(profile.knownHostsFile, '/tmp/aux-command-known-hosts');
+  assert.throws(
+    () => normalizeProfile({ name: 'Bad known hosts', protocol: 'ssh', host: '127.0.0.1', knownHostsFile: '-oProxyCommand=bad' }),
+    /knownHostsFile cannot start with a hyphen/u
+  );
+});
