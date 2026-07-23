@@ -65,12 +65,16 @@ test('renderer scopes SFTP progress events to the visible profile', () => {
 test('renderer prevents modal-global shortcut collisions and disables impossible tunnel start', () => {
   assert.match(renderer, /const modalOpen = Boolean\(elements\.modalRoot\.querySelector\('\.modal-backdrop'\)\);/u);
   assert.match(renderer, /if \(modalOpen && event\.key !== 'Escape'\) return;/u);
+  assert.match(renderer, /function isEditableShortcutTarget\(target\)/u);
+  assert.match(renderer, /if \(isEditableShortcutTarget\(event\.target\)\) return;/u);
   assert.match(renderer, /Create an SSH profile before starting a tunnel/u);
   assert.match(renderer, /disabled: !sshProfiles\.length/u);
 });
 
 test('modals trap keyboard focus and restore the invoking control', () => {
   assert.match(renderer, /const previousFocus = document\.activeElement/u);
+  assert.match(renderer, /function modalFocusableElements\(modal\)/u);
+  assert.match(renderer, /button:not\(\[disabled\]\):not\(\[hidden\]\)/u);
   assert.match(renderer, /modal\.addEventListener\('keydown', \(event\) => \{/u);
   assert.match(renderer, /if \(event\.key !== 'Tab'\) return;/u);
   assert.match(renderer, /previousFocus\?\.isConnected/u);
@@ -101,6 +105,9 @@ test('primary text inputs have explicit accessible names and motion can be reduc
   assert.match(indexHtml, /id="quick-input"[^>]*aria-label="Quick connect target"/u);
   assert.match(indexHtml, /id="profile-search"[^>]*aria-label="Filter connections"/u);
   assert.match(indexHtml, /id="sftp-path"[^>]*aria-label="Remote path"/u);
+  assert.match(indexHtml, /id="new-profile-button"[^>]*aria-label="New connection"/u);
+  assert.match(indexHtml, /id="sftp-close"[^>]*aria-label="Close SFTP"/u);
+  assert.match(renderer, /className: 'modal-close'[^\n]*text: '×'[^\n]*title: 'Close'[^\n]*attrs: \{ 'aria-label': 'Close dialog' \}/u);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/u);
 });
 
@@ -175,6 +182,11 @@ test('renderer exposes a command palette for actions, profiles and snippets', ()
   assert.match(renderer, /function paletteActions\(\)/u);
   assert.match(renderer, /function openCommandPalette\(\)/u);
   assert.match(renderer, /Command palette/u);
+  assert.match(renderer, /role: 'combobox'/u);
+  assert.match(renderer, /role: 'listbox'/u);
+  assert.match(renderer, /role: 'option'/u);
+  assert.match(renderer, /aria-activedescendant/u);
+  assert.match(renderer, /aria-selected/u);
   assert.match(renderer, /Run snippet/u);
   assert.match(renderer, /Connect profile/u);
   assert.match(renderer, /event\.code === 'KeyP'/u);
@@ -206,7 +218,7 @@ test('terminal tabs use linked panels, roving tabindex and keyboard navigation',
   assert.match(renderer, /event\.key === 'ArrowLeft'/u);
   assert.match(renderer, /event\.key === 'Home'/u);
   assert.match(renderer, /event\.key === 'End'/u);
-  assert.match(renderer, /tab\.tabButton\.setAttribute\('tabindex', active \? '0' : '-1'\)/u);
+  assert.match(renderer, /tab\.tabButton\.setAttribute\('tabindex', roving \? '0' : '-1'\)/u);
   assert.match(styles, /\.tab-close[^\{]*\{[^}]*min-width: 24px[^}]*min-height: 24px/su);
 });
 

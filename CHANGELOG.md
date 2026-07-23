@@ -15,6 +15,12 @@
 - Added Serial to Quick Connect with `/dev/...` device-path handling.
 - Added an advanced per-profile OpenSSH known-hosts-file override for isolated lab/fixture profiles.
 
+### Fixed
+
+- Prevented global terminal shortcuts from firing while operators type in Quick Connect, profile search, SFTP path, or other editable fields.
+- Improved keyboard focus handling for non-closeable SSH trust/authentication prompts so focus lands on visible controls, not hidden close buttons.
+- Added command-palette combobox/listbox/option ARIA state and explicit icon-button labels for better keyboard and assistive-technology behavior.
+
 ## 0.1.0 — 2026-07-22
 
 Initial Aux Command engineering release.
