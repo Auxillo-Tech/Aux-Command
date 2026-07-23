@@ -36,6 +36,7 @@
     terminalSearchToggle: $('#terminal-search-toggle'),
     exportTranscriptButton: $('#export-transcript-button'),
     terminalLogButton: $('#terminal-log-button'),
+    macroRecordButton: $('#macro-record-button'),
     terminalSearchHost: $('#terminal-search-host'),
     duplicateSessionButton: $('#duplicate-session-button'),
     reconnectSessionButton: $('#reconnect-session-button'),
@@ -86,6 +87,7 @@
     broadcastInput: false,
     terminalSearchOpen: false,
     terminalSearchQuery: '',
+    macroRecording: null,
     selectedProfileId: '',
     diagnostics: null,
     updates: null,
@@ -801,6 +803,7 @@
     observeResizablePane(tab);
 
     terminal.onData((data) => {
+      recordTerminalMacroInput(data);
       const targets = state.broadcastInput ? [...state.tabs.values()] : [tab];
       for (const target of targets) {
         if (!target.closed) api.terminal.write(target.id, data).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
@@ -1113,6 +1116,10 @@
     elements.exportTranscriptButton.disabled = !tab;
     elements.terminalLogButton.disabled = !tab || tab.closed;
     elements.terminalLogButton.textContent = tab?.logging?.active ? 'Stop log' : 'Log';
+    elements.macroRecordButton.disabled = !tab || tab.closed;
+    elements.macroRecordButton.textContent = state.macroRecording ? 'Stop macro' : 'Macro';
+    elements.macroRecordButton.classList.toggle('active', Boolean(state.macroRecording));
+    elements.macroRecordButton.setAttribute('aria-pressed', state.macroRecording ? 'true' : 'false');
     elements.duplicateSessionButton.disabled = !tab;
     elements.reconnectSessionButton.disabled = !tab;
     elements.paneShrinkButton.disabled = state.layout !== 'grid';
@@ -1258,6 +1265,85 @@
       activateTab(remaining.at(-1) || '');
     }
     if (!state.tabs.size) activateTab('');
+  }
+
+  function recordTerminalMacroInput(data) {
+    if (!state.macroRecording || typeof data !== 'string') return;
+    state.macroRecording.chunks.push(data);
+    const joined = state.macroRecording.chunks.join('');
+    if (joined.length > 4096) state.macroRecording.chunks = [joined.slice(-4096)];
+  }
+
+  function macroCommandText() {
+    return (state.macroRecording?.chunks || [])
+      .join('')
+      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/gu, '')
+      .replace(/[^\t\n\r\x20-\x7e]/gu, '')
+      .replace(/\r\n?/gu, '\n')
+      .trim();
+  }
+
+  async function toggleMacroRecording() {
+    const tab = activeTab();
+    if (!tab || tab.closed) throw new Error('Open an active terminal before recording a macro');
+    if (!state.macroRecording) {
+      const confirmed = await confirmAction({
+        title: 'Start macro recording?',
+        description: 'Macro recording may capture secrets typed into this terminal. Do not record passwords, tokens, recovery codes, or private customer data.',
+        confirmLabel: 'Start recording',
+        danger: true
+      });
+      if (!confirmed) return;
+      state.macroRecording = { tabId: tab.id, title: tab.title, startedAt: new Date().toISOString(), chunks: [] };
+      updateSessionActions();
+      toast('Macro recording', tab.title, 'success');
+      return;
+    }
+    const command = macroCommandText();
+    const recorded = state.macroRecording;
+    state.macroRecording = null;
+    updateSessionActions();
+    if (!command) {
+      toast('Macro discarded', 'No replayable terminal input was captured.', 'info');
+      return;
+    }
+    const form = snippetForm({
+      name: `Macro ${new Date().toLocaleString()}`,
+      description: `Recorded from ${recorded.title} at ${recorded.startedAt}`,
+      command
+    });
+    let controller;
+    const save = async () => {
+      if (!form.reportValidity()) return false;
+      const values = new FormData(form);
+      const saved = await api.snippets.save({
+        name: String(values.get('name') || '').trim(),
+        description: String(values.get('description') || '').trim(),
+        command: String(values.get('command') || '')
+      });
+      await refreshSnippets();
+      toast('Macro recorded', saved.name, 'success');
+      return true;
+    };
+    controller = showModal({
+      title: 'Save recorded macro',
+      description: 'Review the captured input before saving. Remove secrets before you save or replay it.',
+      body: form,
+      className: 'narrow',
+      actions: [
+        { label: 'Discard', busy: false, run: () => true },
+        { label: 'Save macro snippet', className: 'primary', run: save }
+      ]
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const close = await save();
+        if (close) controller.close();
+      } catch (error) {
+        toast('Could not save macro', errorMessage(error), 'error');
+      }
+    });
   }
 
   async function duplicateActiveSession() {
@@ -2480,6 +2566,7 @@
     elements.terminalSearchToggle.addEventListener('click', openTerminalSearch);
     elements.exportTranscriptButton.addEventListener('click', () => exportActiveTranscript().catch((error) => toast('Transcript export failed', errorMessage(error), 'error')));
     elements.terminalLogButton.addEventListener('click', () => toggleTerminalLogging().catch((error) => toast('Terminal logging failed', errorMessage(error), 'error')));
+    elements.macroRecordButton.addEventListener('click', () => toggleMacroRecording().catch((error) => toast('Macro recording failed', errorMessage(error), 'error')));
     elements.duplicateSessionButton.addEventListener('click', () => duplicateActiveSession().catch((error) => toast('Duplicate failed', errorMessage(error), 'error')));
     elements.reconnectSessionButton.addEventListener('click', () => reconnectActiveSession().catch((error) => toast('Reconnect failed', errorMessage(error), 'error')));
     elements.paneShrinkButton.addEventListener('click', () => adjustPaneSize(-40));

@@ -137,6 +137,7 @@ Install optional runtime tools with:
 - Explicit per-session terminal logging to a local operator-selected file.
 - Command palette.
 - Command snippets.
+- Guarded macro recording that saves reviewed terminal input as replayable snippets.
 - Guarded broadcast input across terminal sessions.
 - Keyboard-first navigation and accessible tab/panel relationships.
 
