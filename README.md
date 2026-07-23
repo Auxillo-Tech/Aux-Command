@@ -133,7 +133,7 @@ Install optional runtime tools with:
 - Terminal tab lifecycle with close confirmations for live sessions.
 - Split/tiled multi-session layouts.
 - Terminal search.
-- Active-session transcript export with local review/copy controls.
+- Active-session transcript export with local review/copy/save controls.
 - Explicit per-session terminal logging to a local operator-selected file.
 - Command palette.
 - Command snippets.
