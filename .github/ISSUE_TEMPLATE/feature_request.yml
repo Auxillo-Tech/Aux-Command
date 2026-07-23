@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose an Aux Command improvement or protocol workflow.
+title: "feature: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What operator workflow should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the expected UX, protocol behavior, and security boundaries.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - SSH / terminal
+        - SFTP
+        - Tunnels
+        - RDP / VNC / Mosh
+        - Telnet / serial
+        - Profiles / vault
+        - Packaging / updates
+        - Accessibility / UI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Suggested validation
+      description: How should this be tested safely, preferably with local fixtures?
