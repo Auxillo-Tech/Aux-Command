@@ -79,6 +79,7 @@ function registerIpc({
   handle('terminal:create', (request) => terminalService.create(request));
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
+  handle('terminal:export-transcript', (id) => terminalService.exportTranscript(id));
   handle('terminal:close', (id) => terminalService.close(id));
 
   handle('external:launch', (profile) => externalService.launch(profile));

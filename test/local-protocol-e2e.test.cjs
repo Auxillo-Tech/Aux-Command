@@ -195,6 +195,40 @@ test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { sk
   }
 });
 
+test('terminal service retains bounded session transcripts for export', async () => {
+  const terminalEvents = [];
+  const terminalService = new TerminalService(() => ({
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => terminalEvents.push({ channel, payload }) }
+  }));
+
+  const session = terminalService.create({
+    profile: {
+      id: 'local-transcript',
+      name: 'Local transcript',
+      protocol: 'local',
+      startupCommand: "printf 'AUX_TRANSCRIPT_LINE\\n'; exit"
+    },
+    cols: 80,
+    rows: 24
+  });
+
+  let output = '';
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    for (const event of terminalEvents.splice(0)) {
+      if (event.channel === 'terminal:data' && event.payload.id === session.id) output += event.payload.data;
+    }
+    if (output.includes('AUX_TRANSCRIPT_LINE')) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  const exportResult = terminalService.exportTranscript(session.id);
+  assert.equal(exportResult.id, session.id);
+  assert.match(exportResult.text, /AUX_TRANSCRIPT_LINE/u);
+  assert.equal(exportResult.truncated, false);
+  assert.equal(terminalService.close(session.id), true);
+});
+
 test('local socat fixture supports bundled serial bridge terminal flows', { skip: hasSerialFixtureTools ? false : 'socat is not installed' }, async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-serial-'));
   const left = path.join(directory, 'tty-left');

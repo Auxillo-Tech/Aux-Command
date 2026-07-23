@@ -4,6 +4,7 @@
 
 ### Documentation
 
+- Declared Aux Command as a free/open-source AGPL-3.0-or-later public product with no enterprise-only features, paid editions, or payment walls.
 - Rebuilt the GitHub-facing README into a professional product overview covering purpose, operating system support, install paths, feature areas, security model, build commands, validation status, and documentation map.
 - Added `INSTALL.md` with AppImage, Debian/Ubuntu, Fedora/RHEL/Rocky/AlmaLinux, openSUSE, Arch-family, source-build, verification, and troubleshooting guidance.
 - Corrected release and architecture documentation to state the current Linux x86_64 package scope and GitHub repository readiness accurately.
@@ -11,6 +12,7 @@
 
 ### Added
 
+- Added active-session terminal transcript export with bounded main-process transcript capture and a renderer review/copy modal.
 - Added per-profile terminal appearance controls for theme, font stack, font size, cursor style, cursor blink, and scrollback depth.
 - Added Serial to Quick Connect with `/dev/...` device-path handling.
 - Added an advanced per-profile OpenSSH known-hosts-file override for isolated lab/fixture profiles.

@@ -1,8 +1,8 @@
 # Aux Command
 
-**Aux Command** is Auxillo’s Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.
+**Aux Command** is Auxillo’s free, open-source Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.
 
-It is built as an original Auxillo product with native Linux tooling, explicit trust boundaries, modern Electron hardening, and verifiable release engineering.
+It is built as an original Auxillo public product with native Linux tooling, explicit trust boundaries, modern Electron hardening, no paid feature walls, and verifiable release engineering.
 
 > Current status: **0.1.x Linux x86_64 engineering release candidate**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, and source validation are in place. It is not yet a signed public production release until release signing, publication, and broader live protocol qualification are complete.
 
@@ -133,6 +133,7 @@ Install optional runtime tools with:
 - Terminal tab lifecycle with close confirmations for live sessions.
 - Split/tiled multi-session layouts.
 - Terminal search.
+- Active-session transcript export with local review/copy controls.
 - Command palette.
 - Command snippets.
 - Guarded broadcast input across terminal sessions.
@@ -264,10 +265,10 @@ The Fedora build wrapper handles common local packaging gaps by downloading buil
 Current source validation passes:
 
 ```text
-Syntax validated for 48 JavaScript files.
+Syntax validated for 50 JavaScript files.
 Syntax validated for 5 Python files.
 Syntax validated for 5 shell scripts.
-105 tests passed.
+117 tests passed.
 ```
 
 Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
@@ -331,6 +332,6 @@ Typical data includes profiles, command snippets, SFTP known-host fingerprints, 
 
 ## License
 
-Copyright © Auxillo. All rights reserved.
+Aux Command is free and open-source software licensed under **AGPL-3.0-or-later**. Every feature belongs in the public build; there are no enterprise-only modules, paid editions, or payment walls.
 
-This source release is proprietary unless Auxillo publishes a different license in writing. Third-party components retain their own licenses; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`THIRD_PARTY_LICENSES.txt`](THIRD_PARTY_LICENSES.txt).
+Third-party components retain their own licenses; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`THIRD_PARTY_LICENSES.txt`](THIRD_PARTY_LICENSES.txt).

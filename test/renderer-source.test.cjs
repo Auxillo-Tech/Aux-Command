@@ -194,6 +194,13 @@ test('renderer exposes terminal search using xterm search addon and shortcuts', 
   assert.match(renderer, /event\.code === 'KeyF'/u);
 });
 
+test('renderer exposes terminal transcript export from the session toolbar', () => {
+  assert.match(indexHtml, /id="export-transcript-button"/u);
+  assert.match(preload, /exportTranscript: \(id\) => invoke\('terminal:export-transcript', id\)/u);
+  assert.match(renderer, /async function exportActiveTranscript\(\)/u);
+  assert.match(renderer, /await api\.terminal\.exportTranscript\(tab\.id\)/u);
+});
+
 test('renderer exposes a command palette for actions, profiles and snippets', () => {
   assert.match(renderer, /function paletteActions\(\)/u);
   assert.match(renderer, /function openCommandPalette\(\)/u);

@@ -1,5 +1,7 @@
 # Aux Command release roadmap
 
+Aux Command is a free, open-source public product. Every feature in this roadmap targets the public build; there are no paid tiers, enterprise-only packs, or payment walls.
+
 ## 0.1 — operational foundation
 
 - Linux desktop shell and Auxillo visual identity.
@@ -11,6 +13,7 @@
 - External FreeRDP and TigerVNC launchers.
 - Secure SFTP credential vault and host-key verification.
 - Command snippets manager.
+- Active-session terminal transcript export with local review/copy controls.
 - Terminal search and command palette.
 - Session duplication and reconnect policy.
 - Tiled multi-session workspace mode.
@@ -30,6 +33,11 @@
 - Persistent workspace layouts and per-profile pane defaults.
 - Drag-and-drop SFTP and resumable transfer queue.
 - SSH config Include parsing and stronger ProxyJump chain support.
+- Terminal output logging to operator-selected local directories with explicit privacy warnings.
+- Save/print terminal transcript actions.
+- Macro recording and replay with secret-recording guardrails.
+- Detached terminal windows and fullscreen terminal workspace mode.
+- Terminal keyword/syntax highlighting definitions for log triage.
 
 ## 0.3 — integrated remote desktop
 
@@ -38,13 +46,26 @@
 - Certificate/fingerprint management.
 - Multi-monitor controls, audio and drive redirection policy.
 - Remote desktop session recording controls where legally permitted.
+- Deeper RDP/VNC settings for clipboard, geometry, console/admin mode, certificate/fingerprint handling, drive/device redirection policy, and multi-monitor behavior.
+- SSH-gateway assisted RDP/VNC/Telnet workflows where the protocol can be safely wrapped through OpenSSH forwarding.
 
-## 0.4 — team operations
+## 0.4 — protocol parity
+
+- FTP and FTPS session support with insecure-transport warnings.
+- SCP browser/transfer mode as an SFTP fallback for constrained legacy servers.
+- Optional XDMCP/remote Unix desktop workflows using a Linux-appropriate design rather than copying Windows-specific embedded X-server behavior.
+- Host X11/Xwayland/Xephyr/Xpra workflow management for remote graphical Unix applications.
+- Legacy Rlogin/RSH only if explicitly justified by real user demand and guarded as insecure legacy transport.
+
+## 0.5 — team operations
 
 - Optional end-to-end encrypted profile synchronization.
 - Role-based shared connection collections.
 - Audit events without command or credential capture.
 - Organization policy for forwarding, legacy protocols and exports.
+- Shared-session sources over local files, HTTPS, FTP/FTPS, and SSH/SFTP where safe and authenticated.
+- Public customizer/policy profile generation for organizations that want branded defaults, disabled unsafe protocols, or preloaded public connection templates.
+- Embedded local server manager for controlled TFTP, HTTP, FTP, SSH/SFTP, and Telnet test daemons with bind-address controls, audit logs, and safe lifecycle cleanup.
 
 ## 1.0 — production release
 

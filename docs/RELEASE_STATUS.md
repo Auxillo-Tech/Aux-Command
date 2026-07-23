@@ -1,13 +1,13 @@
 # Aux Command 0.1.0 — engineering release status
 
 Validated: **2026-07-23T12:12:27Z**
-Scope: **Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
+Scope: **Free/open-source Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
 
 The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for the next live-protocol and GitHub-publication phase.
 
-This is **not yet a signed public production release**. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI has passed on `main`, and a draft `v0.1.0` GitHub Release has been proven with uploaded assets. The release remains unsigned, draft-only, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
+This is **not yet a signed public production release**. Aux Command is declared as AGPL-3.0-or-later free/open-source software with all features intended for the public build and no enterprise-only or paid feature walls. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI has passed on `main`, and a draft `v0.1.0` GitHub Release has been proven with uploaded assets. The release remains unsigned, draft-only, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
 
 ## Distribution decision
 
@@ -34,7 +34,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **114/114 tests passed**
+- `npm run check`: **117/117 tests passed**
 - JavaScript syntax: 50 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
@@ -78,6 +78,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Quick Connect now includes Serial and routes `/dev/...` device paths through the bundled serial bridge.
 - Advanced per-profile OpenSSH known-hosts-file overrides allow isolated lab/fixture profiles without touching the operator's real `~/.ssh/known_hosts`.
 - Renderer branding and Linux package icons now use the supplied Auxillo gradient logo; packaged smoke verified `./assets/logo.png` is loaded from the AppImage.
+- Package metadata and `LICENSE` now declare AGPL-3.0-or-later free/open-source distribution rather than proprietary/private packaging.
+- Active terminal sessions now retain a bounded local transcript and expose an Export control so operators can review/copy output after a session exits but before closing the tab.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
 - Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
 - Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.

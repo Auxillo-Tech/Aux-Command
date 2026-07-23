@@ -6,10 +6,23 @@ const { PythonPty } = require('../lib/python-pty.cjs');
 const { buildTerminalCommand } = require('../lib/command-builder.cjs');
 const { normalizeTerminalRequest } = require('../lib/validation.cjs');
 
+const MAX_TRANSCRIPT_BYTES = 1_048_576;
+
+function appendTranscript(session, data) {
+  const text = typeof data === 'string' ? data : String(data || '');
+  if (!text) return;
+  session.transcript = `${session.transcript}${text}`;
+  if (Buffer.byteLength(session.transcript, 'utf8') > MAX_TRANSCRIPT_BYTES) {
+    session.transcript = session.transcript.slice(-MAX_TRANSCRIPT_BYTES);
+    session.transcriptTruncated = true;
+  }
+}
+
 class TerminalService {
   constructor(getWindow) {
     this.getWindow = getWindow;
     this.sessions = new Map();
+    this.closedTranscripts = new Map();
   }
 
   create(input) {
@@ -31,12 +44,26 @@ class TerminalService {
       title: spec.title,
       protocol: request.profile.protocol,
       terminal,
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
+      transcript: '',
+      transcriptTruncated: false
     };
     this.sessions.set(id, session);
 
-    terminal.onData((data) => this.#send('terminal:data', { id, data }));
+    terminal.onData((data) => {
+      appendTranscript(session, data);
+      this.#send('terminal:data', { id, data });
+    });
     terminal.onExit(({ exitCode, signal }) => {
+      this.closedTranscripts.set(id, {
+        id: session.id,
+        title: session.title,
+        protocol: session.protocol,
+        profileId: session.profileId,
+        startedAt: session.startedAt,
+        transcript: session.transcript,
+        transcriptTruncated: session.transcriptTruncated
+      });
       this.sessions.delete(id);
       this.#send('terminal:exit', { id, exitCode, signal });
     });
@@ -61,10 +88,28 @@ class TerminalService {
     return true;
   }
 
+  exportTranscript(id) {
+    const session = this.sessions.get(id) || this.closedTranscripts.get(id);
+    if (!session) throw new Error('Terminal session not found');
+    return {
+      id: session.id,
+      title: session.title,
+      protocol: session.protocol,
+      profileId: session.profileId,
+      startedAt: session.startedAt,
+      exportedAt: new Date().toISOString(),
+      truncated: Boolean(session.transcriptTruncated),
+      text: session.transcript
+    };
+  }
+
   close(id) {
     const session = this.sessions.get(id);
-    if (!session) return false;
+    if (!session) {
+      return this.closedTranscripts.delete(id);
+    }
     this.sessions.delete(id);
+    this.closedTranscripts.delete(id);
     try { session.terminal.kill(); } catch { /* process already exited */ }
     return true;
   }
@@ -74,7 +119,7 @@ class TerminalService {
   }
 
   list() {
-    return [...this.sessions.values()].map(({ terminal, ...metadata }) => metadata);
+    return [...this.sessions.values()].map(({ terminal, transcript, ...metadata }) => metadata);
   }
 
   #send(channel, payload) {
