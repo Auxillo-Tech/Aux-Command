@@ -86,6 +86,8 @@ function registerIpc({
   handle('sftp:mkdir', (profile, remotePath) => sftpService.mkdir(profile, remotePath));
   handle('sftp:rename', (profile, oldPath, newPath) => sftpService.rename(profile, oldPath, newPath));
   handle('sftp:remove', (profile, remotePath, directory) => sftpService.remove(profile, remotePath, directory));
+  handle('sftp:read-text', (profile, remotePath) => sftpService.readText(profile, remotePath));
+  handle('sftp:write-text', (profile, remotePath, content) => sftpService.writeText(profile, remotePath, content));
   handle('sftp:upload', async (profile, remoteDirectory) => {
     const result = await dialog.showOpenDialog(getWindow(), { title: 'Select file to upload', properties: ['openFile'] });
     if (result.canceled || !result.filePaths[0]) return { canceled: true };

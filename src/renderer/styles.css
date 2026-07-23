@@ -180,7 +180,7 @@ kbd { margin-right: 2px; padding: 2px 5px; border: 1px solid var(--line-strong);
 .pathbar { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 5px; padding: 0 10px 8px; }
 .pathbar input { min-width: 0; height: 31px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: rgba(12, 25, 34, .9); color: var(--text); font-family: var(--mono); font-size: 10px; }
 .pathbar button { border-radius: 7px; }
-.sftp-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 0 10px 10px; }
+.sftp-actions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; padding: 0 10px 10px; }
 .sftp-actions button { min-width: 0; height: 29px; border-radius: 7px; color: var(--muted); font-size: 9px; }
 .file-header { display: grid; grid-template-columns: minmax(0, 1fr) 74px; padding: 7px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--faint); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .file-header span:last-child { text-align: right; }
@@ -236,6 +236,7 @@ kbd { margin-right: 2px; padding: 2px 5px; border: 1px solid var(--line-strong);
 .field input, .field select, .field textarea { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: rgba(5, 15, 22, .72); color: var(--text); }
 .field input, .field select { height: 36px; padding: 0 10px; }
 .field textarea { min-height: 80px; resize: vertical; padding: 9px 10px; }
+.field textarea.remote-editor { min-height: min(520px, 56vh); font-family: var(--mono); font-size: 11px; line-height: 1.5; white-space: pre; overflow: auto; }
 .field small { color: var(--faint); font-size: 9px; line-height: 1.45; }
 .checkbox-row { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 0; }
 .checkbox-row label { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; }

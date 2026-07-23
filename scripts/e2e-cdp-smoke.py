@@ -119,13 +119,16 @@ def main() -> int:
             profileConnect: Boolean(document.querySelector('.profile-connect')),
             profileEdit: Boolean(document.querySelector('.profile-edit')),
             durableStartupError: Boolean(document.getElementById('initialization-error') && document.getElementById('retry-initialization')),
+            updateButton: Boolean(document.getElementById('updates-button')),
+            sftpEditButton: Boolean(document.getElementById('sftp-edit')),
             labeledTopActions: [...document.querySelectorAll('.top-action .action-label')].map(node => node.textContent.trim())
           })
         """)
         require(
             ui_foundation['sessionTablist'] and ui_foundation['toolbar'] and ui_foundation['profileConnect']
             and ui_foundation['profileEdit'] and ui_foundation['durableStartupError']
-            and ui_foundation['labeledTopActions'] == ['Local shell', 'Snippets', 'Tunnels', 'Diagnostics'],
+            and ui_foundation['updateButton'] and ui_foundation['sftpEditButton']
+            and ui_foundation['labeledTopActions'] == ['Local shell', 'Snippets', 'Tunnels', 'Updates', 'Diagnostics'],
             'remediated UI foundation missing from packaged app',
             ui_foundation,
         )
@@ -304,6 +307,18 @@ def main() -> int:
         """, timeout=25)
         require(snippet_smoke.get('ok'), 'snippet UI smoke failed', snippet_smoke)
 
+        updates_smoke = cdp.eval("""
+          (async () => {
+            document.getElementById('updates-button').click();
+            await new Promise(r => setTimeout(r, 200));
+            const modalText = document.getElementById('modal-root').innerText;
+            document.querySelector('#modal-root .modal-close:not([hidden])')?.click();
+            const normalized = modalText.toLowerCase();
+            return { opened: normalized.includes('aux command updates') && normalized.includes('github releases'), modalText: modalText.slice(0, 1000) };
+          })()
+        """, timeout=5)
+        require(updates_smoke.get('opened'), 'top-level updates modal smoke failed', updates_smoke)
+
         diagnostics_smoke = cdp.eval("""
           (async () => {
             document.getElementById('diagnostics-button').click();
@@ -325,6 +340,7 @@ def main() -> int:
             'workstationSmoke': workstation_smoke,
             'workstationOpsSmoke': workstation_ops_smoke,
             'snippetSmoke': snippet_smoke,
+            'updatesModalSmoke': updates_smoke,
             'diagnosticsModalSmoke': diagnostics_smoke,
             'stateAfter': state_after,
             'screenshot': screenshot['path'],

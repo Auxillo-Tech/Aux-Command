@@ -154,7 +154,8 @@ Install optional runtime tools with:
 
 - Graphical SFTP browser backed by `ssh2`.
 - Explicit host-key fingerprint confirmation.
-- Upload, download, folder creation, rename, and delete operations.
+- Upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
+- Inline remote editing uses a temporary upload plus OpenSSH POSIX rename where supported, with a 1 MB safety limit for in-app edits.
 - Separate treatment for account passwords and private-key passphrases.
 - Persistent SFTP secrets only when Linux desktop safe storage is encrypted.
 - Unsafe Electron `basic_text` secret storage is rejected.
@@ -183,7 +184,7 @@ Install optional runtime tools with:
 ### Release and diagnostics
 
 - GitHub Releases update path wired through `electron-updater`.
-- Diagnostics UI for update state and package behavior.
+- Top-level Updates toolbar control plus diagnostics UI for update state and package behavior.
 - GitHub Actions Linux build pipeline.
 - AppImage, `.deb`, and `.rpm` package outputs for x86_64.
 - CycloneDX SBOM generation.

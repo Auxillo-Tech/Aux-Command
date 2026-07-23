@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
@@ -15,6 +16,23 @@ function callSftp(sftp, method, ...args) {
   return new Promise((resolve, reject) => {
     sftp[method](...args, (error, result) => error ? reject(error) : resolve(result));
   });
+}
+
+async function replaceRemoteFile(sftp, partialPath, targetPath) {
+  if (typeof sftp.ext_openssh_rename === 'function') {
+    try {
+      await callSftp(sftp, 'ext_openssh_rename', partialPath, targetPath);
+      return;
+    } catch (error) {
+      if (!/does not support this extended request/u.test(error.message)) throw error;
+    }
+  }
+  try {
+    await callSftp(sftp, 'rename', partialPath, targetPath);
+  } catch (error) {
+    await callSftp(sftp, 'unlink', targetPath);
+    await callSftp(sftp, 'rename', partialPath, targetPath);
+  }
 }
 
 function createOpenSshProxy(profile) {
@@ -232,6 +250,46 @@ class SftpService {
   async remove(profile, remotePath, directory = false) {
     const connection = await this.connect(profile);
     await callSftp(connection.sftp, directory ? 'rmdir' : 'unlink', normalizeRemotePath(remotePath));
+    return true;
+  }
+
+  async readText(profileInput, remotePath, limit = 1_000_000) {
+    const connection = await this.connect(profileInput);
+    const source = normalizeRemotePath(remotePath);
+    const stat = await callSftp(connection.sftp, 'stat', source);
+    if (isDirectory(stat)) throw new Error('Remote text editor can only open files');
+    const size = Number(stat?.size || 0);
+    if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
+    const localPath = path.join(os.tmpdir(), `aux-command-remote-edit-${randomUUID()}`);
+    try {
+      await new Promise((resolve, reject) => {
+        connection.sftp.fastGet(source, localPath, (error) => error ? reject(error) : resolve());
+      });
+      return fs.readFileSync(localPath, 'utf8');
+    } finally {
+      try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
+    }
+  }
+
+  async writeText(profileInput, remotePath, content) {
+    const connection = await this.connect(profileInput);
+    const target = normalizeRemotePath(remotePath);
+    const text = String(content ?? '');
+    if (Buffer.byteLength(text, 'utf8') > 1_000_000) throw new Error('Remote text editor refuses to save files larger than 1 MB');
+    const partialPath = `${target}.aux-command-${randomUUID()}.part`;
+    const localPath = path.join(os.tmpdir(), `aux-command-remote-edit-${randomUUID()}`);
+    try {
+      fs.writeFileSync(localPath, text, { mode: 0o600 });
+      await new Promise((resolve, reject) => {
+        connection.sftp.fastPut(localPath, partialPath, (error) => error ? reject(error) : resolve());
+      });
+      await replaceRemoteFile(connection.sftp, partialPath, target);
+    } catch (error) {
+      try { await callSftp(connection.sftp, 'unlink', partialPath); } catch { /* best effort cleanup */ }
+      throw error;
+    } finally {
+      try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
+    }
     return true;
   }
 

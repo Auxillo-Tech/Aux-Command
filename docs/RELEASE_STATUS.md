@@ -1,13 +1,13 @@
 # Aux Command 0.1.0 — engineering release status
 
-Validated: **2026-07-23T05:51:36Z**
+Validated: **2026-07-23T07:39:37Z**
 Scope: **Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
 
 ## Current verdict
 
 The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for the next live-protocol and GitHub-publication phase.
 
-This is **not yet a signed public production release**. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, and Linux CI is green on `main`. No real GitHub Release has been published from a tag yet, artifacts are unsigned, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
+This is **not yet a signed public production release**. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI has passed on `main`, and a draft `v0.1.0` GitHub Release has been proven with uploaded assets. The release remains unsigned, draft-only, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
 
 ## Distribution decision
 
@@ -16,7 +16,7 @@ Aux Command desktop binaries and update metadata should live on **GitHub Release
 - GitHub owns versioned desktop release assets, release notes, checksums, and update metadata.
 - The Auxillo server does not need to host desktop installer/update files.
 - GitHub release/update configuration targets `Auxillo-Tech/Aux-Command`; update `package.json` `build.publish.owner` and `build.publish.repo` if the repository changes before tagging.
-- GitHub repository readiness is complete for private development: metadata, topics, issue templates, pull request template, Dependabot config, security policy, and Linux CI are configured.
+- GitHub repository readiness is complete for private development: metadata, topics, issue templates, pull request template, Dependabot config, security policy, Linux CI, tag-triggered release workflow, and draft release asset upload are configured.
 
 See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
@@ -78,6 +78,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Quick Connect now includes Serial and routes `/dev/...` device paths through the bundled serial bridge.
 - Advanced per-profile OpenSSH known-hosts-file overrides allow isolated lab/fixture profiles without touching the operator's real `~/.ssh/known_hosts`.
 - Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
+- Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
+- Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
 - CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
 
 ### Packaged runtime
@@ -95,6 +97,7 @@ Fresh AppImage with isolated configuration/cache passed:
 - pane resizing
 - snippet creation/execution
 - diagnostics modal with GitHub update state
+- top-level Updates modal with GitHub release update state
 - screenshot capture remains available as a diagnostic artifact when CDP/compositor timing allows it; failure to capture a screenshot after functional smoke passes is reported as `screenshotWarning`, not as an app failure
 
 Packaged accessibility/source assertions passed:
@@ -138,10 +141,9 @@ Exact byte sizes and SHA-256 digests are canonical in `dist/release-manifest.jso
 
 ### External trust/provenance blockers
 
-1. **Immutable release tag:** no `v0.1.0` GitHub tag/release exists yet from this source tree.
-2. **Production signing identity:** no controlled Auxillo signing key is available locally. The verifier supports full-fingerprint-pinned GPG validation, but unsigned releases currently require `--allow-unsigned`.
-3. **Public/private GitHub feature gate:** branch protection and artifact attestations are blocked while the repository remains private under the current GitHub plan. JD intends to make the repository public after private preparation is complete.
-4. **Published updater validation:** update checks are wired for GitHub Releases, but cannot be end-to-end proven until a GitHub release exists.
+1. **Production signing identity:** no controlled Auxillo signing key is available locally. The verifier supports full-fingerprint-pinned GPG validation, but unsigned releases currently require `--allow-unsigned`.
+2. **Public/private GitHub feature gate:** branch protection and artifact attestations are blocked while the repository remains private under the current GitHub plan. JD intends to make the repository public after private preparation is complete.
+3. **Published updater validation:** update checks are wired for GitHub Releases and a draft release exists, but public updater discovery still requires publishing a release.
 
 ### Product/live qualification still required
 
@@ -164,6 +166,7 @@ See `docs/LIVE_QUALIFICATION.md` for the live evidence checklist.
 - **Foundation engineering status:** qualified for GitHub repo setup and live-protocol qualification
 - **Internal x64 engineering release:** yes
 - **GitHub release/update path wired in code:** yes
+- **Draft GitHub release:** yes
 - **Published GitHub release:** no
 - **Signed/authenticated public release:** no
 - **Unrestricted production 1.0:** no
