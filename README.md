@@ -152,6 +152,7 @@ Install optional runtime tools with:
 - Compression, keepalive, X11 forwarding, and agent forwarding controls.
 - Literal remote startup commands passed safely as OpenSSH arguments.
 - No local shell interpolation of profile values.
+- Explicit SCP fallback transfer mode for legacy SSH servers that do not expose SFTP; SFTP remains the default and SCP is limited to upload/download style file transfer.
 
 ### SFTP
 
@@ -163,6 +164,13 @@ Install optional runtime tools with:
 - Persistent SFTP secrets only when Linux desktop safe storage is encrypted.
 - Unsafe Electron `basic_text` secret storage is rejected.
 - Profile exports omit secrets and credential identifiers.
+
+### SCP fallback
+
+- SSH profiles can opt into SCP fallback transfer mode for constrained legacy servers.
+- SCP uses OpenSSH `scp -O` in batch mode with direct argument arrays and private temporary download staging.
+- SCP fallback supports regular file upload/download only; directory browsing, mkdir, rename, delete, and inline remote editing require SFTP.
+- Stored GUI-vault account passwords are refused for SCP fallback because external `scp` cannot consume them safely; use SSH agent or an identity file.
 
 ### FTP / FTPS
 

@@ -1490,6 +1490,7 @@
       proxyJump: '',
       keepAliveSeconds: 30,
       sftpRoot: '/',
+      transferMode: 'sftp',
       device: '/dev/ttyUSB0',
       baudRate: 115200,
       rdpDomain: '',
@@ -1525,6 +1526,9 @@
     const startupCommand = node('textarea', { name: 'startupCommand', value: profile.startupCommand || '', placeholder: 'tmux attach || tmux new' });
     startupCommand.value = profile.startupCommand || '';
     const sftpRoot = textInput('sftpRoot', profile.sftpRoot || '/', { placeholder: '/' });
+    const transferMode = selectInput('transferMode', [
+      ['sftp', 'SFTP browser'], ['scp', 'SCP fallback']
+    ], profile.transferMode || 'sftp');
     const device = textInput('device', profile.device || '/dev/ttyUSB0', { placeholder: '/dev/ttyUSB0' });
     const baudRate = textInput('baudRate', profile.baudRate || 115200, { type: 'number', min: 50, max: 4000000 });
     const rdpDomain = textInput('rdpDomain', profile.rdpDomain, { placeholder: 'CORP' });
@@ -1570,6 +1574,7 @@
       field('ProxyJump', proxyJump, 'SSH terminal sessions and tunnels use the OpenSSH -J option.'),
       field('Keepalive seconds', keepAlive),
       field('SFTP start path', sftpRoot, '', '',),
+      field('SSH transfer mode', transferMode, 'SCP is upload/download fallback only for legacy SSH servers without SFTP.'),
       field('Serial device', device, '', '',),
       field('Baud rate', baudRate, '', '',),
       field('RDP domain', rdpDomain, '', '',),
@@ -1595,6 +1600,7 @@
       [proxyJump.closest('.field'), 'ssh'],
       [keepAlive.closest('.field'), 'ssh'],
       [sftpRoot.closest('.field'), 'ssh,ftp,ftps'],
+      [transferMode.closest('.field'), 'ssh'],
       [device.closest('.field'), 'serial'],
       [baudRate.closest('.field'), 'serial'],
       [rdpDomain.closest('.field'), 'rdp'],
@@ -1635,6 +1641,7 @@
         keepAliveSeconds: Number(values.get('keepAliveSeconds') || 0),
         startupCommand: String(values.get('startupCommand') || ''),
         sftpRoot: String(values.get('sftpRoot') || '/').trim(),
+        transferMode: String(values.get('transferMode') || 'sftp'),
         device: String(values.get('device') || '').trim(),
         baudRate: Number(values.get('baudRate') || 115200),
         rdpDomain: String(values.get('rdpDomain') || '').trim(),
