@@ -13,10 +13,10 @@
     <header class="topbar">
       <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle connections sidebar" aria-expanded="false">☰</button>
       <button id="brand-button" class="brand" type="button" title="Aux Command home">
-        <img src="./assets/logo.png" alt="">
-        <span class="brand-copy"><strong>Aux Command</strong><small>Remote operations</small></span>
+        <img class="brand-wordmark" src="./assets/auxillo-wordmark.png" alt="Auxillo">
+        <span class="product-name">Command</span>
       </button>
-      <div class="quick-connect">
+      <div class="quick-connect workspace-commandbar">
         <span class="quick-prefix">›_</span>
         <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22, user@host, or /dev/ttyUSB0">
         <select id="quick-protocol" aria-label="Quick connect protocol">
@@ -93,9 +93,16 @@
       </div>
       <section id="welcome" class="welcome">
         <div class="welcome-mark"><img src="./assets/logo.png" alt=""></div>
-        <span class="eyebrow">Auxillo infrastructure tools</span>
+        <img class="eyebrow-logo" src="./assets/eyebrow-logo.png" alt="Auxillo">
         <h1>Control every remote system from one Linux workspace.</h1>
         <p>Native OpenSSH sessions, file transfer, tunnels and remote desktop launchers without hiding the Linux tools you already trust.</p>
+        <div class="welcome-capabilities" aria-label="Available connection capabilities">
+          <span><i class="capability-dot secure"></i>SSH &amp; SFTP</span>
+          <span><i class="capability-dot transfer"></i>FTP &amp; FTPS</span>
+          <span><i class="capability-dot route"></i>Tunnels</span>
+          <span><i class="capability-dot local"></i>Local &amp; serial</span>
+          <span><i class="capability-dot desktop"></i>RDP &amp; VNC</span>
+        </div>
         <div class="welcome-actions">
           <button id="welcome-local" class="action-card" type="button"><span>›_</span><strong>Local terminal</strong><small>Start an interactive shell</small></button>
           <button id="welcome-profile" class="action-card" type="button"><span>＋</span><strong>New connection</strong><small>SSH, Mosh, Telnet, FTP, FTPS, RDP, VNC or serial</small></button>
