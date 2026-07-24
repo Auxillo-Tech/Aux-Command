@@ -60,7 +60,7 @@ test('release manifest script writes deterministic artifact metadata and checksu
 });
 
 test('package exposes release manifest script', () => {
-  assert.equal(packageJson.scripts['release:manifest'], 'node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs');
+  assert.equal(packageJson.scripts['release:manifest'], 'AUX_COMMAND_GPG_KEY=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs');
   assert.equal(packageJson.scripts['release:metadata'], 'node scripts/release-metadata.cjs');
 });
 
@@ -142,5 +142,5 @@ test('release verifier pins signed releases to an external full fingerprint', ()
 });
 
 test('package exposes release verification script', () => {
-  assert.equal(packageJson.scripts['release:verify'], 'node scripts/verify-release.cjs');
+  assert.equal(packageJson.scripts['release:verify'], 'AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/verify-release.cjs');
 });

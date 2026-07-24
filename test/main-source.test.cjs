@@ -69,7 +69,7 @@ test('production package locks Electron runtime fuses', () => {
     enableCookieEncryption: true,
     enableNodeOptionsEnvironmentVariable: false,
     enableNodeCliInspectArguments: false,
-    enableEmbeddedAsarIntegrityValidation: false,
+    enableEmbeddedAsarIntegrityValidation: true,
     onlyLoadAppFromAsar: true,
     loadBrowserProcessSpecificV8Snapshot: false,
     grantFileProtocolExtraPrivileges: true
