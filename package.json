@@ -1,6 +1,6 @@
 {
   "name": "aux-command",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Auxillo's Linux-native remote operations workstation for SSH, SFTP, FTP, FTPS, tunnels, RDP, VNC, Mosh, Telnet, serial consoles and local shells.",
   "main": "src/main/index.cjs",
   "desktopName": "aux-command.desktop",
@@ -21,8 +21,8 @@
     "smoke:cdp": "python3 scripts/e2e-cdp-smoke.py",
     "soak:cdp": "python3 scripts/soak-cdp.py",
     "release:metadata": "node scripts/release-metadata.cjs",
-    "release:manifest": "node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs",
-    "release:verify": "node scripts/verify-release.cjs"
+    "release:manifest": "AUX_COMMAND_GPG_KEY=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs",
+    "release:verify": "AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/verify-release.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
@@ -43,7 +43,7 @@
       "enableCookieEncryption": true,
       "enableNodeOptionsEnvironmentVariable": false,
       "enableNodeCliInspectArguments": false,
-      "enableEmbeddedAsarIntegrityValidation": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
       "onlyLoadAppFromAsar": true,
       "loadBrowserProcessSpecificV8Snapshot": false,
       "grantFileProtocolExtraPrivileges": true

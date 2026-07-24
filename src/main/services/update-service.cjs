@@ -21,7 +21,11 @@ class UpdateService {
 
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.logger = null;
+    autoUpdater.logger = {
+      info: (msg) => process.stderr.write(`[updater] ${msg}\n`),
+      warn: (msg) => process.stderr.write(`[updater:WARN] ${msg}\n`),
+      error: (msg) => process.stderr.write(`[updater:ERROR] ${msg}\n`)
+    };
 
     autoUpdater.on('checking-for-update', () => this.#merge({ checking: true, error: null }));
     autoUpdater.on('update-available', (info) => this.#merge({

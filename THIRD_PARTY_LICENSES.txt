@@ -1,4 +1,4 @@
-Third-party licenses bundled with Aux Command 0.1.0
+Third-party licenses bundled with Aux Command 0.2.1
 
 Generated from the production dependency graph. Aux Command itself remains
 proprietary under the terms in LICENSE.

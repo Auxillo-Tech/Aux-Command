@@ -6,7 +6,7 @@ Aux Command desktop release artifacts are distributed from GitHub Releases, not 
 
 - Canonical release host: GitHub Releases for `Auxillo-Tech/Aux-Command`.
 - Auxillo server role: none for desktop binary hosting or update metadata unless a later architecture decision explicitly changes this.
-- Supported Linux artifacts for 0.1.x:
+- Supported Linux artifacts for 0.2.x:
   - `Aux-Command-<version>-x86_64.AppImage`
   - `Aux-Command-<version>-amd64.deb`
   - `Aux-Command-<version>-x86_64.rpm`
@@ -36,13 +36,15 @@ Completed:
 - Repository metadata, topics, issue templates, pull request template, Dependabot config, and security policy are present.
 - Electron Builder publish config targets `Auxillo-Tech/Aux-Command`.
 
-Before the first real public release:
+## Release process
 
-1. Keep or intentionally change the final owner/name. If it changes from `Auxillo-Tech/Aux-Command`, update `package.json` `build.publish.owner` and `build.publish.repo` before tagging.
-2. Create and push an immutable semver tag, for example `v0.1.0`.
-3. Let the `release` workflow build artifacts from the tag.
-4. Review workflow logs, uploaded artifacts, `release-manifest.json`, `SHA256SUMS`, and attestations when the repository is public and GitHub enables artifact attestations for the org plan.
-5. Publish the drafted GitHub Release only after the artifact set and release notes are correct.
+1. Verify the signing key: `export AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2`
+2. Bump version in `package.json`, commit, push to `main`.
+3. Create and push an immutable semver tag, for example `v0.2.2`.
+4. Build: `npm run dist:x64`
+5. Sign: `gpg --detach-sign --armor dist/SHA256SUMS && gpg --detach-sign --armor dist/release-manifest.json`
+6. Publish: generate source archives + manifest, then create GitHub Release with all artifacts.
+7. Verify: `npm run release:verify` (assumes `AUX_COMMAND_GPG_FINGERPRINT` is set).
 
 ## Manual local verification commands
 
@@ -61,4 +63,4 @@ npm run release:verify -- --allow-unsigned
 
 ## Remaining trust gap
 
-The current release path is checksum-verified in Actions. GitHub artifact attestations are enabled only when the repository/org plan supports them; this private repository currently skips attestation because GitHub reports the feature unavailable. The release is still unsigned unless an Auxillo-controlled signing key is configured. Checksums detect corruption; signatures authenticate publisher identity. Public production should not be called fully authenticated until signing is implemented and documented.
+The current release path is checksum-verified in Actions. GitHub artifact attestations are enabled only when the repository/org plan supports them; this private repository currently skips attestation because GitHub reports the feature unavailable. The release is signed with an Auxillo-controlled signing key (`SIGNING_KEY.asc`). Use `npm run release:verify` with the `AUX_COMMAND_GPG_FINGERPRINT` environment variable to authenticate releases. See the release-verification documentation in `scripts/verify-release.cjs`.
