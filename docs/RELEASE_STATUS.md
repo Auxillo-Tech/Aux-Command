@@ -1,13 +1,15 @@
-# Aux Command 0.1.0 — engineering release status
+# Aux Command 0.2.2 — signed engineering release
 
-Validated: **2026-07-23T16:49:55Z**
-Scope: **Free/open-source Linux x86_64 engineering release candidate with feature/function/UI polish, GitHub repository, CI, release/update path, and public-facing documentation prepared**
+Validated: **2026-07-24T13:57:00Z**
+Scope: **Free/open-source Linux x86_64 engineering release with GPG-signed releases, GitHub repository, CI, release/update path, and public-facing documentation**
 
 ## Current verdict
 
-The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for the next live-protocol and GitHub-publication phase.
+The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for live-protocol and GitHub-publication phases.
 
-This is **not yet a signed public production release**. Aux Command is declared as AGPL-3.0-or-later free/open-source software with all features intended for the public build and no enterprise-only or paid feature walls. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI has passed on `main`, and a draft `v0.1.0` GitHub Release has been proven with uploaded assets. The release remains unsigned, draft-only, and GitHub artifact attestations are skipped while the repository is private because GitHub reports the feature unavailable for the org/repo plan. Live endpoint/hardware qualification remains incomplete for optional integrations.
+Aux Command is declared as AGPL-3.0-or-later free/open-source software with all features intended for the public build and no enterprise-only or paid feature walls. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI passes on `main`, and releases are GPG-signed with the Aux Command Release Signing key (`SIGNING_KEY.asc`). Release verification requires `AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2`.
+
+Live endpoint/hardware qualification remains incomplete for optional integrations such as Mosh and external RDP/VNC clients behind NAT or jump hosts.
 
 ## Distribution decision
 
@@ -34,7 +36,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **126/126 tests passed**
+- `npm run check`: **127/127 tests passed**
 - JavaScript syntax: 52 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
@@ -54,6 +56,7 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
   - `NODE_OPTIONS` disabled
   - Node CLI inspection disabled
   - ASAR-only application loading enabled
+  - embedded ASAR integrity validation enabled
 - PTY and tunnel children launch through an exact-parent Linux `PR_SET_PDEATHSIG` guard with readiness synchronization.
 - The parent-death signal is `SIGKILL`, preventing bridge or OpenSSH handlers from suppressing abnormal-exit cleanup.
 - Normal user-requested terminal termination uses the graceful control path with timed force escalation.

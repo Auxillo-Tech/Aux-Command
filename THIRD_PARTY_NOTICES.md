@@ -1,6 +1,6 @@
 # Third-party notices
 
-Aux Command is proprietary software. Its own terms are in `LICENSE`.
+Aux Command is free, open-source software licensed under AGPL-3.0-or-later. Its own terms are in `LICENSE`.
 
 Aux Command bundles the following direct npm runtime components:
 
