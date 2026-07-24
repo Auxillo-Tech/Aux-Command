@@ -2,7 +2,7 @@
 
 Aux Command currently ships as a Linux x86_64 desktop application.
 
-Supported package outputs for the 0.1.x engineering release line:
+Supported package outputs for the 0.2.x release line:
 
 ```text
 Aux-Command-<version>-x86_64.AppImage

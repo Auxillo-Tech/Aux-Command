@@ -4,7 +4,7 @@
 
 It is built as an original Auxillo public product with native Linux tooling, explicit trust boundaries, modern Electron hardening, no paid feature walls, and verifiable release engineering.
 
-> Current status: **0.1.x Linux x86_64 engineering release candidate**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, and source validation are in place. It is not yet a signed public production release until release signing, publication, and broader live protocol qualification are complete.
+> Current status: **0.2.x Linux x86_64 engineering release**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, GPG-signed releases, and source validation are in place. Releases are cryptographically signed with the Aux Command Release Signing key.
 
 ---
 
@@ -345,6 +345,7 @@ Typical data includes profiles, command snippets, SFTP known-host fingerprints, 
 | [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) | Current engineering release evidence and remaining gates. |
 | [`docs/LIVE_QUALIFICATION.md`](docs/LIVE_QUALIFICATION.md) | Live protocol qualification checklist. |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Forward plan for closing remaining product gaps. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Pull request workflow and code standards. |
 
 ---
 
