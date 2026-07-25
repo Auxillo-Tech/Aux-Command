@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](README.de.md) · [简体中文](README.zh.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [日本語](README.ja.md) · [Português](README.pt.md)
+
 # Aux Command
 
 **Aux Command** is Auxillo’s free, open-source Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.

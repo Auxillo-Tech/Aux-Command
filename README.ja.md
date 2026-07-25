@@ -1,0 +1,47 @@
+🌐 [English](README.md) · [Deutsch](README.de.md) · [简体中文](README.zh.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · **日本語** · [Português](README.pt.md)
+
+---
+
+# Aux Command
+
+**Aux Command** は、Auxillo による無料・オープンソース・Linux ネイティブのリモートオペレーションワークステーションです。SSH ターミナル、SFTP、トンネル、リモートデスクトップランチャー、Mosh、Telnet、シリアルコンソール、ローカルシェル、プロファイル、そして本番運用レベルのツールを一つのアプリケーションに統合した、安全なデスクトップコンソールです。
+
+ローカルとリモートのシステム間を迅速に移動しながら作業する必要がある、技術オペレーター、インフラストラクチャチーム、セキュリティエンジニアのために設計されており、作業を多数の非連携ツールに分散させる必要はありません。
+
+## 主な機能
+
+- **ターミナルワークスペース** – xterm.js による PTY ベースのタブ型ターミナル、ローカルシェルセッション、カスタマイズ可能なテーマ、分割レイアウト、コマンドパレット、マクロ記録、ブロードキャスト入力。
+- **SSH 操作** – ネイティブ OpenSSH セッション、SSH エージェントサポート、`~/.ssh/config` インポート、ID ファイル、ProxyJump、圧縮、キープアライブ、X11 転送、SCP フォールバック。
+- **SFTP** – ホストキーフィンガープリント確認機能付きグラフィカル SFTP ブラウザ、アップロード/ダウンロード、インラインテキスト編集、フォルダ管理。
+- **SSH トンネル** – エビデンスベースの準備完了検出によるローカル転送、リモート転送、動的 SOCKS 転送。
+- **プロトコルランチャーとブリッジ** – Mosh、RDP（FreeRDP）、VNC（TigerVNC）、Telnet、シリアルブリッジ、および PTY ヘルパー。
+- **FTP / FTPS** – 暗号化 TLS 転送（FTPS）対応のファイルブラウザプロファイルと、暗号化されていない FTP 接続時の警告。
+- **リリースと診断** – GitHub Releases 更新パス、AppImage、.deb、.rpm パッケージ、SBOM 生成、SHA-256 チェックサム検証。
+
+## クイックインストール
+
+```bash
+# AppImage（ポータブル）
+chmod +x Aux-Command-0.1.0-x86_64.AppImage
+./Aux-Command-0.1.0-x86_64.AppImage
+
+# Debian / Ubuntu
+sudo apt install ./Aux-Command-0.1.0-amd64.deb
+aux-command
+
+# Fedora / RHEL / Rocky / AlmaLinux
+sudo dnf install ./Aux-Command-0.1.0-x86_64.rpm
+aux-command
+```
+
+## セキュリティ
+
+Aux Command はセキュリティ重視の運用向けに構築されており、目に見えない利便性よりも明示的な境界を優先します。Electron レンダラーサンドボックス、`contextIsolation`、Chromium 権限要求のデフォルト拒否が有効になっています。外部ナビゲーションとポップアップはデフォルトでブロックされます。特権 IPC は送信元ウィンドウとフレームを検証し、引数配列による直接プロセス生成（シェル補間なし）、管理対象ヘルパープロセス用の Linux 死亡シグナルガードにより、安全な運用環境を確保します。
+
+## ライセンス
+
+Aux Command は **AGPL-3.0-or-later** ライセンスのもとで提供される自由なオープンソースソフトウェアです。すべての機能は公開ビルドに含まれており、エンタープライズ専用モジュールや有料エディション、ペイウォールは一切ありません。
+
+---
+
+> 完全な英語ドキュメント: [README.md](README.md)
