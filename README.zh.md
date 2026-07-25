@@ -10,13 +10,13 @@
 
 ## 主要功能
 
-- **终端工作区** – 基于 PTY 的选项卡式终端（xterm.js），支持本地 Shell 会话、可定制主题、分屏布局、命令面板、宏录制和广播输入。
-- **SSH 操作** – 原生 OpenSSH 会话、SSH 代理支持、`~/.ssh/config` 导入、身份文件、ProxyJump、压缩、保活、X11 转发和 SCP 回退。
-- **SFTP** – 图形化 SFTP 浏览器，支持主机密钥指纹确认、上传/下载、内联文本编辑和文件夹管理。
-- **SSH 隧道** – 本地、远程和动态 SOCKS 转发，基于证据的就绪检测。
-- **协议启动器和桥接器** – Mosh、RDP（FreeRDP）、VNC（TigerVNC）、Telnet 和串行桥接器，以及 PTY 辅助程序。
-- **FTP / FTPS** – 文件浏览器配置文件，支持加密 TLS 传输（FTPS）并对未加密的 FTP 连接发出警告。
-- **发布与诊断** – GitHub Releases 更新路径、AppImage、.deb 和 .rpm 软件包、SBOM 生成和 SHA-256 校验验证。
+- **终端工作区** - 基于 PTY 的选项卡式终端（xterm.js），支持本地 Shell 会话、可定制主题、分屏布局、命令面板、宏录制和广播输入。
+- **SSH 操作** - 原生 OpenSSH 会话、SSH 代理支持、`~/.ssh/config` 导入、身份文件、ProxyJump、压缩、保活、X11 转发和 SCP 回退。
+- **SFTP** - 图形化 SFTP 浏览器，支持主机密钥指纹确认、上传/下载、内联文本编辑和文件夹管理。
+- **SSH 隧道** - 本地、远程和动态 SOCKS 转发，基于证据的就绪检测。
+- **协议启动器和桥接器** - Mosh、RDP（FreeRDP）、VNC（TigerVNC）、Telnet 和串行桥接器，以及 PTY 辅助程序。
+- **FTP / FTPS** - 文件浏览器配置文件，支持加密 TLS 传输（FTPS）并对未加密的 FTP 连接发出警告。
+- **发布与诊断** - GitHub Releases 更新路径、AppImage、.deb 和 .rpm 软件包、SBOM 生成和 SHA-256 校验验证。
 
 ## 快速安装
 

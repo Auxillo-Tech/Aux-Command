@@ -10,13 +10,13 @@ Progettato per operatori tecnici, team infrastrutturali e ingegneri della sicure
 
 ## Caratteristiche principali
 
-- **Area di lavoro terminale** – Schede terminale basate su PTY con xterm.js, sessioni shell locali, temi personalizzabili, layout suddivisi, palette comandi, registrazione macro e input broadcast.
-- **Operazioni SSH** – Sessioni OpenSSH native, supporto agente SSH, importazione `~/.ssh/config`, file di identità, ProxyJump, compressione, keepalive, inoltro X11 e fallback SCP.
-- **SFTP** – Browser SFTP grafico con conferma dell'impronta della chiave host, upload/download, modifica testo inline e gestione cartelle.
-- **Tunnel SSH** – Inoltri locali, remoti e SOCKS dinamici con rilevamento della prontezza basato su evidenze.
-- **Lanciatori di protocollo e ponti** – Bridge Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet e seriali, più un helper PTY.
-- **FTP / FTPS** – Profili browser file con trasporto TLS crittografato (FTPS) e avviso per connessioni FTP non crittografate.
-- **Rilascio e diagnostica** – Percorso di aggiornamento GitHub Releases, pacchetti AppImage, .deb e .rpm, generazione SBOM e verifica checksum SHA-256.
+- **Area di lavoro terminale** - Schede terminale basate su PTY con xterm.js, sessioni shell locali, temi personalizzabili, layout suddivisi, palette comandi, registrazione macro e input broadcast.
+- **Operazioni SSH** - Sessioni OpenSSH native, supporto agente SSH, importazione `~/.ssh/config`, file di identità, ProxyJump, compressione, keepalive, inoltro X11 e fallback SCP.
+- **SFTP** - Browser SFTP grafico con conferma dell'impronta della chiave host, upload/download, modifica testo inline e gestione cartelle.
+- **Tunnel SSH** - Inoltri locali, remoti e SOCKS dinamici con rilevamento della prontezza basato su evidenze.
+- **Lanciatori di protocollo e ponti** - Bridge Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet e seriali, più un helper PTY.
+- **FTP / FTPS** - Profili browser file con trasporto TLS crittografato (FTPS) e avviso per connessioni FTP non crittografate.
+- **Rilascio e diagnostica** - Percorso di aggiornamento GitHub Releases, pacchetti AppImage, .deb e .rpm, generazione SBOM e verifica checksum SHA-256.
 
 ## Installazione rapida
 

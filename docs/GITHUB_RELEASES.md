@@ -7,15 +7,15 @@ Aux Command desktop release artifacts are distributed from GitHub Releases, not 
 - Canonical release host: GitHub Releases for `Auxillo-Tech/Aux-Command`.
 - Auxillo server role: none for desktop binary hosting or update metadata unless a later architecture decision explicitly changes this.
 - Supported Linux artifacts for 0.2.x:
-  - `Aux-Command-<version>-x86_64.AppImage`
-  - `Aux-Command-<version>-amd64.deb`
-  - `Aux-Command-<version>-x86_64.rpm`
-  - `aux-command-<version>-sbom.cdx.json`
-  - `aux-command-<version>-source.tar.gz`
-  - `aux-command-<version>-source.zip`
-  - `latest-linux.yml`
-  - `release-manifest.json`
-  - `SHA256SUMS`
+ `Aux-Command-<version>-x86_64.AppImage`
+ `Aux-Command-<version>-amd64.deb`
+ `Aux-Command-<version>-x86_64.rpm`
+ `aux-command-<version>-sbom.cdx.json`
+ `aux-command-<version>-source.tar.gz`
+ `aux-command-<version>-source.zip`
+ `latest-linux.yml`
+ `release-manifest.json`
+ `SHA256SUMS`
 
 ## Current implementation
 
