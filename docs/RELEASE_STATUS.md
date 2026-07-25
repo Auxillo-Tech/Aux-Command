@@ -1,4 +1,4 @@
-# Aux Command 0.2.2 — signed engineering release
+# Aux Command 0.2.2 - signed engineering release
 
 Validated: **2026-07-24T13:57:00Z**
 Scope: **Free/open-source Linux x86_64 engineering release with GPG-signed releases, GitHub repository, CI, release/update path, and public-facing documentation**
@@ -51,12 +51,12 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 - Navigation, popup creation, Chromium permission requests, and permission checks are denied by default.
 - Hardware acceleration is disabled before Electron readiness.
 - Electron fuses verified from the packaged executable:
-  - Run as Node disabled
-  - cookie encryption enabled
-  - `NODE_OPTIONS` disabled
-  - Node CLI inspection disabled
-  - ASAR-only application loading enabled
-  - embedded ASAR integrity validation enabled
+ Run as Node disabled
+ cookie encryption enabled
+ `NODE_OPTIONS` disabled
+ Node CLI inspection disabled
+ ASAR-only application loading enabled
+ embedded ASAR integrity validation enabled
 - PTY and tunnel children launch through an exact-parent Linux `PR_SET_PDEATHSIG` guard with readiness synchronization.
 - The parent-death signal is `SIGKILL`, preventing bridge or OpenSSH handlers from suppressing abnormal-exit cleanup.
 - Normal user-requested terminal termination uses the graceful control path with timed force escalation.

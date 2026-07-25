@@ -10,13 +10,13 @@ Projetado para operadores técnicos, equipes de infraestrutura e engenheiros de 
 
 ## Principais recursos
 
-- **Espaço de trabalho de terminal** – Abas de terminal baseadas em PTY com xterm.js, sessões de shell local, temas personalizáveis, layouts divididos, paleta de comandos, gravação de macros e entrada transmitida.
-- **Operações SSH** – Sessões OpenSSH nativas, suporte a agente SSH, importação de `~/.ssh/config`, arquivos de identidade, ProxyJump, compressão, keepalive, encaminhamento X11 e fallback SCP.
-- **SFTP** – Navegador SFTP gráfico com confirmação de impressão digital de chave de host, upload/download, edição de texto inline e gerenciamento de pastas.
-- **Túneis SSH** – Encaminhamentos locais, remotos e SOCKS dinâmicos com detecção de prontidão baseada em evidências.
-- **Lançadores de protocolo e pontes** – Pontes Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet e serial, além de um auxiliar PTY.
-- **FTP / FTPS** – Perfis de navegador de arquivos com transporte TLS criptografado (FTPS) e aviso para conexões FTP não criptografadas.
-- **Lançamento e diagnóstico** – Caminho de atualização do GitHub Releases, pacotes AppImage, .deb e .rpm, geração de SBOM e verificação de soma de verificação SHA-256.
+- **Espaço de trabalho de terminal** - Abas de terminal baseadas em PTY com xterm.js, sessões de shell local, temas personalizáveis, layouts divididos, paleta de comandos, gravação de macros e entrada transmitida.
+- **Operações SSH** - Sessões OpenSSH nativas, suporte a agente SSH, importação de `~/.ssh/config`, arquivos de identidade, ProxyJump, compressão, keepalive, encaminhamento X11 e fallback SCP.
+- **SFTP** - Navegador SFTP gráfico com confirmação de impressão digital de chave de host, upload/download, edição de texto inline e gerenciamento de pastas.
+- **Túneis SSH** - Encaminhamentos locais, remotos e SOCKS dinâmicos com detecção de prontidão baseada em evidências.
+- **Lançadores de protocolo e pontes** - Pontes Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet e serial, além de um auxiliar PTY.
+- **FTP / FTPS** - Perfis de navegador de arquivos com transporte TLS criptografado (FTPS) e aviso para conexões FTP não criptografadas.
+- **Lançamento e diagnóstico** - Caminho de atualização do GitHub Releases, pacotes AppImage, .deb e .rpm, geração de SBOM e verificação de soma de verificação SHA-256.
 
 ## Instalação rápida
 

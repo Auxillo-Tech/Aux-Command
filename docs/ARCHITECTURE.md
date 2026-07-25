@@ -48,9 +48,9 @@ The application stores data below Electron's Linux `userData` directory, normall
 
 Files include:
 
-- `profiles.json` — connection settings and snippets;
-- `known-hosts.json` — host fingerprints accepted by the graphical SFTP client;
-- `vault.json` — encrypted credential blobs only when a secure desktop secret-service backend is available.
+- `profiles.json` - connection settings and snippets;
+- `known-hosts.json` - host fingerprints accepted by the graphical SFTP client;
+- `vault.json` - encrypted credential blobs only when a secure desktop secret-service backend is available.
 
 Files are written atomically and restricted to mode `0600` where the filesystem supports POSIX permissions.
 

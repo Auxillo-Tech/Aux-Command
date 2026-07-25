@@ -10,13 +10,13 @@ Entwickelt für technische Betreiber, Infrastrukturteams und Sicherheitsingenieu
 
 ## Hauptfunktionen
 
-- **Terminal-Arbeitsbereich** – Registerkartenbasierter PTY-gestützter Terminal mit xterm.js, lokale Shell-Sitzungen, anpassbare Designs, geteilte Layouts, Befehlspalette, Makroaufzeichnung und gesendete Eingabe.
-- **SSH-Operationen** – Native OpenSSH-Sitzungen, SSH-Agent-Unterstützung, `~/.ssh/config`-Import, Identity-Dateien, ProxyJump, Kompression, Keepalive, X11-Weiterleitung und SCP-Fallback.
-- **SFTP** – Grafischer SFTP-Browser mit Host-Key-Fingerprint-Bestätigung, Upload/Download, Inline-Textbearbeitung und Ordnerverwaltung.
-- **SSH-Tunnel** – Lokale, Remote- und dynamische SOCKS-Weiterleitungen mit evidenzbasierter Bereitschaftserkennung.
-- **Protokoll-Starter und Brücken** – Mosh-, RDP- (FreeRDP), VNC- (TigerVNC), Telnet- und serielle Brücken sowie ein PTY-Helfer.
-- **FTP / FTPS** – Datei-Browser-Profile mit verschlüsseltem TLS-Transport (FTPS) und Warnung bei unverschlüsselten FTP-Verbindungen.
-- **Veröffentlichung und Diagnose** – GitHub-Releases-Update-Pfad, AppImage-, .deb- und .rpm-Pakete, SBOM-Generierung und SHA-256-Prüfsummenverifikation.
+- **Terminal-Arbeitsbereich** - Registerkartenbasierter PTY-gestützter Terminal mit xterm.js, lokale Shell-Sitzungen, anpassbare Designs, geteilte Layouts, Befehlspalette, Makroaufzeichnung und gesendete Eingabe.
+- **SSH-Operationen** - Native OpenSSH-Sitzungen, SSH-Agent-Unterstützung, `~/.ssh/config`-Import, Identity-Dateien, ProxyJump, Kompression, Keepalive, X11-Weiterleitung und SCP-Fallback.
+- **SFTP** - Grafischer SFTP-Browser mit Host-Key-Fingerprint-Bestätigung, Upload/Download, Inline-Textbearbeitung und Ordnerverwaltung.
+- **SSH-Tunnel** - Lokale, Remote- und dynamische SOCKS-Weiterleitungen mit evidenzbasierter Bereitschaftserkennung.
+- **Protokoll-Starter und Brücken** - Mosh-, RDP- (FreeRDP), VNC- (TigerVNC), Telnet- und serielle Brücken sowie ein PTY-Helfer.
+- **FTP / FTPS** - Datei-Browser-Profile mit verschlüsseltem TLS-Transport (FTPS) und Warnung bei unverschlüsselten FTP-Verbindungen.
+- **Veröffentlichung und Diagnose** - GitHub-Releases-Update-Pfad, AppImage-, .deb- und .rpm-Pakete, SBOM-Generierung und SHA-256-Prüfsummenverifikation.
 
 ## Schnellinstallation
 

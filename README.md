@@ -45,9 +45,9 @@ Aux Command is currently a **Linux desktop application**.
 | openSUSE x86_64 | Expected supported | `.rpm` or AppImage | Runtime tools install through `zypper`; validate package policy locally. |
 | Arch Linux / EndeavourOS / Manjaro x86_64 | Source/AppImage path | AppImage or source | No native pacman package is produced yet; runtime tools install through `pacman`. |
 | Other modern x86_64 Linux desktops | Best effort | AppImage | Requires a graphical session and standard Electron/Linux desktop dependencies. |
-| Windows | Not supported | — | No Windows package is currently produced. |
-| macOS | Not supported | — | No macOS package is currently produced. |
-| Linux ARM64 | Not currently shipped | — | The code is not intentionally x86-only, but current release artifacts are x86_64 only. |
+| Windows | Not supported | - | No Windows package is currently produced. |
+| macOS | Not supported | - | No macOS package is currently produced. |
+| Linux ARM64 | Not currently shipped | - | The code is not intentionally x86-only, but current release artifacts are x86_64 only. |
 
 Desktop environments expected to work include GNOME, KDE Plasma, Xfce, Cinnamon, and other modern X11/Wayland desktops with the normal Electron runtime stack. Wayland and X11 both require target-distro validation before a public production claim.
 
@@ -57,7 +57,7 @@ Desktop environments expected to work include GNOME, KDE Plasma, Xfce, Cinnamon,
 
 Full instructions are in [`INSTALL.md`](INSTALL.md).
 
-### AppImage — portable Linux install
+### AppImage - portable Linux install
 
 Use this when you want the least invasive installation path.
 
@@ -235,9 +235,9 @@ Key controls:
 
 Security documentation:
 
-- [`SECURITY.md`](SECURITY.md) — vulnerability reporting policy.
-- [`docs/SECURITY.md`](docs/SECURITY.md) — detailed security model.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — trust boundaries and process architecture.
+- [`SECURITY.md`](SECURITY.md) - vulnerability reporting policy.
+- [`docs/SECURITY.md`](docs/SECURITY.md) - detailed security model.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - trust boundaries and process architecture.
 
 ---
 

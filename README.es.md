@@ -10,13 +10,13 @@ Diseñado para operadores técnicos, equipos de infraestructura e ingenieros de 
 
 ## Características principales
 
-- **Espacio de trabajo de terminal** – Pestañas de terminal basadas en PTY con xterm.js, sesiones de shell local, temas personalizables, diseños divididos, paleta de comandos, grabación de macros y entrada transmitida.
-- **Operaciones SSH** – Sesiones OpenSSH nativas, soporte de agente SSH, importación de `~/.ssh/config`, archivos de identidad, ProxyJump, compresión, keepalive, reenvío X11 y modo de respaldo SCP.
-- **SFTP** – Explorador SFTP gráfico con confirmación de huella digital de clave de host, carga/descarga, edición de texto en línea y gestión de carpetas.
-- **Túneles SSH** – Reenvíos locales, remotos y SOCKS dinámicos con detección de disponibilidad basada en evidencia.
-- **Lanzadores de protocolo y puentes** – Puentes Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet y serie, además de un ayudante PTY.
-- **FTP / FTPS** – Perfiles de explorador de archivos con transporte TLS cifrado (FTPS) y advertencia para conexiones FTP no cifradas.
-- **Publicación y diagnóstico** – Ruta de actualización de GitHub Releases, paquetes AppImage, .deb y .rpm, generación de SBOM y verificación de suma de comprobación SHA-256.
+- **Espacio de trabajo de terminal** - Pestañas de terminal basadas en PTY con xterm.js, sesiones de shell local, temas personalizables, diseños divididos, paleta de comandos, grabación de macros y entrada transmitida.
+- **Operaciones SSH** - Sesiones OpenSSH nativas, soporte de agente SSH, importación de `~/.ssh/config`, archivos de identidad, ProxyJump, compresión, keepalive, reenvío X11 y modo de respaldo SCP.
+- **SFTP** - Explorador SFTP gráfico con confirmación de huella digital de clave de host, carga/descarga, edición de texto en línea y gestión de carpetas.
+- **Túneles SSH** - Reenvíos locales, remotos y SOCKS dinámicos con detección de disponibilidad basada en evidencia.
+- **Lanzadores de protocolo y puentes** - Puentes Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet y serie, además de un ayudante PTY.
+- **FTP / FTPS** - Perfiles de explorador de archivos con transporte TLS cifrado (FTPS) y advertencia para conexiones FTP no cifradas.
+- **Publicación y diagnóstico** - Ruta de actualización de GitHub Releases, paquetes AppImage, .deb y .rpm, generación de SBOM y verificación de suma de comprobación SHA-256.
 
 ## Instalación rápida
 

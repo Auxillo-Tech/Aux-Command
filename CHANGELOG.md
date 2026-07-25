@@ -33,7 +33,7 @@
 - Added command-palette combobox/listbox/option ARIA state and explicit icon-button labels for better keyboard and assistive-technology behavior.
 - Fixed graphical SFTP remote text replacement so overwriting existing files uses OpenSSH POSIX rename where available instead of failing on non-overwriting SFTP rename behavior.
 
-## 0.1.0 — 2026-07-22
+## 0.1.0 - 2026-07-22
 
 Initial Aux Command engineering release.
 

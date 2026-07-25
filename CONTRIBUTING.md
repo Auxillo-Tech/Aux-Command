@@ -4,10 +4,10 @@ Aux Command is free, open-source software under AGPL-3.0-or-later. Contributions
 
 ## Types of contributions
 
-- **Bug reports** — open an issue with reproduction steps, expected vs actual behavior, and environment details.
-- **Security reports** — follow the process in `SECURITY.md`; do not open a public issue.
-- **Code contributions** — see the pull request workflow below.
-- **Documentation** — README, INSTALL, architecture docs, and runbook improvements.
+- **Bug reports** - open an issue with reproduction steps, expected vs actual behavior, and environment details.
+- **Security reports** - follow the process in `SECURITY.md`; do not open a public issue.
+- **Code contributions** - see the pull request workflow below.
+- **Documentation** - README, INSTALL, architecture docs, and runbook improvements.
 
 ## Pull request workflow
 

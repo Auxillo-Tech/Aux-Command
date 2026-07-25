@@ -4,10 +4,10 @@ Aux Command is free, open-source software licensed under AGPL-3.0-or-later. Its 
 
 Aux Command bundles the following direct npm runtime components:
 
-- `@xterm/xterm` — MIT License
-- `@xterm/addon-fit` — MIT License
-- `@xterm/addon-search` — MIT License
-- `ssh2` — MIT License
+- `@xterm/xterm` - MIT License
+- `@xterm/addon-fit` - MIT License
+- `@xterm/addon-search` - MIT License
+- `ssh2` - MIT License
 
 Their production transitive dependencies are also bundled. The complete,
 versioned license texts for every package in the production dependency graph

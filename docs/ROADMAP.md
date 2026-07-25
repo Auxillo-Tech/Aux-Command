@@ -2,7 +2,7 @@
 
 Aux Command is a free, open-source public product. Every feature in this roadmap targets the public build; there are no paid tiers, enterprise-only packs, or payment walls.
 
-## 0.1 — operational foundation
+## 0.1 - operational foundation
 
 - Linux desktop shell and Auxillo visual identity.
 - Native PTY terminal tabs.
@@ -33,7 +33,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Per-profile terminal theme, font, cursor and scrollback settings.
 - Serial quick connect for absolute Linux device paths such as `/dev/ttyUSB0`.
 
-## 0.2 — daily-driver terminal polish
+## 0.2 - daily-driver terminal polish
 
 - Global terminal appearance presets and import/exportable workspace-level defaults.
 - Persistent workspace layouts and per-profile pane defaults.
@@ -43,7 +43,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Detached terminal windows and fullscreen terminal workspace mode.
 - Terminal keyword/syntax highlighting definitions for log triage.
 
-## 0.3 — integrated remote desktop
+## 0.3 - integrated remote desktop
 
 - Embedded RDP and VNC surfaces or a hardened native companion process.
 - Until that work is designed and audited, embedded RDP and VNC surfaces remain a 0.3 architecture item; 0.1 intentionally launches native FreeRDP/TigerVNC clients at the external-client boundary.
@@ -53,7 +53,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Deeper RDP/VNC settings for clipboard, geometry, console/admin mode, certificate/fingerprint handling, drive/device redirection policy, and multi-monitor behavior.
 - SSH-gateway assisted RDP/VNC/Telnet workflows where the protocol can be safely wrapped through OpenSSH forwarding.
 
-## 0.4 — protocol parity
+## 0.4 - protocol parity
 
 - Deeper FTP/FTPS transfer management, including queue pause/resume/retry and additional TLS policy controls.
 - Deeper SCP workflow polish, including explicit remote-path download prompts and broader legacy-server qualification.
@@ -61,7 +61,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Host X11/Xwayland/Xephyr/Xpra workflow management for remote graphical Unix applications.
 - Legacy Rlogin/RSH only if explicitly justified by real user demand and guarded as insecure legacy transport.
 
-## 0.5 — team operations
+## 0.5 - team operations
 
 - Optional end-to-end encrypted profile synchronization.
 - Role-based shared connection collections.
@@ -71,7 +71,7 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Public customizer/policy profile generation for organizations that want branded defaults, disabled unsafe protocols, or preloaded public connection templates.
 - Embedded local server manager for controlled TFTP, HTTP, FTP, SSH/SFTP, and Telnet test daemons with bind-address controls, audit logs, and safe lifecycle cleanup.
 
-## 1.0 — production release
+## 1.0 - production release
 
 - Signed packages and reproducible release pipeline.
 - Automatic update channel with signed update verification.

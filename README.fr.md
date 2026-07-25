@@ -10,13 +10,13 @@ Conçu pour les opérateurs techniques, les équipes d'infrastructure et les ing
 
 ## Fonctionnalités clés
 
-- **Espace de travail terminal** – Onglets de terminaux basés sur PTY avec xterm.js, sessions shell locales, thèmes personnalisables, dispositions divisées, palette de commandes, enregistrement de macros et diffusion d'entrée.
-- **Opérations SSH** – Sessions OpenSSH natives, support de l'agent SSH, importation `~/.ssh/config`, fichiers d'identité, ProxyJump, compression, keepalive, redirection X11 et repli SCP.
-- **SFTP** – Navigateur SFTP graphique avec confirmation d'empreinte de clé hôte, téléchargement/téléversement, édition de texte en ligne et gestion de dossiers.
-- **Tunnels SSH** – Redirections locales, distantes et SOCKS dynamiques avec détection de disponibilité basée sur des preuves.
-- **Lanceurs de protocole et ponts** – Ponts Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet et série, plus un assistant PTY.
-- **FTP / FTPS** – Profils de navigateur de fichiers avec transport TLS chiffré (FTPS) et avertissement pour les connexions FTP non chiffrées.
-- **Publication et diagnostic** – Chemin de mise à jour GitHub Releases, paquets AppImage, .deb et .rpm, génération SBOM et vérification de somme de contrôle SHA-256.
+- **Espace de travail terminal** - Onglets de terminaux basés sur PTY avec xterm.js, sessions shell locales, thèmes personnalisables, dispositions divisées, palette de commandes, enregistrement de macros et diffusion d'entrée.
+- **Opérations SSH** - Sessions OpenSSH natives, support de l'agent SSH, importation `~/.ssh/config`, fichiers d'identité, ProxyJump, compression, keepalive, redirection X11 et repli SCP.
+- **SFTP** - Navigateur SFTP graphique avec confirmation d'empreinte de clé hôte, téléchargement/téléversement, édition de texte en ligne et gestion de dossiers.
+- **Tunnels SSH** - Redirections locales, distantes et SOCKS dynamiques avec détection de disponibilité basée sur des preuves.
+- **Lanceurs de protocole et ponts** - Ponts Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet et série, plus un assistant PTY.
+- **FTP / FTPS** - Profils de navigateur de fichiers avec transport TLS chiffré (FTPS) et avertissement pour les connexions FTP non chiffrées.
+- **Publication et diagnostic** - Chemin de mise à jour GitHub Releases, paquets AppImage, .deb et .rpm, génération SBOM et vérification de somme de contrôle SHA-256.
 
 ## Installation rapide
 
