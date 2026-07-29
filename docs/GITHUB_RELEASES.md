@@ -63,4 +63,4 @@ npm run release:verify -- --allow-unsigned
 
 ## Remaining trust gap
 
-The current release path is checksum-verified in Actions. GitHub artifact attestations are enabled only when the repository/org plan supports them; this private repository currently skips attestation because GitHub reports the feature unavailable. The release is signed with an Auxillo-controlled signing key (`SIGNING_KEY.asc`). Use `npm run release:verify` with the `AUX_COMMAND_GPG_FINGERPRINT` environment variable to authenticate releases. See the release-verification documentation in `scripts/verify-release.cjs`.
+The current release path is checksum-verified in Actions and published on the public GitHub repository. GitHub artifact attestations are optional and enabled only when the repository/org plan supports them. The release is signed with an Auxillo-controlled signing key (`SIGNING_KEY.asc`). Use `npm run release:verify` with the `AUX_COMMAND_GPG_FINGERPRINT` environment variable to authenticate releases. See the release-verification documentation in `scripts/verify-release.cjs`.

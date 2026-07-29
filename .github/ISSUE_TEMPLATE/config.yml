@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
+    url: https://github.com/Auxillo-Tech/Aux-Command/blob/main/SECURITY.md
+    about: Report security issues privately to security@auxillo.tech. Do not open public vulnerability issues.
+  - name: Auxillo website
     url: https://auxillo.tech
-    about: Report security issues privately. Do not open public vulnerability issues.
+    about: Hosted Auxillo products and company information

@@ -18,7 +18,7 @@ Aux Command desktop binaries and update metadata should live on **GitHub Release
 - GitHub owns versioned desktop release assets, release notes, checksums, and update metadata.
 - The Auxillo server does not need to host desktop installer/update files.
 - GitHub release/update configuration targets `Auxillo-Tech/Aux-Command`; update `package.json` `build.publish.owner` and `build.publish.repo` if the repository changes before tagging.
-- GitHub repository readiness is complete for private development: metadata, topics, issue templates, pull request template, Dependabot config, security policy, Linux CI, tag-triggered release workflow, and draft release asset upload are configured.
+- GitHub repository readiness is complete for public distribution: metadata, topics, issue templates, pull request template, Dependabot config, security policy, Linux CI, tag-triggered release workflow, signed release assets, and public homepage metadata are configured.
 
 See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
@@ -154,9 +154,9 @@ Exact byte sizes and SHA-256 digests are canonical in `dist/release-manifest.jso
 
 ### External trust/provenance blockers
 
-1. **Production signing identity:** no controlled Auxillo signing key is available locally. The verifier supports full-fingerprint-pinned GPG validation, but unsigned releases currently require `--allow-unsigned`.
-2. **Public/private GitHub feature gate:** branch protection and artifact attestations are blocked while the repository remains private under the current GitHub plan. JD intends to make the repository public after private preparation is complete.
-3. **Published updater validation:** update checks are wired for GitHub Releases and a draft release exists, but public updater discovery still requires publishing a release.
+1. **Production signing identity:** releases are GPG-signed with the Aux Command Release Signing key (`SIGNING_KEY.asc`, fingerprint `FAC028574B9C6875D10DA4DC6443E86108ABD2A2`). Verify with `npm run release:verify` and `AUX_COMMAND_GPG_FINGERPRINT` set to that fingerprint.
+2. **GitHub platform extras:** branch protection is available on the public repository. GitHub artifact attestations remain optional and plan-dependent; Auxillo GPG signatures are the primary trust path.
+3. **Published updater validation:** update checks target published GitHub Releases for `Auxillo-Tech/Aux-Command` (current line v0.2.3).
 
 ### Product/live qualification still required
 

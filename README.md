@@ -299,14 +299,15 @@ Syntax validated for 5 shell scripts.
 
 Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
 
-The release is still classified as an engineering release candidate because these gates remain open:
+Current public release line: **v0.2.3** on GitHub Releases (AppImage, `.deb`, `.rpm`, source archives, SBOM, `SHA256SUMS` + GPG signatures, `SIGNING_KEY.asc`).
 
-- no signed public release yet;
-- no published immutable GitHub Release tag yet;
-- no Auxillo-controlled production signing key configured;
-- artifact attestations are blocked while the repository is private under the current GitHub plan;
-- branch protection is blocked while the repository is private under the current GitHub plan;
-- broader live qualification is still required across representative SSH/SFTP/tunnel/Mosh/RDP/VNC/X11/serial environments.
+Still open for broader product qualification:
+
+- live qualification across representative SSH/SFTP/tunnel/Mosh/RDP/VNC/X11/serial environments;
+- assistive-technology coverage with a real screen reader;
+- broader Wayland/X11, desktop-environment, high-DPI, and multi-monitor coverage.
+
+Artifact trust path: GPG-signed release manifests and checksums (fingerprint in `SIGNING_KEY.asc`). GitHub artifact attestations may be enabled when the org/plan supports them; they are optional and do not replace Auxillo GPG verification.
 
 See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICATION.md`](docs/LIVE_QUALIFICATION.md).
 
