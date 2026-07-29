@@ -166,7 +166,24 @@ class NetworkToolService {
       }, timeout);
       timer.unref();
 
-      child.once('error', (error) => finish(error));
+      child.once('error', (error) => {
+        // Missing host tools must not crash the diagnostics panel or CI.
+        // Return a non-zero capture result so callers can skip/show "not installed".
+        if (error && error.code === 'ENOENT') {
+          finish(null, {
+            id,
+            command,
+            args,
+            exitCode: 127,
+            signal: null,
+            stdout,
+            stderr: stderr || `${command}: not found on PATH`,
+            missing: true
+          });
+          return;
+        }
+        finish(error);
+      });
       child.once('exit', (code, signal) => {
         if (entry.cancelled) finish(new Error(`${command} was cancelled`));
         else if (entry.timedOut) finish(new Error(`${command} timed out`));

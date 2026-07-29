@@ -54,7 +54,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libarchive-tools \
             rpm \
-            xz-utils
+            xz-utils \
+            python3 \
+            iputils-ping \
+            traceroute \
+            dnsutils \
+            whois \
+            socat
 
       - name: Install dependencies
         run: npm ci
@@ -121,9 +127,12 @@ jobs:
             dist/*.asc
 
       - name: Upload workflow artifacts
+        if: github.ref_type == 'tag'
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: aux-command-linux-x64-${{ github.ref_name }}
+          retention-days: 5
           if-no-files-found: error
           path: |
             dist/Aux-Command-${{ steps.version.outputs.version }}-*.AppImage

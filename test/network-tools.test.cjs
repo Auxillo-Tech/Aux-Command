@@ -11,7 +11,7 @@ test('NetworkToolService ping works', async (t) => {
   // Ping localhost (should succeed)
   const result = await svc.ping('127.0.0.1', 1);
   assert.equal(result.command, 'ping');
-  if (result.exitCode !== 0) {
+  if (result.missing || result.exitCode === 127 || result.exitCode !== 0) {
     t.skip(`ping is unavailable in this environment: ${result.stderr.trim() || result.exitCode}`);
     return;
   }
@@ -24,7 +24,7 @@ test('NetworkToolService DNS lookup works', async (t) => {
   const svc = new NetworkToolService();
 
   const result = await svc.dnsLookup('localhost', 'A');
-  if (result.exitCode !== 0) {
+  if (result.missing || result.exitCode === 127 || result.exitCode !== 0) {
     t.skip(`dig is unavailable in this environment: ${result.stderr.trim() || result.exitCode}`);
     return;
   }
@@ -49,12 +49,29 @@ test('NetworkToolService traceroute works', async (t) => {
   const svc = new NetworkToolService();
 
   const result = await svc.traceroute('127.0.0.1');
-  if (result.exitCode !== 0) {
+  if (result.missing || result.exitCode === 127 || result.exitCode !== 0) {
     t.skip(`traceroute is unavailable in this environment: ${result.stderr.trim() || result.exitCode}`);
     return;
   }
   assert.equal(result.exitCode, 0);
   assert.ok(result.stdout, 'traceroute should produce output');
+});
+
+test('NetworkToolService reports missing host tools without throwing', async () => {
+  const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
+  const originalPath = process.env.PATH;
+  // Empty PATH forces spawn ENOENT for traceroute/ping/dig/whois.
+  process.env.PATH = '';
+  try {
+    const svc = new NetworkToolService();
+    const result = await svc.traceroute('127.0.0.1');
+    assert.equal(result.missing, true);
+    assert.equal(result.exitCode, 127);
+    assert.equal(result.command, 'traceroute');
+    assert.match(String(result.stderr || ''), /not found/i);
+  } finally {
+    process.env.PATH = originalPath;
+  }
 });
 
 test('NetworkToolService whois rejects short input gracefully', async () => {
