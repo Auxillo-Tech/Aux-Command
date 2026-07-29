@@ -107,7 +107,11 @@ def main() -> int:
             buttonTexts: [...document.querySelectorAll('button')].slice(0, 24).map(b => b.id + ':' + b.textContent.trim())
           }))()
         """, timeout=20)
-        expected_namespaces = ['app', 'external', 'profiles', 'prompts', 'sftp', 'snippets', 'system', 'terminal', 'tunnels', 'updates', 'vault']
+        expected_namespaces = [
+            'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'sftp',
+            'snippets', 'sshKeys', 'sync', 'system', 'terminal', 'transfer', 'tunnels', 'updates',
+            'vault', 'vnc',
+        ]
         require(baseline['title'] == 'Aux Command', 'wrong document title', baseline)
         require(baseline['apiKeys'] == expected_namespaces, 'unexpected preload API namespaces', baseline['apiKeys'])
         require(any('snippets-button' in text for text in baseline['buttonTexts']), 'snippets button missing', baseline['buttonTexts'])
@@ -128,7 +132,10 @@ def main() -> int:
             ui_foundation['sessionTablist'] and ui_foundation['toolbar'] and ui_foundation['profileConnect']
             and ui_foundation['profileEdit'] and ui_foundation['durableStartupError']
             and ui_foundation['updateButton'] and ui_foundation['sftpEditButton']
-            and ui_foundation['labeledTopActions'] == ['Local shell', 'Snippets', 'Tunnels', 'Updates', 'Diagnostics'],
+            and ui_foundation['labeledTopActions'] == [
+                'Local shell', 'Snippets', 'Tunnels', 'Updates', 'Diagnostics', 'Network',
+                'Monitor', 'Gateway', 'Sync', 'Keys'
+            ],
             'remediated UI foundation missing from packaged app',
             ui_foundation,
         )
@@ -314,7 +321,7 @@ def main() -> int:
             const modalText = document.getElementById('modal-root').innerText;
             document.querySelector('#modal-root .modal-close:not([hidden])')?.click();
             const normalized = modalText.toLowerCase();
-            return { opened: normalized.includes('aux command updates') && normalized.includes('github releases'), modalText: modalText.slice(0, 1000) };
+            return { opened: normalized.includes('aux command updates') && (normalized.includes('github release') || normalized.includes('github releases')), modalText: modalText.slice(0, 1000) };
           })()
         """, timeout=5)
         require(updates_smoke.get('opened'), 'top-level updates modal smoke failed', updates_smoke)
@@ -331,6 +338,33 @@ def main() -> int:
         """, timeout=5)
         require(diagnostics_smoke.get('opened'), 'diagnostics modal smoke failed', diagnostics_smoke)
 
+        operations_tools_smoke = cdp.eval("""
+          (async () => {
+            const checks = {};
+            const openAndRead = async (buttonId) => {
+              document.getElementById(buttonId)?.click();
+              await new Promise(r => setTimeout(r, 250));
+              const text = document.getElementById('modal-root').innerText;
+              document.querySelector('#modal-root .modal-close:not([hidden])')?.click();
+              await new Promise(r => setTimeout(r, 80));
+              return text;
+            };
+            checks.network = (await openAndRead('network-tools-button')).includes('Network tools');
+            checks.keys = (await openAndRead('sshkeys-button')).includes('SSH Key Manager');
+            checks.monitor = (await openAndRead('monitor-button')).includes('Live server monitor');
+            checks.gateway = (await openAndRead('gateway-button')).includes('Remote desktop gateway');
+            checks.sync = (await openAndRead('sync-button')).includes('Profile synchronization');
+            const state = await window.auxCommand.app.getState();
+            const privateDefaults = state.profiles.some(p => String(p.id).startsWith('infra-'));
+            const defaultsOk = state.profiles.length === 1
+              && state.profiles[0].id === 'local-shell'
+              && state.profiles[0].protocol === 'local'
+              && !privateDefaults;
+            return { ok: Object.values(checks).every(Boolean) && defaultsOk, checks, privateDefaults, defaultsOk };
+          })()
+        """, timeout=10)
+        require(operations_tools_smoke.get('ok'), 'operations tools or privacy-safe profile defaults smoke failed', operations_tools_smoke)
+
         state_after = cdp.eval('(async () => await window.auxCommand.app.getState())()', timeout=10)
         screenshot = capture_screenshot(cdp)
 
@@ -342,6 +376,7 @@ def main() -> int:
             'snippetSmoke': snippet_smoke,
             'updatesModalSmoke': updates_smoke,
             'diagnosticsModalSmoke': diagnostics_smoke,
+            'operationsToolsSmoke': operations_tools_smoke,
             'stateAfter': state_after,
             'screenshot': screenshot['path'],
             'screenshotWarning': screenshot['warning'],

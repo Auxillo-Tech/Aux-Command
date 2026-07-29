@@ -25,17 +25,33 @@
     "release:verify": "AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/verify-release.cjs"
   },
   "dependencies": {
+    "@novnc/novnc": "^1.7.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "6.0.0",
-    "basic-ftp": "6.0.1",
+    "basic-ftp": "6.0.2",
     "electron-updater": "6.8.9",
-    "ssh2": "1.17.0"
+    "openpgp": "6.3.1",
+    "ssh2": "1.17.0",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@electron/fuses": "2.1.3",
     "electron": "43.2.0",
     "electron-builder": "26.15.3"
+  },
+  "overrides": {
+    "@electron/asar": "4.2.1",
+    "@electron/universal": "3.0.6",
+    "brace-expansion": "5.0.8",
+    "dir-compare": "5.0.0",
+    "ejs": "6.0.1",
+    "filelist": "2.0.2",
+    "glob": "13.0.6",
+    "jake": "12.10.1",
+    "minimatch": "10.2.5",
+    "rimraf": "6.1.3",
+    "temp": "0.9.4"
   },
   "build": {
     "electronFuses": {
@@ -66,6 +82,7 @@
       "LICENSE",
       "THIRD_PARTY_NOTICES.md",
       "THIRD_PARTY_LICENSES.txt",
+      "SIGNING_KEY.asc",
       "build/icons/256x256.png"
     ],
     "directories": {
@@ -102,13 +119,21 @@
     "deb": {
       "depends": [
         "openssh-client",
-        "python3"
+        "python3",
+        "iputils-ping",
+        "traceroute",
+        "dnsutils",
+        "whois"
       ]
     },
     "rpm": {
       "depends": [
         "openssh-clients",
-        "python3"
+        "python3",
+        "iputils",
+        "traceroute",
+        "bind-utils",
+        "whois"
       ]
     },
     "asarUnpack": [
