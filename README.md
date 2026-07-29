@@ -2,7 +2,13 @@
 
 # Aux Command
 
-**Aux Command** is Auxillo’s free, open-source Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20x86__64-black.svg)](#)
+[![Release](https://img.shields.io/github/v/release/Auxillo-Tech/Aux-Command?include_prereleases)](https://github.com/Auxillo-Tech/Aux-Command/releases)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/auxillo)
+
+
+**Aux Command** is Auxillo's free, open-source Linux-native remote-operations workstation: a secure desktop console for operators who need SSH terminals, SFTP, tunnels, remote-desktop launchers, Mosh, Telnet, serial consoles, local shells, profiles, and release-grade operational tooling in one application.
 
 It is built as an original Auxillo public product with native Linux tooling, explicit trust boundaries, modern Electron hardening, no paid feature walls, and verifiable release engineering.
 
@@ -146,7 +152,7 @@ Install optional runtime tools with:
 ### SSH operations
 
 - Native OpenSSH sessions.
-- SSH agent support through the user’s existing environment.
+- SSH agent support through the user's existing environment.
 - `~/.ssh/config` import support.
 - Identity files.
 - Advanced per-profile OpenSSH known-hosts-file override for isolated lab or fixture profiles.
@@ -325,7 +331,7 @@ Right-click copies selected terminal text; with no selection it pastes clipboard
 
 ## Data location
 
-Application data is stored beneath Electron’s Linux `userData` location, normally:
+Application data is stored beneath Electron's Linux `userData` location, normally:
 
 ```text
 ~/.config/Aux Command/aux-command-data/
