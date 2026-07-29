@@ -351,6 +351,14 @@ Typical data includes profiles, command snippets, SFTP known-host fingerprints, 
 
 ---
 
+
+
+---
+
+## Support
+
+Aux Command is free and open source. If it helps your operations work, you can [buy me a coffee](https://www.buymeacoffee.com/auxillo).
+
 ## License
 
 Aux Command is free and open-source software licensed under **AGPL-3.0-or-later**. Every feature belongs in the public build; there are no enterprise-only modules, paid editions, or payment walls.
