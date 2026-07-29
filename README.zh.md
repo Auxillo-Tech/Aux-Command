@@ -38,6 +38,10 @@ aux-command
 
 Aux Command 倾向于采用明确的安全边界而非隐蔽的便利性。Electron 渲染器沙箱、`contextIsolation` 已启用，Chromium 权限请求默认拒绝。外部导航和弹窗默认被阻止。特权 IPC 经过发送者窗口和框架验证，使用参数数组直接生成进程（无 Shell 插值），并通过 Linux 死亡信号守卫管理辅助进程的生命周期。
 
+## 支持
+
+Aux Command 是免费开源软件。如果它对你的运维工作有帮助，可以[请我喝杯咖啡](https://www.buymeacoffee.com/auxillo)。
+
 ## 许可证
 
 Aux Command 是免费开源软件，采用 **AGPL-3.0-or-later** 许可证。所有功能均包含在公开构建中，无企业专属模块、付费版本或付费墙。

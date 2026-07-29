@@ -38,6 +38,10 @@ aux-command
 
 Aux Command está construido para operaciones sensibles a la seguridad, favoreciendo límites explícitos sobre la conveniencia invisible. El sandbox del renderizador de Electron, `contextIsolation` y la denegación predeterminada de solicitudes de permiso de Chromium están activados. La navegación externa y las ventanas emergentes están bloqueadas por defecto. La IPC privilegiada valida la ventana y el marco del remitente, la creación directa de procesos con matrices de argumentos (sin interpolación de shell) y un guardián de señal de muerte de Linux para procesos auxiliares gestionados garantizan un entorno operativo seguro.
 
+## Apoyo
+
+Aux Command es software libre y de código abierto. Si te ayuda en tu trabajo de operaciones, puedes [invitarme a un café](https://www.buymeacoffee.com/auxillo).
+
 ## Licencia
 
 Aux Command es software libre y de código abierto bajo la licencia **AGPL-3.0-or-later**. Cada funcionalidad pertenece a la compilación pública; no hay módulos solo empresariales, ediciones de pago ni muros de pago.
