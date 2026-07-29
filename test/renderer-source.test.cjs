@@ -12,6 +12,7 @@ const styles = fs.readFileSync(path.join(root, 'src/renderer/styles.css'), 'utf8
 const preload = fs.readFileSync(path.join(root, 'src/preload/index.cjs'), 'utf8');
 const ipc = fs.readFileSync(path.join(root, 'src/main/ipc.cjs'), 'utf8');
 const logoPng = fs.statSync(path.join(root, 'src/renderer/assets/logo.png'));
+const wordmarkPngPath = path.join(root, 'src/renderer/assets/auxillo-wordmark.png');
 
 test('renderer reattaches or closes existing main-process terminal sessions after reload', () => {
   assert.match(renderer, /function restoreInitialSessions\(sessions = \[\]\)/u);
@@ -57,7 +58,7 @@ test('session controls derive enabled state from active protocol and tab count',
   assert.equal((renderer.match(/function updateSessionActions\(\)/gu) || []).length, 1);
   assert.match(renderer, /function updateSessionActions\(\)/u);
   assert.match(renderer, /elements\.sftpToggle\.disabled = !fileTransfer/u);
-  assert.match(renderer, /elements\.broadcastToggle\.disabled = tabCount < 2/u);
+  assert.match(renderer, /elements\.broadcastToggle\.disabled = terminalCount < 2/u);
 });
 
 test('renderer scopes SFTP progress events to the visible profile', () => {
@@ -145,6 +146,18 @@ test('renderer uses the supplied Auxillo logo raster asset', () => {
   assert.ok(logoPng.size > 1024, 'logo asset should be a real PNG, not a placeholder');
 });
 
+test('renderer uses the complete Auxillo wordmark and branded workstation hierarchy', () => {
+  assert.ok(fs.existsSync(wordmarkPngPath), 'complete Auxillo wordmark asset should be bundled');
+  assert.ok(fs.statSync(wordmarkPngPath).size > 10_000, 'wordmark should be the real high-resolution brand asset');
+  assert.match(indexHtml, /class="brand-wordmark"[^>]*src="\.\/assets\/auxillo-wordmark\.png"/u);
+  assert.match(indexHtml, /class="product-name">Command<\/span>/u);
+  assert.match(indexHtml, /class="[^"]*workspace-commandbar[^"]*"/u);
+  assert.match(indexHtml, /class="welcome-capabilities"/u);
+  assert.match(styles, /\.brand-wordmark/u);
+  assert.match(styles, /\.workspace-commandbar/u);
+  assert.match(styles, /\.welcome-capabilities/u);
+});
+
 test('renderer exposes a tiled multi-session layout for split-pane operations', () => {
   assert.match(indexHtml, /id="layout-toggle"/u);
   assert.match(renderer, /function toggleTerminalLayout\(\)/u);
@@ -172,7 +185,7 @@ test('renderer exposes guarded broadcast input across terminal sessions', () => 
   assert.match(renderer, /await confirmAction\(\{/u);
   assert.match(renderer, /Enable broadcast input\?/u);
   assert.match(renderer, /elements\.broadcastWarning\.hidden = !state\.broadcastInput/u);
-  assert.match(renderer, /const targets = state\.broadcastInput \? \[\.\.\.state\.tabs\.values\(\)\] : \[tab\]/u);
+  assert.match(renderer, /const targets = state\.broadcastInput \? \[\.\.\.state\.tabs\.values\(\)\]\.filter\(\(candidate\) => candidate\.terminal\) : \[tab\]/u);
   assert.match(renderer, /api\.terminal\.write\(target\.id, data\)/u);
   assert.match(renderer, /elements\.broadcastToggle\.classList\.toggle\('active', state\.broadcastInput\)/u);
 });

@@ -20,6 +20,10 @@
     tunnelsButton: $('#tunnels-button'),
     updatesButton: $('#updates-button'),
     diagnosticsButton: $('#diagnostics-button'),
+    sshKeysButton: $('#sshkeys-button'),
+    monitorButton: $('#monitor-button'),
+    gatewayButton: $('#gateway-button'),
+    syncButton: $('#sync-button'),
     websiteButton: $('#website-button'),
     newProfileButton: $('#new-profile-button'),
     profileSearch: $('#profile-search'),
@@ -106,6 +110,10 @@
       selectedPath: '',
       requestToken: 0,
       lastError: ''
+    },
+    transferQueue: {
+      entries: [],
+      expanded: false
     }
   };
 
@@ -182,6 +190,72 @@
       brightMagenta: '#e6c7ff',
       brightCyan: '#9cffff',
       brightWhite: '#ffffff'
+    }),
+    'nord': Object.freeze({
+      background: '#2e3440', foreground: '#d8dee9', cursor: '#88c0d0', cursorAccent: '#2e3440',
+      selectionBackground: '#434c5e', selectionInactiveBackground: '#3b4252',
+      black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0',
+      brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b', brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4'
+    }),
+    'dracula': Object.freeze({
+      background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f2', cursorAccent: '#282a36',
+      selectionBackground: '#44475a', selectionInactiveBackground: '#363849',
+      black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
+      brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5', brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff'
+    }),
+    'solarized-dark': Object.freeze({
+      background: '#002b36', foreground: '#839496', cursor: '#839496', cursorAccent: '#002b36',
+      selectionBackground: '#073642', selectionInactiveBackground: '#04313d',
+      black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
+      brightBlack: '#586e75', brightRed: '#cb4b16', brightGreen: '#859900', brightYellow: '#b58900', brightBlue: '#268bd2', brightMagenta: '#d33682', brightCyan: '#2aa198', brightWhite: '#fdf6e3'
+    }),
+    'solarized-light': Object.freeze({
+      background: '#fdf6e3', foreground: '#586e75', cursor: '#586e75', cursorAccent: '#fdf6e3',
+      selectionBackground: '#eee8d5', selectionInactiveBackground: '#e8e2cf',
+      black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
+      brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#859900', brightYellow: '#b58900', brightBlue: '#268bd2', brightMagenta: '#d33682', brightCyan: '#2aa198', brightWhite: '#fdf6e3'
+    }),
+    'one-dark': Object.freeze({
+      background: '#282c34', foreground: '#abb2bf', cursor: '#528bff', cursorAccent: '#282c34',
+      selectionBackground: '#3e4451', selectionInactiveBackground: '#323843',
+      black: '#282c34', red: '#e06c75', green: '#98c379', yellow: '#e5c07b', blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#abb2bf',
+      brightBlack: '#5c6370', brightRed: '#e06c75', brightGreen: '#98c379', brightYellow: '#e5c07b', brightBlue: '#61afef', brightMagenta: '#c678dd', brightCyan: '#56b6c2', brightWhite: '#c8ccd4'
+    }),
+    'catppuccin-mocha': Object.freeze({
+      background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#f5e0dc', cursorAccent: '#1e1e2e',
+      selectionBackground: '#45475a', selectionInactiveBackground: '#363849',
+      black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de',
+      brightBlack: '#585b70', brightRed: '#f38ba8', brightGreen: '#a6e3a1', brightYellow: '#f9e2af', brightBlue: '#89b4fa', brightMagenta: '#f5c2e7', brightCyan: '#94e2d5', brightWhite: '#a6adc8'
+    }),
+    'tokyo-night': Object.freeze({
+      background: '#1a1b26', foreground: '#a9b1d6', cursor: '#c0caf5', cursorAccent: '#1a1b26',
+      selectionBackground: '#33467c', selectionInactiveBackground: '#293a6c',
+      black: '#32344a', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6',
+      brightBlack: '#444b6a', brightRed: '#ff9eae', brightGreen: '#b4f07a', brightYellow: '#f8c572', brightBlue: '#94b4fc', brightMagenta: '#cba8ff', brightCyan: '#92e2ff', brightWhite: '#c0caf5'
+    }),
+    'gruvbox-dark': Object.freeze({
+      background: '#282828', foreground: '#ebdbb2', cursor: '#ebdbb2', cursorAccent: '#282828',
+      selectionBackground: '#504945', selectionInactiveBackground: '#3c3836',
+      black: '#282828', red: '#cc241d', green: '#98971a', yellow: '#d79921', blue: '#458588', magenta: '#b16286', cyan: '#689d6a', white: '#a89984',
+      brightBlack: '#928374', brightRed: '#fb4934', brightGreen: '#b8bb26', brightYellow: '#fabd2f', brightBlue: '#83a598', brightMagenta: '#d3869b', brightCyan: '#8ec07c', brightWhite: '#ebdbb2'
+    }),
+    'monokai': Object.freeze({
+      background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f2', cursorAccent: '#272822',
+      selectionBackground: '#49483e', selectionInactiveBackground: '#3b3a32',
+      black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f8f8f2',
+      brightBlack: '#75715e', brightRed: '#f92672', brightGreen: '#a6e22e', brightYellow: '#f4bf75', brightBlue: '#66d9ef', brightMagenta: '#ae81ff', brightCyan: '#a1efe4', brightWhite: '#f9f8f5'
+    }),
+    'oceanic-next': Object.freeze({
+      background: '#1b2b34', foreground: '#cdd3de', cursor: '#cdd3de', cursorAccent: '#1b2b34',
+      selectionBackground: '#343d46', selectionInactiveBackground: '#2c3540',
+      black: '#1b2b34', red: '#ec5f67', green: '#99c794', yellow: '#fac863', blue: '#6699cc', magenta: '#c594c5', cyan: '#5fb3b3', white: '#cdd3de',
+      brightBlack: '#65737e', brightRed: '#ec5f67', brightGreen: '#99c794', brightYellow: '#fac863', brightBlue: '#6699cc', brightMagenta: '#c594c5', brightCyan: '#5fb3b3', brightWhite: '#d8dee9'
+    }),
+    'material': Object.freeze({
+      background: '#263238', foreground: '#eeffff', cursor: '#80cbc4', cursorAccent: '#263238',
+      selectionBackground: '#37474f', selectionInactiveBackground: '#2e3c43',
+      black: '#000000', red: '#e53935', green: '#91b859', yellow: '#ffb62c', blue: '#6182b8', magenta: '#9c3eda', cyan: '#39adb5', white: '#eeffff',
+      brightBlack: '#546e7a', brightRed: '#e53935', brightGreen: '#91b859', brightYellow: '#ffb62c', brightBlue: '#6182b8', brightMagenta: '#9c3eda', brightCyan: '#39adb5', brightWhite: '#ffffff'
     })
   });
 
@@ -231,8 +305,8 @@
   function describeUpdateState(status = state.updates || {}) {
     if (!status.supported) return status.error || 'Update checks are enabled only in packaged GitHub releases.';
     if (status.checking) return 'Checking GitHub Releases...';
-    if (status.downloaded) return `Downloaded ${status.latestVersion || 'update'}; restart to install.`;
-    if (status.updateAvailable) return `Available: ${status.latestVersion || 'new version'}`;
+    if (status.downloaded) return `Authenticated update ${status.latestVersion || ''} downloaded; restart to install.`;
+    if (status.updateAvailable) return `${status.authenticated ? 'Authenticated' : 'Unverified'} update available: ${status.latestVersion || 'new version'}`;
     if (status.latestVersion) return `Current: ${status.latestVersion}`;
     return 'Manual check available.';
   }
@@ -273,7 +347,7 @@
       node('div', { className: `diagnostic-row${updateStatus.error ? '' : ' available'}` }, [
         node('span', { className: 'indicator' }),
         node('div', {}, [node('strong', { text: 'Update channel' }), node('small', { text: describeUpdateState(updateStatus) })]),
-        node('span', { className: 'diagnostic-state', text: updateStatus.supported ? 'GitHub' : 'Source' })
+        node('span', { className: 'diagnostic-state', text: updateStatus.supported ? (updateStatus.authenticated ? 'Signed' : 'GitHub') : 'Source' })
       ]),
       node('div', { className: 'button-row' }, updateActionButtons(updateStatus, afterAction))
     ]);
@@ -286,7 +360,7 @@
         controller?.close();
         openUpdatesModal();
       }),
-      node('div', { className: 'warning-box', text: 'Updates are delivered through GitHub Releases. Draft releases are internal review artifacts; updater discovery requires a published release.' })
+      node('div', { className: 'warning-box', text: 'Updates install only after the published manifest and updater metadata pass OpenPGP verification with the bundled Aux Command signing key.' })
     ]);
     controller = showModal({
       title: 'Aux Command updates',
@@ -425,6 +499,7 @@
         spellcheck: options.spellcheck === true ? 'true' : 'false',
         min: options.min,
         max: options.max,
+        maxlength: options.maxlength,
         required: options.required
       }
     });
@@ -546,14 +621,16 @@
       if (action.disabled) button.disabled = true;
       button.addEventListener('click', async () => {
         const buttons = [...footer.querySelectorAll('button')];
+        const managesBusyState = action.busy !== false;
+        const previousDisabled = buttons.map((item) => item.disabled);
         try {
-          if (action.busy !== false) buttons.forEach((item) => { item.disabled = true; });
+          if (managesBusyState) buttons.forEach((item) => { item.disabled = true; });
           const shouldClose = action.run ? await action.run({ close, modal, body: bodyElement, button }) : true;
           if (shouldClose !== false) close();
-          else buttons.forEach((item) => { item.disabled = false; });
+          else if (managesBusyState) buttons.forEach((item, index) => { item.disabled = previousDisabled[index]; });
         } catch (error) {
           toast('Operation failed', errorMessage(error), 'error');
-          buttons.forEach((item) => { item.disabled = false; });
+          if (managesBusyState) buttons.forEach((item, index) => { item.disabled = previousDisabled[index]; });
         }
       });
       footer.append(button);
@@ -738,6 +815,74 @@
     renderProfiles();
 
     if (profile.protocol === 'rdp' || profile.protocol === 'vnc') {
+      if (profile.protocol === 'vnc') {
+        // Try embedded VNC
+        try {
+          const result = await runTask(`Connecting VNC to ${profile.name}…`, () => api.vnc.start(profile), `VNC connected`);
+          // Create a terminal-like tab but for VNC
+          const vncSession = {
+            id: result.id,
+            title: `VNC · ${profile.name}`,
+            protocol: 'vnc',
+            profileId: profile.id,
+            startedAt: new Date().toISOString(),
+            vncUrl: result.vncUrl
+          };
+          const panelId = `terminal-panel-${vncSession.id}`;
+          const tabId = `terminal-tab-${vncSession.id}`;
+          const view = node('div', {
+            id: panelId,
+            className: 'terminal-view vnc-view',
+            attrs: { role: 'tabpanel', 'aria-labelledby': tabId, 'data-session-id': vncSession.id }
+          });
+          const iframe = node('iframe', {
+            className: 'vnc-iframe',
+            attrs: {
+              src: result.vncUrl,
+              allow: 'clipboard-read; clipboard-write',
+              sandbox: 'allow-scripts allow-same-origin',
+              title: `VNC: ${profile.name}`
+            }
+          });
+          view.append(iframe);
+
+          const closeButton = node('button', { type: 'button', className: 'tab-close', text: '×', title: `Close VNC ${profile.name}` });
+          const tabButton = node('button', {
+            id: tabId,
+            type: 'button',
+            className: 'tab-select',
+            attrs: { role: 'tab', tabindex: '-1', 'aria-selected': 'false', 'aria-controls': panelId }
+          }, [
+            node('span', { className: 'tab-dot' }),
+            node('span', { className: 'tab-title', text: `VNC: ${profile.name}` })
+          ]);
+          const tabElement = node('div', { className: 'session-tab', attrs: { 'data-session-id': vncSession.id } }, [tabButton, closeButton]);
+          elements.tabbar.insertBefore(tabElement, elements.tabbarSpacer);
+          elements.terminalStack.append(view);
+
+          const vncTab = {
+            id: vncSession.id,
+            profile, title: vncSession.title, view, tabElement, tabButton, closed: false
+          };
+          state.vncSessions = state.vncSessions || new Map();
+          state.vncSessions.set(vncSession.id, vncTab);
+          state.tabs.set(vncSession.id, vncTab);
+
+          tabButton.addEventListener('click', () => activateTab(vncSession.id));
+          closeButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            requestCloseVncTab(vncSession.id);
+          });
+          activateTab(vncSession.id);
+          persistSessions();
+          toast('VNC session started', profile.name, 'success');
+          return;
+        } catch (error) {
+          // Fall back to external client
+          toast('Embedded VNC unavailable, launching external client', errorMessage(error), 'info');
+        }
+      }
+      // Fall through to external launch for RDP or VNC fallback
       try {
         const result = await runTask(`Launching ${profile.protocol.toUpperCase()}…`, () => api.external.launch(profile), `${profile.protocol.toUpperCase()} launched`);
         toast(`${profile.protocol.toUpperCase()} client launched`, result.executable, 'success');
@@ -749,7 +894,7 @@
       if (profile.protocol === 'ftp') {
         const confirmed = await confirmAction({
           title: 'Open insecure FTP?',
-          message: 'Plain FTP is not encrypted. Credentials and file contents can be observed on the network. Use FTPS unless this is a trusted legacy target.',
+          description: 'Plain FTP is not encrypted. Credentials and file contents can be observed on the network. Use FTPS unless this is a trusted legacy target.',
           confirmLabel: 'Open FTP file browser'
         });
         if (!confirmed) return;
@@ -830,7 +975,7 @@
 
     terminal.onData((data) => {
       recordTerminalMacroInput(data);
-      const targets = state.broadcastInput ? [...state.tabs.values()] : [tab];
+      const targets = state.broadcastInput ? [...state.tabs.values()].filter((candidate) => candidate.terminal) : [tab];
       for (const target of targets) {
         if (!target.closed) api.terminal.write(target.id, data).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
       }
@@ -904,6 +1049,7 @@
       state.pendingTerminalData.delete(session.id);
     }
     activateTab(session.id);
+    persistSessions();
     return tab;
   }
 
@@ -932,26 +1078,48 @@
     if (restored) toast('Terminal sessions restored', `${restored} session${restored === 1 ? '' : 's'} reattached after renderer reload.`, 'success');
   }
 
+  async function restoreSavedSessions() {
+    try {
+      const saved = await api.app.getSessions();
+      if (!Array.isArray(saved) || !saved.length) return;
+      const liveSessionIds = new Set(state.tabs.keys());
+      const restoreable = saved.slice(0, 16).filter((s) => (
+        s.profileId && s.protocol && !liveSessionIds.has(s.startedAt)
+      ));
+      if (!restoreable.length) return;
+      let restored = 0;
+      for (const savedSession of restoreable) {
+        const profile = state.initialProfiles?.find((p) => p.id === savedSession.profileId);
+        if (!profile) continue;
+        if (profile.protocol === 'local' || profile.protocol === 'ssh') {
+          await connectProfile(profile);
+          restored += 1;
+        }
+      }
+      if (restored) toast('Session persistence', `${restored} session${restored === 1 ? '' : 's'} restored from previous workspace.`, 'success');
+    } catch { /* session restore is best-effort */ }
+  }
+
   function closeTerminalSearch() {
     const panel = elements.terminalSearchHost.querySelector('.terminal-search-panel');
     panel?.remove();
     state.terminalSearchOpen = false;
     elements.terminalSearchToggle.classList.remove('active');
     elements.terminalSearchToggle.setAttribute('aria-pressed', 'false');
-    activeTab()?.terminal.focus();
+    activeTab()?.terminal?.focus();
   }
 
   function runTerminalSearch(direction = 'next') {
     const tab = activeTab();
     const query = state.terminalSearchQuery.trim();
-    if (!tab || !query) return false;
+    if (!tab?.searchAddon || !query) return false;
     const options = { caseSensitive: false, wholeWord: false, regex: false, incremental: false };
     return direction === 'previous' ? tab.searchAddon.findPrevious(query, options) : tab.searchAddon.findNext(query, options);
   }
 
   function openTerminalSearch() {
     const tab = activeTab();
-    if (!tab) {
+    if (!tab?.terminal) {
       toast('Open a terminal first', 'Terminal search needs an active session.', 'error');
       return;
     }
@@ -997,7 +1165,7 @@
 
   async function exportActiveTranscript() {
     const tab = activeTab();
-    if (!tab) {
+    if (!tab?.terminal) {
       toast('Open a terminal first', 'Transcript export needs an active session.', 'error');
       return;
     }
@@ -1060,7 +1228,7 @@
     }
     const confirmed = await confirmAction({
       title: 'Start terminal log?',
-      message: 'Terminal logs may capture secrets, commands, hostnames, customer data, and remote output. Choose the log file carefully and stop logging when finished.',
+      description: 'Terminal logs may capture secrets, commands, hostnames, customer data, and remote output. Choose the log file carefully and stop logging when finished.',
       confirmLabel: 'Choose log file'
     });
     if (!confirmed) return;
@@ -1123,6 +1291,21 @@
     }, 250);
   }
 
+  let sessionPersistTimer = null;
+  function persistSessions() {
+    if (sessionPersistTimer) clearTimeout(sessionPersistTimer);
+    sessionPersistTimer = setTimeout(() => {
+      sessionPersistTimer = null;
+      const sessions = [...state.tabs.values()].map((tab) => ({
+        profileId: tab.profile.id,
+        protocol: tab.profile.protocol,
+        title: tab.title,
+        startedAt: tab.id
+      }));
+      api.app.saveSessions(sessions).catch(() => {});
+    }, 500);
+  }
+
   function adjustPaneSize(delta) {
     const step = Number(delta) || 0;
     state.paneMinWidth = Math.max(240, Math.min(720, state.paneMinWidth + step));
@@ -1135,19 +1318,21 @@
   function updateSessionActions() {
     const tab = activeTab();
     const tabCount = state.tabs.size;
+    const terminalTab = Boolean(tab?.terminal);
+    const terminalCount = [...state.tabs.values()].filter((candidate) => candidate.terminal).length;
     const fileTransfer = isFileTransferProfile(tab?.profile);
     elements.layoutToggle.disabled = tabCount < 2 && state.layout !== 'grid';
-    elements.broadcastToggle.disabled = tabCount < 2;
-    elements.terminalSearchToggle.disabled = !tab;
-    elements.exportTranscriptButton.disabled = !tab;
-    elements.terminalLogButton.disabled = !tab || tab.closed;
+    elements.broadcastToggle.disabled = terminalCount < 2;
+    elements.terminalSearchToggle.disabled = !terminalTab;
+    elements.exportTranscriptButton.disabled = !terminalTab;
+    elements.terminalLogButton.disabled = !terminalTab || tab.closed;
     elements.terminalLogButton.textContent = tab?.logging?.active ? 'Stop log' : 'Log';
-    elements.macroRecordButton.disabled = !tab || tab.closed;
+    elements.macroRecordButton.disabled = !terminalTab || tab.closed;
     elements.macroRecordButton.textContent = state.macroRecording ? 'Stop macro' : 'Macro';
     elements.macroRecordButton.classList.toggle('active', Boolean(state.macroRecording));
     elements.macroRecordButton.setAttribute('aria-pressed', state.macroRecording ? 'true' : 'false');
-    elements.duplicateSessionButton.disabled = !tab;
-    elements.reconnectSessionButton.disabled = !tab;
+    elements.duplicateSessionButton.disabled = !terminalTab;
+    elements.reconnectSessionButton.disabled = !terminalTab;
     elements.paneShrinkButton.disabled = state.layout !== 'grid';
     elements.paneGrowButton.disabled = state.layout !== 'grid';
     elements.sftpToggle.disabled = !fileTransfer;
@@ -1187,21 +1372,23 @@
     elements.broadcastToggle.setAttribute('aria-pressed', state.broadcastInput ? 'true' : 'false');
     elements.broadcastWarning.hidden = !state.broadcastInput;
     if (state.broadcastInput) {
-      const names = [...state.tabs.values()].map((tab) => tab.title).join(', ');
-      elements.broadcastWarning.querySelector('span').textContent = `Keyboard input is being sent to ${state.tabs.size} terminals: ${names}`;
+      const terminals = [...state.tabs.values()].filter((tab) => tab.terminal);
+      const names = terminals.map((tab) => tab.title).join(', ');
+      elements.broadcastWarning.querySelector('span').textContent = `Keyboard input is being sent to ${terminals.length} terminals: ${names}`;
     }
   }
 
   async function toggleBroadcastInput() {
-    if (state.tabs.size < 2 && !state.broadcastInput) {
+    const terminals = [...state.tabs.values()].filter((tab) => tab.terminal);
+    if (terminals.length < 2 && !state.broadcastInput) {
       toast('Open another session first', 'Broadcast input needs at least two terminal sessions.', 'error');
       return;
     }
     if (!state.broadcastInput) {
-      const names = [...state.tabs.values()].map((tab) => tab.title).join(', ');
+      const names = terminals.map((tab) => tab.title).join(', ');
       const confirmed = await confirmAction({
         title: 'Enable broadcast input?',
-        description: `Every keystroke will be sent to ${state.tabs.size} terminals: ${names}. Commands cannot be recalled after transmission.`,
+        description: `Every keystroke will be sent to ${terminals.length} terminals: ${names}. Commands cannot be recalled after transmission.`,
         confirmLabel: 'Enable broadcast',
         danger: true
       });
@@ -1239,7 +1426,8 @@
       elements.activeSessionLabel.textContent = `${activeTab.title} · ${activeTab.profile.protocol.toUpperCase()}`;
       window.setTimeout(() => {
         fitVisibleTerminals();
-        activeTab.terminal.focus();
+        if (activeTab.terminal) activeTab.terminal.focus();
+        else activeTab.view.querySelector('iframe')?.focus();
       }, 0);
     } else {
       elements.activeSessionLabel.textContent = 'No active session';
@@ -1252,6 +1440,11 @@
   async function requestCloseTab(id) {
     const tab = state.tabs.get(id);
     if (!tab) return;
+    // VNC sessions close without confirmation
+    if (tab.protocol === 'vnc' || tab.profile?.protocol === 'vnc') {
+      await closeVncTab(id);
+      return;
+    }
     if (!tab.closed) {
       const confirmed = await confirmAction({
         title: 'Close live session?',
@@ -1264,9 +1457,33 @@
     await closeTab(id);
   }
 
+  async function closeVncTab(id) {
+    const tab = state.tabs.get(id);
+    if (!tab) return;
+    try { await api.vnc.stop(id); } catch { /* bridge already closed */ }
+    state.tabs.delete(id);
+    tab.tabElement?.remove();
+    tab.view?.remove();
+    state.vncSessions?.delete(id);
+    if (state.activeTabId === id) {
+      const remaining = [...state.tabs.keys()];
+      activateTab(remaining.at(-1) || '');
+    }
+    if (!state.tabs.size) activateTab('');
+    persistSessions();
+  }
+
+  function requestCloseVncTab(id) {
+    closeVncTab(id);
+  }
+
   async function closeTab(id) {
     const tab = state.tabs.get(id);
     if (!tab) return;
+    if (tab.protocol === 'vnc') {
+      await closeVncTab(id);
+      return;
+    }
     if (state.sftp.ownerTabId === tab.id) {
       state.sftp.open = false;
       elements.appShell.classList.remove('sftp-open');
@@ -1282,7 +1499,7 @@
     tab.view.remove();
     state.tabs.delete(id);
     state.pendingTerminalData.delete(id);
-    if (state.tabs.size < 2 && state.broadcastInput) {
+    if ([...state.tabs.values()].filter((candidate) => candidate.terminal).length < 2 && state.broadcastInput) {
       applyBroadcastState(false);
       toast('Broadcast input disabled', 'Fewer than two terminal sessions remain.');
     }
@@ -1292,6 +1509,7 @@
       activateTab(remaining.at(-1) || '');
     }
     if (!state.tabs.size) activateTab('');
+    persistSessions();
   }
 
   function recordTerminalMacroInput(data) {
@@ -1375,7 +1593,7 @@
 
   async function duplicateActiveSession() {
     const tab = activeTab();
-    if (!tab) {
+    if (!tab?.terminal) {
       toast('No active session', 'Open a terminal tab before duplicating a session.', 'error');
       return;
     }
@@ -1384,7 +1602,7 @@
 
   async function reconnectActiveSession() {
     const tab = activeTab();
-    if (!tab) {
+    if (!tab?.terminal) {
       toast('No active session', 'Open a terminal tab before reconnecting a session.', 'error');
       return;
     }
@@ -1533,7 +1751,11 @@
     const baudRate = textInput('baudRate', profile.baudRate || 115200, { type: 'number', min: 50, max: 4000000 });
     const rdpDomain = textInput('rdpDomain', profile.rdpDomain, { placeholder: 'CORP' });
     const terminalTheme = selectInput('terminalTheme', [
-      ['aux-dark', 'Aux dark'], ['light', 'Light'], ['high-contrast', 'High contrast']
+      ['aux-dark', 'Aux dark'], ['light', 'Light'], ['high-contrast', 'High contrast'],
+      ['nord', 'Nord'], ['dracula', 'Dracula'], ['solarized-dark', 'Solarized dark'],
+      ['solarized-light', 'Solarized light'], ['one-dark', 'One dark'], ['catppuccin-mocha', 'Catppuccin mocha'],
+      ['tokyo-night', 'Tokyo night'], ['gruvbox-dark', 'Gruvbox dark'], ['monokai', 'Monokai'],
+      ['oceanic-next', 'Oceanic next'], ['material', 'Material']
     ], profile.terminalTheme || 'aux-dark');
     const terminalFontFamily = textInput('terminalFontFamily', profile.terminalFontFamily || defaultTerminalFont, { placeholder: defaultTerminalFont });
     const terminalFontSize = textInput('terminalFontSize', profile.terminalFontSize || 13, { type: 'number', min: 8, max: 32 });
@@ -2197,13 +2419,60 @@
     elements.sftpUp.disabled = !ready || state.sftp.path === '/';
   }
 
+  function renderTransferQueue() {
+    const entries = state.transferQueue.entries;
+    const container = document.getElementById('transfer-queue');
+    if (!container) return;
+    if (!entries.length) {
+      container.innerHTML = '<div class="queue-empty">No transfers</div>';
+      return;
+    }
+    const statusOrder = { transferring: 0, queued: 1, pausing: 2, paused: 3, failed: 4, completed: 5 };
+    const sorted = [...entries].sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9));
+    container.replaceChildren();
+    for (const entry of sorted) {
+      const pct = entry.total > 0 ? Math.min(100, Math.round((entry.transferred / entry.total) * 100)) : 0;
+      const statusIcon = entry.status === 'transferring' ? '↻' : entry.status === 'queued' ? '⋯' : entry.status === 'paused' ? '⏸' : entry.status === 'failed' ? '✗' : entry.status === 'completed' ? '✓' : '?';
+      const actionButton = (entry.status === 'transferring' || entry.status === 'queued') && entry.pausable !== false
+        ? node('button', { type: 'button', className: 'queue-action', text: '⏸', title: 'Pause' })
+        : entry.status === 'paused'
+          ? node('button', { type: 'button', className: 'queue-action', text: '▶', title: 'Resume' })
+          : entry.status === 'failed'
+            ? node('button', { type: 'button', className: 'queue-action', text: '↻', title: 'Retry' })
+            : null;
+      const cancelButton = entry.status === 'transferring' || entry.status === 'queued' || entry.status === 'paused'
+        ? node('button', { type: 'button', className: 'queue-action queue-cancel', text: '×', title: 'Cancel' })
+        : null;
+      const progressBar = entry.status !== 'completed'
+        ? node('div', { className: 'queue-progress-bg' }, [
+            node('div', { className: 'queue-progress-fill', attrs: { style: `width:${pct}%` } })
+          ])
+        : null;
+      const row = node('div', { className: `queue-row status-${entry.status}` }, [
+        node('span', { className: 'queue-icon', text: statusIcon }),
+        node('div', { className: 'queue-info' }, [
+          node('strong', { className: 'queue-name', text: entry.fileName }),
+          node('small', { className: 'queue-detail', text: `${entry.direction === 'upload' ? '↑' : '↓'} ${entry.status === 'failed' ? entry.error : entry.status === 'completed' ? 'Done' : `${formatBytes(entry.transferred)} / ${formatBytes(entry.total)}`}` }),
+          progressBar
+        ]),
+        node('span', { className: 'queue-actions' }, [actionButton, cancelButton].filter(Boolean))
+      ]);
+      if (actionButton) actionButton.addEventListener('click', () => {
+        if (entry.status === 'transferring' || entry.status === 'queued') api.transfer.pause(entry.id).catch(() => {});
+        else if (entry.status === 'paused') api.transfer.resume(entry.id).catch(() => {});
+        else if (entry.status === 'failed') api.transfer.retry(entry.id).catch(() => {});
+      });
+      if (cancelButton) cancelButton.addEventListener('click', () => api.transfer.cancel(entry.id).catch(() => {}));
+      container.append(row);
+    }
+  }
+
   async function uploadFile() {
     if (!state.sftp.profile) return;
     try {
       const result = await api.sftp.upload(state.sftp.profile, state.sftp.path);
       if (!result.canceled) {
-        toast('Upload complete', result.remotePath, 'success');
-        await loadSftp(state.sftp.path);
+        toast('Upload queued', result.remotePath, 'success');
       }
     } catch (error) { toast('Upload failed', errorMessage(error), 'error'); }
   }
@@ -2225,8 +2494,7 @@
       elements.transferStatus.textContent = `Uploading ${localPaths.length} dropped file${localPaths.length === 1 ? '' : 's'}…`;
       const result = await api.sftp.uploadPaths(state.sftp.profile, state.sftp.path, localPaths);
       const count = result.uploaded?.length || 0;
-      toast('Drag files here to upload', `${count} file${count === 1 ? '' : 's'} uploaded`, 'success');
-      await loadSftp(state.sftp.path);
+      toast('Uploads queued', `${count} file${count === 1 ? '' : 's'} added to the transfer queue`, 'success');
     } catch (error) {
       toast('Drop upload failed', errorMessage(error), 'error');
     }
@@ -2253,7 +2521,7 @@
     if (!entry || entry.directory || !state.sftp.profile) return;
     try {
       const result = await api.sftp.download(state.sftp.profile, entry.path);
-      if (!result.canceled) toast('Download complete', result.localPath, 'success');
+      if (!result.canceled) toast('Download queued', result.localPath, 'success');
     } catch (error) { toast('Download failed', errorMessage(error), 'error'); }
   }
 
@@ -2500,6 +2768,426 @@
     showModal({ title: 'System diagnostics', description: 'Protocol support detected on this Linux host.', body, className: 'wide', actions: [{ label: 'Close', busy: false }] });
   }
 
+  function openLiveMonitor() {
+    const sshProfiles = state.profiles.filter((profile) => profile.protocol === 'ssh');
+    if (!sshProfiles.length) {
+      showModal({
+        title: 'Live server monitor',
+        description: 'Read-only CPU, memory, disk, process and listening-socket data over SSH.',
+        body: node('div', { className: 'empty-state', text: 'Create or import an SSH profile before using the live monitor.' }),
+        className: 'wide',
+        actions: [{ label: 'Close', busy: false }]
+      });
+      return;
+    }
+    const profileSelect = selectInput('profileId', sshProfiles.map((profile) => [profile.id, profile.name]), sshProfiles[0].id);
+    const autoRefresh = checkbox('autoRefresh', 'Refresh every 10 seconds');
+    const output = node('div', { className: 'modal-sections' }, node('div', { className: 'empty-state', text: 'Select an SSH profile and capture a snapshot.' }));
+    const refresh = node('button', { type: 'button', className: 'button primary', text: 'Capture snapshot' });
+    const controls = node('div', { className: 'modal-sections' }, [
+      node('div', { className: 'form-grid' }, [field('SSH profile', profileSelect, '', 'full'), node('div', { className: 'full' }, autoRefresh)]),
+      node('div', { className: 'button-row' }, refresh),
+      output
+    ]);
+    let running = false;
+    let timer = null;
+    const capture = async () => {
+      if (running) return;
+      running = true;
+      refresh.disabled = true;
+      refresh.textContent = 'Capturing...';
+      try {
+        const profile = sshProfiles.find((item) => item.id === profileSelect.value);
+        const result = await api.monitor.snapshot(profile);
+        output.replaceChildren();
+        for (const [key, value] of Object.entries(result.sections || {})) {
+          output.append(node('section', {}, [
+            node('div', { className: 'section-title', text: key.replaceAll('_', ' ') }),
+            node('pre', { className: 'network-output', text: value || 'No data' })
+          ]));
+        }
+        if (!output.childElementCount) output.append(node('div', { className: 'empty-state', text: 'The host returned no monitor data.' }));
+        setStatus(`Monitor snapshot captured for ${profile.name}`);
+      } catch (error) {
+        output.replaceChildren(node('div', { className: 'warning-box danger-box', text: errorMessage(error) }));
+        toast('Monitor snapshot failed', errorMessage(error), 'error');
+      } finally {
+        running = false;
+        refresh.disabled = false;
+        refresh.textContent = 'Capture snapshot';
+      }
+    };
+    refresh.addEventListener('click', capture);
+    autoRefresh.querySelector('input').addEventListener('change', (event) => {
+      if (timer) window.clearInterval(timer);
+      timer = event.target.checked ? window.setInterval(capture, 10_000) : null;
+      if (event.target.checked) capture();
+    });
+    const controller = showModal({
+      title: 'Live server monitor',
+      description: 'Read-only CPU, memory, disk, process and listening-socket data over SSH.',
+      body: controls,
+      className: 'wide',
+      actions: [{ label: 'Close', busy: false }]
+    });
+    controller.onClose(() => { if (timer) window.clearInterval(timer); });
+  }
+
+  async function openRemoteDesktopGateway() {
+    const sshProfiles = state.profiles.filter((profile) => profile.protocol === 'ssh');
+    if (!sshProfiles.length) {
+      showModal({
+        title: 'Remote desktop gateway',
+        description: 'Open RDP or VNC through an SSH local-forwarding gateway.',
+        body: node('div', { className: 'empty-state', text: 'Create or import an SSH profile before opening a remote desktop gateway.' }),
+        className: 'wide',
+        actions: [{ label: 'Close', busy: false }]
+      });
+      return;
+    }
+    const gatewaySelect = selectInput('gatewayProfileId', sshProfiles.map((profile) => [profile.id, profile.name]), sshProfiles[0].id);
+    const protocolSelect = selectInput('protocol', [['rdp', 'RDP'], ['vnc', 'VNC']], 'rdp');
+    const hostInput = textInput('targetHost', '', { placeholder: '10.0.0.10', required: 'required' });
+    const portInput = textInput('targetPort', '3389', { type: 'number', min: '1', max: '65535' });
+    const localPortInput = textInput('localPort', '', { type: 'number', min: '1024', max: '65535', placeholder: 'automatic' });
+    const usernameInput = textInput('username', '', { autocomplete: 'username', placeholder: 'optional' });
+    const connectButton = node('button', { type: 'button', className: 'button primary', text: 'Open remote desktop' });
+    const sessionsHost = node('div', { className: 'modal-sections' });
+    const renderSessions = async () => {
+      const sessions = await api.gateway.list();
+      sessionsHost.replaceChildren(node('div', { className: 'section-title', text: 'Active gateways' }));
+      if (!sessions.length) {
+        sessionsHost.append(node('div', { className: 'empty-state', text: 'No remote desktop gateways are running.' }));
+        return;
+      }
+      for (const session of sessions) {
+        const stop = node('button', { type: 'button', className: 'button', text: 'Stop' });
+        stop.addEventListener('click', async () => { await api.gateway.disconnect(session.id); await renderSessions(); });
+        sessionsHost.append(node('div', { className: 'diagnostic-row' }, [
+          node('span', { className: 'indicator' }),
+          node('div', {}, [node('strong', { text: `${session.protocol.toUpperCase()} ${session.targetHost}:${session.targetPort}` }), node('small', { text: `${session.gatewayName} via localhost:${session.localPort}` })]),
+          stop
+        ]));
+      }
+    };
+    protocolSelect.addEventListener('change', () => { portInput.value = protocolSelect.value === 'rdp' ? '3389' : '5900'; });
+    connectButton.addEventListener('click', async () => {
+      connectButton.disabled = true;
+      connectButton.textContent = 'Opening gateway...';
+      try {
+        const gatewayProfile = sshProfiles.find((profile) => profile.id === gatewaySelect.value);
+        const result = await api.gateway.connect({
+          gatewayProfile,
+          protocol: protocolSelect.value,
+          targetHost: hostInput.value.trim(),
+          targetPort: Number(portInput.value),
+          localPort: localPortInput.value ? Number(localPortInput.value) : undefined,
+          username: usernameInput.value.trim()
+        });
+        setStatus(`${result.protocol.toUpperCase()} gateway connected on localhost:${result.localPort}`);
+        await renderSessions();
+      } catch (error) {
+        toast('Could not open remote desktop gateway', errorMessage(error), 'error');
+      } finally {
+        connectButton.disabled = false;
+        connectButton.textContent = 'Open remote desktop';
+      }
+    });
+    const body = node('div', { className: 'modal-sections' }, [
+      node('div', { className: 'form-grid' }, [
+        field('SSH gateway', gatewaySelect),
+        field('Desktop protocol', protocolSelect),
+        field('Target host', hostInput),
+        field('Target port', portInput),
+        field('Local forwarding port', localPortInput, 'Leave empty to choose a free local port.'),
+        field('Remote desktop username', usernameInput, 'The native client handles any password prompt.')
+      ]),
+      node('div', { className: 'button-row' }, connectButton),
+      node('div', { className: 'warning-box', text: 'The SSH tunnel must confirm forwarding readiness before Aux Command starts the native RDP or VNC client.' }),
+      sessionsHost
+    ]);
+    const controller = showModal({
+      title: 'Remote desktop gateway',
+      description: 'Reach an internal RDP or VNC service through a saved SSH gateway profile.',
+      body,
+      className: 'wide',
+      actions: [{ label: 'Close', busy: false }]
+    });
+    const unsubscribe = api.gateway.onStatus(() => { if (controller.modal.isConnected) renderSessions().catch(() => {}); });
+    controller.onClose(unsubscribe);
+    await renderSessions();
+  }
+
+  async function openProfileSync() {
+    const [config, initialStatus] = await Promise.all([api.sync.config(), api.sync.status()]);
+    let currentStatus = initialStatus;
+    const sshProfiles = state.profiles.filter((profile) => profile.protocol === 'ssh');
+    const typeSelect = selectInput('type', [['file', 'Local file'], ['http', 'HTTP'], ['https', 'HTTPS'], ['ssh', 'SSH / SFTP']], config?.type || 'file');
+    const sourceInput = textInput('source', config?.url || '', { placeholder: '/path/to/profiles.json' });
+    const profileSelect = selectInput('profileId', sshProfiles.map((profile) => [profile.id, profile.name]), config?.profileId || sshProfiles[0]?.id || '');
+    const intervalInput = textInput('intervalMinutes', String(config?.intervalMinutes || 60), { type: 'number', min: '1', max: '1440' });
+    const sourceField = field('Profile source', sourceInput, 'A JSON array or an object with a profiles array.', 'full');
+    const profileField = field('SSH profile', profileSelect, 'The remote file is read through this saved SSH profile.', 'full');
+    const statusBox = node('div', { className: 'warning-box' });
+    const renderStatus = () => {
+      statusBox.textContent = currentStatus.configured
+        ? `Configured: ${currentStatus.type}. Last sync: ${currentStatus.lastSyncAt || 'never'}. ${currentStatus.lastError ? `Last error: ${currentStatus.lastError}` : ''}`
+        : 'Profile synchronization is disabled.';
+      statusBox.classList.toggle('danger-box', Boolean(currentStatus.lastError));
+    };
+    const updateFields = () => {
+      const ssh = typeSelect.value === 'ssh';
+      profileField.hidden = !ssh;
+      sourceInput.placeholder = ssh ? '/remote/path/profiles.json' : typeSelect.value === 'file' ? '/path/to/profiles.json' : `${typeSelect.value}://host/profiles.json`;
+    };
+    typeSelect.addEventListener('change', updateFields);
+    updateFields();
+    renderStatus();
+    const body = node('div', { className: 'modal-sections' }, [
+      node('div', { className: 'form-grid' }, [
+        field('Source type', typeSelect),
+        field('Sync interval in minutes', intervalInput),
+        sourceField,
+        profileField
+      ]),
+      statusBox,
+      node('div', { className: 'warning-box', text: 'Credentials and private-key material are never imported from a sync source. Existing local credentials stay local.' })
+    ]);
+    showModal({
+      title: 'Profile synchronization',
+      description: 'Keep non-secret connection profiles aligned from a local, web or SSH-hosted JSON file.',
+      body,
+      className: 'wide',
+      actions: [
+        { label: 'Close', busy: false },
+        {
+          label: 'Disable',
+          busy: false,
+          disabled: !currentStatus.configured,
+          run: async ({ button }) => {
+            currentStatus = await api.sync.disable();
+            button.disabled = true;
+            renderStatus();
+            setStatus('Profile synchronization disabled');
+            return false;
+          }
+        },
+        {
+          label: 'Sync now',
+          className: 'button',
+          disabled: !currentStatus.configured,
+          run: async () => {
+            const result = await api.sync.syncNow();
+            currentStatus = await api.sync.status();
+            state.profiles = await api.profiles.list();
+            renderProfiles();
+            renderStatus();
+            setStatus(`Profile sync complete: ${result.added} added, ${result.updated} updated`);
+            return false;
+          }
+        },
+        {
+          label: 'Save configuration',
+          className: 'primary',
+          run: async () => {
+            const intervalMinutes = Number(intervalInput.value);
+            const next = { type: typeSelect.value, url: sourceInput.value.trim(), intervalMinutes };
+            if (typeSelect.value === 'ssh') next.profileId = profileSelect.value;
+            await api.sync.configure(next);
+            currentStatus = await api.sync.status();
+            renderStatus();
+            setStatus('Profile synchronization configured');
+            return false;
+          }
+        }
+      ]
+    });
+  }
+
+  async function openSshKeyManager() {
+    const name = textInput('name', 'id_aux_command', { required: true, maxlength: 64 });
+    const type = selectInput('type', [['ed25519', 'Ed25519'], ['rsa', 'RSA 4096']], 'ed25519');
+    const passphrase = textInput('passphrase', '', { type: 'password', required: false, maxlength: 4096 });
+    const generate = node('button', { type: 'button', className: 'primary', text: 'Generate key' });
+    const form = node('form', { className: 'form-grid compact-form' }, [
+      field('Key name', name, 'Letters, numbers, dots, underscores, and hyphens only.'),
+      field('Type', type),
+      field('Passphrase', passphrase, 'Optional. The passphrase is never stored by Aux Command.', 'full'),
+      node('div', { className: 'full' }, generate)
+    ]);
+    const list = node('div', { className: 'tunnel-list', attrs: { 'aria-live': 'polite' } });
+    const body = node('div', { className: 'modal-sections' }, [
+      node('div', {}, [node('div', { className: 'section-title', text: 'Generate key pair' }), form]),
+      node('div', {}, [node('div', { className: 'section-title', text: 'Local SSH keys' }), list])
+    ]);
+    showModal({
+      title: 'SSH Key Manager',
+      description: 'Generate and manage key pairs in your local SSH directory. Private key contents never enter the renderer.',
+      body,
+      actions: [{ label: 'Close', busy: false }]
+    });
+
+    const refresh = async () => {
+      list.replaceChildren(node('div', { className: 'list-empty', text: 'Loading SSH keys…' }));
+      const keys = await api.sshKeys.list();
+      list.replaceChildren();
+      if (!keys.length) {
+        list.append(node('div', { className: 'list-empty', text: 'No SSH key pairs were found.' }));
+        return;
+      }
+      for (const key of keys) {
+        const copy = node('button', { type: 'button', className: 'mini-button', text: 'Copy public' });
+        const remove = node('button', { type: 'button', className: 'mini-button destructive', text: 'Delete' });
+        const controls = node('div', { className: 'row-actions' }, [copy, remove]);
+        const row = node('div', { className: 'tunnel-row' }, [
+          node('span', { className: 'tunnel-indicator' }),
+          node('div', {}, [
+            node('strong', { text: key.name }),
+            node('small', { text: `${key.type} · ${key.fingerprint}${key.comment ? ` · ${key.comment}` : ''}` })
+          ]),
+          controls
+        ]);
+        copy.addEventListener('click', async () => {
+          const publicKey = await api.sshKeys.getPublicKey(key.name);
+          await api.system.clipboardWrite(publicKey);
+          toast('Public key copied', key.name, 'success');
+        });
+        remove.addEventListener('click', async () => {
+          const confirmed = await confirmAction({
+            title: 'Delete SSH key pair?',
+            description: `Delete the local private and public key files for “${key.name}”? This cannot be undone.`,
+            confirmLabel: 'Delete key pair',
+            danger: true
+          });
+          if (!confirmed) return;
+          await api.sshKeys.delete(key.name);
+          toast('SSH key deleted', key.name, 'success');
+          await refresh();
+        });
+        list.append(row);
+      }
+    };
+
+    generate.addEventListener('click', async () => {
+      if (!form.reportValidity()) return;
+      generate.disabled = true;
+      try {
+        const created = await api.sshKeys.generate(name.value.trim(), type.value, passphrase.value);
+        passphrase.value = '';
+        toast('SSH key generated', `${created.name} · ${created.fingerprint}`, 'success');
+        await refresh();
+      } catch (error) {
+        toast('SSH key generation failed', errorMessage(error), 'error');
+      } finally {
+        generate.disabled = false;
+      }
+    });
+    form.addEventListener('submit', (event) => { event.preventDefault(); generate.click(); });
+    await refresh();
+  }
+
+  function openNetworkTools() {
+    const toolTabs = ['Ping', 'Traceroute', 'DNS lookup', 'Port scan', 'Whois', 'Wake-on-LAN'];
+    const tabBar = node('div', { className: 'network-tabbar', attrs: { role: 'tablist', 'aria-label': 'Network tool' } });
+    const output = node('div', { className: 'network-output', attrs: { role: 'status', 'aria-live': 'polite', style: 'min-height:200px;overflow:auto;font-family:var(--mono);font-size:11px;white-space:pre-wrap;line-height:1.5' } });
+    const inputRow = node('div', { className: 'network-input-row', attrs: { style: 'display:grid;grid-template-columns:1fr auto auto;gap:8px' } });
+    const input = node('input', { type: 'text', placeholder: 'hostname or IP', attrs: { 'aria-label': 'Network target', style: 'height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(5,15,22,.72);color:var(--text);padding:0 10px' } });
+    const runButton = node('button', { type: 'button', className: 'button primary', text: 'Run' });
+    const cancelButton = node('button', { type: 'button', className: 'button', text: 'Cancel', attrs: { 'aria-label': 'Cancel running network command' } });
+    cancelButton.hidden = true;
+    inputRow.append(input, runButton, cancelButton);
+    const extraInput = node('input', { type: 'text', placeholder: 'optional: count / port list / DNS type', attrs: { 'aria-label': 'Network tool options', style: 'height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(5,15,22,.72);color:var(--text);padding:0 10px;display:none' } });
+    let activeTool = 'Ping';
+
+    const tabs = toolTabs.map((name) => {
+      const btn = node('button', { type: 'button', className: 'mini-button', text: name, attrs: { role: 'tab', 'aria-selected': 'false' } });
+      btn.addEventListener('click', () => {
+        tabs.forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        activeTool = name;
+        extraInput.style.display = ['Ping', 'Port scan', 'DNS lookup'].includes(name) ? 'block' : 'none';
+        extraInput.placeholder = name === 'Ping' ? 'Count (default 4)' : name === 'Port scan' ? 'Comma-separated ports' : 'Record type (A/MX/TXT/AAAA)';
+        input.placeholder = name === 'Whois' ? 'Domain or IP' : name === 'Wake-on-LAN' ? 'MAC address (xx:xx:xx:xx:xx:xx)' : 'Hostname or IP';
+        output.textContent = 'Ready. Enter a target and click Run.';
+      });
+      return btn;
+    });
+    tabBar.append(...tabs);
+    tabs[0].classList.add('active');
+    tabs[0].setAttribute('aria-selected', 'true');
+
+    runButton.addEventListener('click', async () => {
+      const target = input.value.trim();
+      if (!target) { output.textContent = 'Enter a target first.'; return; }
+      output.textContent = 'Running...';
+      runButton.disabled = true;
+      cancelButton.hidden = false;
+      cancelButton.disabled = false;
+      tabs.forEach((tab) => { tab.disabled = true; });
+      const selectedTool = activeTool;
+      try {
+        let result;
+        switch (selectedTool) {
+          case 'Ping': {
+            const count = parseInt(extraInput.value) || 4;
+            result = await api.network.ping(target, Math.min(20, Math.max(1, count)));
+            break;
+          }
+          case 'Traceroute':
+            result = await api.network.traceroute(target);
+            break;
+          case 'DNS lookup': {
+            const type = (extraInput.value || 'A').toUpperCase().trim();
+            result = await api.network.dns(target, type);
+            break;
+          }
+          case 'Port scan': {
+            const ports = (extraInput.value || '22,80,443,8080,3306,8443,9090,3000').split(',').map((p) => parseInt(p.trim())).filter((p) => p > 0 && p < 65536);
+            result = await api.network.portScan(target, ports);
+            break;
+          }
+          case 'Whois':
+            result = await api.network.whois(target);
+            break;
+          case 'Wake-on-LAN':
+            result = await api.network.wakeOnLan(target);
+            break;
+        }
+        if (selectedTool === 'Port scan' && Array.isArray(result)) {
+          const open = result.filter((r) => r.open);
+          const closed = result.filter((r) => !r.open);
+          output.textContent = ['Port scan: ' + target, '', 'OPEN (' + open.length + '):', ...open.map((r) => '  ' + r.port + '/tcp'), '', 'CLOSED (' + closed.length + '):', ...closed.map((r) => '  ' + r.port + '/tcp')].join('\n');
+        } else if (result && result.stdout) {
+          output.textContent = result.stdout || 'No output';
+          if (result.stderr) output.textContent += '\n\nSTDERR:\n' + result.stderr;
+        } else {
+          output.textContent = JSON.stringify(result, null, 2);
+        }
+      } catch (error) {
+        output.textContent = 'Error: ' + (error.message || String(error));
+      }
+      runButton.disabled = false;
+      cancelButton.hidden = true;
+      tabs.forEach((tab) => { tab.disabled = false; });
+    });
+
+    cancelButton.addEventListener('click', async () => {
+      const cancelled = await api.network.cancelAll();
+      output.textContent = cancelled ? 'Cancelling network command…' : 'No cancellable network command is running.';
+      cancelButton.disabled = true;
+    });
+
+    const body = node('div', { className: 'modal-sections' }, [
+      node('div', {}, [node('div', { className: 'section-title', text: 'Tool' }), tabBar]),
+      node('div', {}, [node('div', { className: 'section-title', text: 'Target' }), inputRow, extraInput]),
+      node('div', {}, [node('div', { className: 'section-title', text: 'Output' }), output])
+    ]);
+    const controller = showModal({ title: 'Network tools', description: 'Ping, traceroute, DNS, port scan, whois, and Wake-on-LAN.', body, className: 'wide' });
+    controller.onClose(() => { api.network.cancelAll().catch(() => {}); });
+    setTimeout(() => input.focus(), 0);
+  }
+
   function queuePrompt(request) {
     state.promptQueue.push(request);
     processNextPrompt();
@@ -2608,6 +3296,25 @@
     api.sftp.onError(({ profileId, message }) => {
       if (state.sftp.profile?.id === profileId) toast('SFTP connection error', message, 'error');
     });
+    api.transfer.onUpdate((entry) => {
+      const idx = state.transferQueue.entries.findIndex((e) => e.id === entry.id);
+      if (idx >= 0) state.transferQueue.entries[idx] = entry;
+      else state.transferQueue.entries.push(entry);
+      if (entry.status === 'completed' && !state.transferQueue.expanded) {
+        toast('Transfer complete', entry.fileName, 'success');
+      }
+      if (entry.status === 'completed' && entry.direction === 'upload' && state.sftp.open && state.sftp.profile?.id === entry.profileId) {
+        loadSftp(state.sftp.path).catch(() => {});
+      }
+      if (entry.status === 'failed' && !state.transferQueue.expanded) {
+        toast('Transfer failed', `${entry.fileName}: ${entry.error}`, 'error');
+      }
+      renderTransferQueue();
+    });
+    api.transfer.onList((entries) => {
+      state.transferQueue.entries = Array.isArray(entries) ? entries : [];
+      renderTransferQueue();
+    });
     api.updates.onStatus((status) => updateUpdateState(status));
     api.prompts.onRequest(queuePrompt);
   }
@@ -2627,6 +3334,12 @@
     elements.tunnelsButton.addEventListener('click', openTunnelsModal);
     elements.updatesButton.addEventListener('click', openUpdatesModal);
     elements.diagnosticsButton.addEventListener('click', openDiagnosticsModal);
+    elements.sshKeysButton.addEventListener('click', () => openSshKeyManager().catch((error) => toast('Could not open SSH Key Manager', errorMessage(error), 'error')));
+    elements.networkToolsButton = document.getElementById('network-tools-button');
+    if (elements.networkToolsButton) elements.networkToolsButton.addEventListener('click', openNetworkTools);
+    elements.monitorButton.addEventListener('click', openLiveMonitor);
+    elements.gatewayButton.addEventListener('click', () => openRemoteDesktopGateway().catch((error) => toast('Could not open desktop gateway', errorMessage(error), 'error')));
+    elements.syncButton.addEventListener('click', () => openProfileSync().catch((error) => toast('Could not open profile sync', errorMessage(error), 'error')));
     elements.websiteButton.addEventListener('click', () => api.system.openWebsite().catch((error) => toast('Could not open website', errorMessage(error), 'error')));
     elements.newProfileButton.addEventListener('click', () => openProfileModal());
     elements.profileSearch.addEventListener('input', renderProfiles);
@@ -2656,6 +3369,18 @@
     elements.sftpMkdir.addEventListener('click', makeRemoteDirectory);
     elements.sftpMore.addEventListener('click', openSftpMore);
     bindSftpDragAndDrop();
+
+    const queueToggle = document.getElementById('queue-toggle');
+    if (queueToggle) {
+      queueToggle.addEventListener('click', () => {
+        const expanded = queueToggle.getAttribute('aria-expanded') === 'true';
+        queueToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        state.transferQueue.expanded = !expanded;
+        const queue = document.getElementById('transfer-queue');
+        if (queue) queue.hidden = expanded;
+        if (state.transferQueue.expanded) renderTransferQueue();
+      });
+    }
 
     window.addEventListener('resize', () => {
       fitVisibleTerminals();
@@ -2744,7 +3469,11 @@
       state.vault = initial.vault || null;
       for (const tunnel of initial.tunnels || []) state.tunnels.set(tunnel.id, tunnel);
       updateProfiles(initial.profiles || []);
+      state.initialProfiles = initial.profiles || [];
       restoreInitialSessions(initial.sessions || []);
+
+      // Restore persisted sessions only after reattaching still-live backend sessions.
+      await restoreSavedSessions();
       elements.appVersion.textContent = `Aux Command ${initial.version}`;
       const agentAvailable = Boolean(initial.diagnostics?.sshAgent);
       elements.agentStatus.textContent = agentAvailable ? 'SSH agent ready' : 'No SSH agent';

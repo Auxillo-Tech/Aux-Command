@@ -6,11 +6,27 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { Duplex } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
+const { resolveHelper } = require('../lib/command-builder.cjs');
+const { findExecutable } = require('../lib/executable-finder.cjs');
 const { expandHome, normalizeProfile, normalizeRemotePath } = require('../lib/validation.cjs');
 const {
   connectionSignature, formatHostPort, isDirectory, modeToString, parseProxyJump, safeTimestampToIso
 } = require('../lib/sftp-utils.cjs');
+
+function spawnGuarded(command, args, stdio) {
+  const python = findExecutable(['python3', 'python']);
+  if (!python) throw new Error('Python 3 is required to own SSH/SCP process lifecycles');
+  const executable = findExecutable([command]);
+  if (!executable) throw new Error(`${command} is not installed`);
+  return spawn(python, [
+    resolveHelper('process_guard.py'),
+    '--parent-pid', String(process.pid),
+    '--ready-fd', '3',
+    '--', executable, ...args
+  ], { stdio: [...stdio, 'pipe'], shell: false, env: process.env });
+}
 
 function quoteRemotePath(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
@@ -34,16 +50,35 @@ function scpArgs(profile, source, destination) {
   return args;
 }
 
-function runScp(profile, args) {
+function runScp(profile, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn('scp', args, { stdio: ['ignore', 'ignore', 'pipe'], shell: false, env: process.env });
+    const child = spawnGuarded('scp', args, ['ignore', 'ignore', 'pipe']);
     let stderr = '';
+    let settled = false;
+    const abortError = () => {
+      const error = new Error('SCP transfer aborted');
+      error.name = 'AbortError';
+      return error;
+    };
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      options.signal?.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onAbort = () => {
+      try { child.kill('SIGTERM'); } catch { /* already exited */ }
+    };
+    if (options.signal?.aborted) onAbort();
+    else options.signal?.addEventListener('abort', onAbort, { once: true });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-8192); });
-    child.once('error', reject);
+    child.once('error', (error) => finish(error));
     child.once('exit', (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error((stderr.trim() || `scp exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
+      if (options.signal?.aborted) finish(abortError());
+      else if (code === 0) finish();
+      else finish(new Error((stderr.trim() || `scp exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
     });
   });
 }
@@ -65,9 +100,32 @@ async function replaceRemoteFile(sftp, partialPath, targetPath) {
   }
   try {
     await callSftp(sftp, 'rename', partialPath, targetPath);
-  } catch (error) {
-    await callSftp(sftp, 'unlink', targetPath);
-    await callSftp(sftp, 'rename', partialPath, targetPath);
+    return;
+  } catch (initialError) {
+    const backupPath = `${targetPath}.aux-backup-${randomUUID()}`;
+    let backedUp = false;
+    try {
+      await callSftp(sftp, 'rename', targetPath, backupPath);
+      backedUp = true;
+    } catch (backupError) {
+      const missing = backupError?.code === 2 || /no such file|not found/i.test(String(backupError?.message || ''));
+      if (!missing) throw initialError;
+    }
+
+    try {
+      await callSftp(sftp, 'rename', partialPath, targetPath);
+    } catch (replacementError) {
+      if (backedUp) {
+        try { await callSftp(sftp, 'rename', backupPath, targetPath); }
+        catch (rollbackError) {
+          throw new AggregateError([replacementError, rollbackError], 'Remote replacement failed and the original file could not be restored');
+        }
+      }
+      throw replacementError;
+    }
+    if (backedUp) {
+      try { await callSftp(sftp, 'unlink', backupPath); } catch { /* a harmless backup may remain for manual recovery */ }
+    }
   }
 }
 
@@ -80,11 +138,7 @@ function createOpenSshProxy(profile) {
   ];
   if (jump.port !== 22) args.push('-p', String(jump.port));
   args.push('-W', formatHostPort(profile.host, profile.port), jump.destination);
-  const child = spawn('ssh', args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    shell: false,
-    env: process.env
-  });
+  const child = spawnGuarded('ssh', args, ['pipe', 'pipe', 'pipe']);
 
   let stderr = '';
   const socket = new Duplex({
@@ -332,62 +386,104 @@ class SftpService {
     return true;
   }
 
-  async upload(profileInput, localPath, remotePath) {
+  async upload(profileInput, localPath, remotePath, options = {}) {
     const profile = normalizeProfile(profileInput, profileInput?.id);
-    if (profile.transferMode === 'scp') return this.#scpUpload(profile, localPath, remotePath);
+    if (profile.transferMode === 'scp') return this.#scpUpload(profile, localPath, remotePath, options);
     const connection = await this.connect(profileInput);
     if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
     const target = normalizeRemotePath(remotePath);
-    await new Promise((resolve, reject) => {
-      connection.sftp.fastPut(localPath, target, {
-        step: (transferred, chunk, total) => this.#emit('sftp:progress', {
-          profileId: connection.profile.id,
-          direction: 'upload',
-          path: target,
-          transferred,
-          total
-        })
-      }, (error) => error ? reject(error) : resolve());
+    const stat = fs.statSync(localPath);
+    if (!stat.isFile()) throw new Error('SFTP uploads regular files only');
+    const partialPath = `${target}.aux-command-${options.transferId || randomUUID()}.part`;
+    let offset = 0;
+    if (options.offset > 0) {
+      try {
+        const remoteStat = await callSftp(connection.sftp, 'stat', partialPath);
+        offset = Math.min(stat.size, Number(remoteStat?.size || 0));
+      } catch { offset = 0; }
+    }
+    let transferred = offset;
+    const source = fs.createReadStream(localPath, { start: offset });
+    const destination = connection.sftp.createWriteStream(partialPath, {
+      flags: offset > 0 ? 'r+' : 'w',
+      start: offset,
+      mode: stat.mode & 0o777
     });
-    return true;
-  }
-
-  async download(profileInput, remotePath, localPath) {
-    const profile = normalizeProfile(profileInput, profileInput?.id);
-    if (profile.transferMode === 'scp') return this.#scpDownload(profile, remotePath, localPath);
-    const connection = await this.connect(profileInput);
-    if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
-    const source = normalizeRemotePath(remotePath);
-    const partialPath = `${localPath}.aux-command-${randomUUID()}.part`;
-    try {
-      await new Promise((resolve, reject) => {
-        connection.sftp.fastGet(source, partialPath, {
-          mode: 0o600,
-          step: (transferred, chunk, total) => this.#emit('sftp:progress', {
-            profileId: connection.profile.id,
-            direction: 'download',
-            path: source,
-            transferred,
-            total
-          })
-        }, (error) => error ? reject(error) : resolve());
+    const report = () => {
+      options.onProgress?.(transferred, stat.size);
+      this.#emit('sftp:progress', {
+        profileId: connection.profile.id,
+        direction: 'upload',
+        path: target,
+        transferred,
+        total: stat.size
       });
-      fs.chmodSync(partialPath, 0o600);
-      fs.renameSync(partialPath, localPath);
-      fs.chmodSync(localPath, 0o600);
+    };
+    report();
+    source.on('data', (chunk) => { transferred += chunk.length; report(); });
+    try {
+      await pipeline(source, destination, { signal: options.signal });
+      await replaceRemoteFile(connection.sftp, partialPath, target);
     } catch (error) {
-      try { fs.rmSync(partialPath, { force: true }); } catch { /* best effort cleanup */ }
+      if (!options.transferId) {
+        try { await callSftp(connection.sftp, 'unlink', partialPath); } catch { /* best effort cleanup */ }
+      }
       throw error;
     }
     return true;
   }
 
-  async #scpUpload(profile, localPath, remotePath) {
+  async download(profileInput, remotePath, localPath, options = {}) {
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    if (profile.transferMode === 'scp') return this.#scpDownload(profile, remotePath, localPath, options);
+    const connection = await this.connect(profileInput);
+    if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
+    const source = normalizeRemotePath(remotePath);
+    const partialPath = `${localPath}.aux-command-${options.transferId || randomUUID()}.part`;
+    const remoteStat = await callSftp(connection.sftp, 'stat', source);
+    const total = Number(remoteStat?.size || 0);
+    const offset = options.offset > 0 && fs.existsSync(partialPath)
+      ? Math.min(total, fs.statSync(partialPath).size)
+      : 0;
+    let transferred = offset;
+    try {
+      const remote = connection.sftp.createReadStream(source, { start: offset });
+      const local = fs.createWriteStream(partialPath, {
+        flags: offset > 0 ? 'r+' : 'w',
+        start: offset,
+        mode: 0o600
+      });
+      const report = () => {
+        options.onProgress?.(transferred, total);
+        this.#emit('sftp:progress', {
+          profileId: connection.profile.id,
+          direction: 'download',
+          path: source,
+          transferred,
+          total
+        });
+      };
+      report();
+      remote.on('data', (chunk) => { transferred += chunk.length; report(); });
+      await pipeline(remote, local, { signal: options.signal });
+      fs.chmodSync(partialPath, 0o600);
+      fs.renameSync(partialPath, localPath);
+      fs.chmodSync(localPath, 0o600);
+    } catch (error) {
+      if (!options.transferId) {
+        try { fs.rmSync(partialPath, { force: true }); } catch { /* best effort cleanup */ }
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  async #scpUpload(profile, localPath, remotePath, options = {}) {
     if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
     const target = normalizeRemotePath(remotePath);
     const stat = fs.statSync(localPath);
     if (!stat.isFile()) throw new Error('SCP fallback uploads regular files only');
-    await runScp(profile, scpArgs(profile, localPath, scpTarget(profile, target)));
+    await runScp(profile, scpArgs(profile, localPath, scpTarget(profile, target)), options);
     this.#emit('sftp:progress', {
       profileId: profile.id,
       direction: 'upload',
@@ -398,14 +494,14 @@ class SftpService {
     return true;
   }
 
-  async #scpDownload(profile, remotePath, localPath) {
+  async #scpDownload(profile, remotePath, localPath, options = {}) {
     if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
     const source = normalizeRemotePath(remotePath);
     const partialPath = `${localPath}.aux-command-${randomUUID()}.part`;
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-scp-download-'));
     const fetchedPath = path.join(tempDir, path.posix.basename(source));
     try {
-      await runScp(profile, scpArgs(profile, scpTarget(profile, source), tempDir));
+      await runScp(profile, scpArgs(profile, scpTarget(profile, source), tempDir), options);
       fs.renameSync(fetchedPath, partialPath);
       fs.renameSync(partialPath, localPath);
       fs.chmodSync(localPath, 0o600);
@@ -423,6 +519,21 @@ class SftpService {
     } finally {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
     }
+    return true;
+  }
+
+  async cleanupTransfer(profileInput, direction, localPath, remotePath, options = {}) {
+    const transferId = options.transferId;
+    if (!transferId) return false;
+    if (direction === 'download') {
+      try { fs.rmSync(`${localPath}.aux-command-${transferId}.part`, { force: true }); } catch { /* best effort */ }
+      return true;
+    }
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    if (profile.transferMode === 'scp') return false;
+    const connection = await this.connect(profile);
+    const partialPath = `${normalizeRemotePath(remotePath)}.aux-command-${transferId}.part`;
+    try { await callSftp(connection.sftp, 'unlink', partialPath); } catch { /* best effort */ }
     return true;
   }
 
@@ -447,4 +558,4 @@ class SftpService {
   }
 }
 
-module.exports = { SftpService, createOpenSshProxy, isDirectory, modeToString };
+module.exports = { SftpService, createOpenSshProxy, isDirectory, modeToString, replaceRemoteFile };

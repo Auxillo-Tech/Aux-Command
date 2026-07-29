@@ -57,7 +57,7 @@ test('package exposes GitHub release update configuration', () => {
     releaseType: 'release'
   }]);
   assert.match(mainSource, /new UpdateService\(app, getWindow\)/u);
-  assert.match(updateSource, /autoUpdater\.autoDownload = false/u);
+  assert.match(updateSource, /this\.updater\.autoDownload = false/u);
   assert.match(updateSource, /checkForUpdates\(\)/u);
   assert.match(ipcSource, /updates:check/u);
   assert.match(preloadSource, /updates: Object\.freeze/u);

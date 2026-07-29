@@ -15,7 +15,9 @@ tar \
   --exclude='./.cache' \
   --exclude='./.git' \
   --exclude='./.pytest_cache' \
-  --exclude='./__pycache__' \
+  --exclude='*/__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='*.pyo' \
   -cf - -C "$ROOT" . | tar -xf - -C "$STAGE/$BASE"
 
 tar -czf "$DIST/$BASE.tar.gz" -C "$STAGE" "$BASE"

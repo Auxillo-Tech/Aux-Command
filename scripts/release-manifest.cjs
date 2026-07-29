@@ -46,13 +46,14 @@ function artifactKind(name) {
   if (name.endsWith('.tar.gz')) return 'source-tarball';
   if (name.endsWith('.zip')) return 'source-zip';
   if (name.endsWith('-sbom.cdx.json')) return 'cyclonedx-sbom';
+  if (/^latest.*\.ya?ml$/u.test(name)) return 'updater-metadata';
   return 'artifact';
 }
 
-function collectArtifacts(distDir) {
+function collectArtifacts(distDir, version) {
   const allowed = /(?:\.(?:AppImage|deb|rpm|tar\.gz|zip)|-sbom\.cdx\.json)$/u;
   return fs.readdirSync(distDir)
-    .filter((name) => allowed.test(name))
+    .filter((name) => /^latest.*\.ya?ml$/u.test(name) || (name.includes(version) && allowed.test(name)))
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
       const filename = path.join(distDir, name);
@@ -107,7 +108,7 @@ function resolveSigningFingerprint(key) {
 function main() {
   const options = parseArgs(process.argv.slice(2));
   fs.mkdirSync(options.dist, { recursive: true });
-  const artifacts = collectArtifacts(options.dist);
+  const artifacts = collectArtifacts(options.dist, options.version);
   if (artifacts.length === 0) throw new Error(`No release artifacts found in ${options.dist}`);
   const signingFingerprint = options.sign && options.key ? resolveSigningFingerprint(options.key) : null;
 

@@ -9,7 +9,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     layout: 'single',
     paneMinWidth: 320,
     paneMinHeight: 220
-  })
+  }),
+  sessions: []
 });
 
 function normalizeWorkspaceSettings(input = {}) {
@@ -24,11 +25,23 @@ function normalizeWorkspaceSettings(input = {}) {
   };
 }
 
+function normalizeSession(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  if (!source.profileId) return null;
+  return {
+    profileId: String(source.profileId || ''),
+    protocol: String(source.protocol || ''),
+    title: String(source.title || 'Unknown'),
+    startedAt: String(source.startedAt || new Date().toISOString())
+  };
+}
+
 function normalizeSettings(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   return {
     version: 1,
-    workspace: normalizeWorkspaceSettings(source.workspace)
+    workspace: normalizeWorkspaceSettings(source.workspace),
+    sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
   };
 }
 
@@ -45,6 +58,16 @@ class SettingsStore {
     const workspace = normalizeWorkspaceSettings(input);
     this.store.update((data) => ({ ...normalizeSettings(data), workspace }));
     return this.get();
+  }
+
+  saveSessions(sessions) {
+    const normalized = Array.isArray(sessions) ? sessions.map(normalizeSession).filter(Boolean) : [];
+    this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 32) }));
+    return normalized;
+  }
+
+  getSessions() {
+    return normalizeSettings(this.store.get()).sessions || [];
   }
 }
 

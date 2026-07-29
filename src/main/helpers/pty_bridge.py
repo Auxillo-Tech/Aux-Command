@@ -35,6 +35,13 @@ def read_spec(fd: int = 4) -> dict[str, Any]:
         total += len(chunk)
         if total > MAX_CONTROL_BUFFER:
             raise ValueError("PTY specification is too large")
+        try:
+            value = json.loads(b"".join(chunks).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(value, dict):
+            raise ValueError("PTY specification must be an object")
+        return value
     value = json.loads(b"".join(chunks).decode("utf-8"))
     if not isinstance(value, dict):
         raise ValueError("PTY specification must be an object")

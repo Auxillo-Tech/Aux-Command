@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 function normalizeFingerprint(value, label = 'fingerprint') {
   const fingerprint = String(value || '').replace(/\s+/gu, '').toUpperCase();
@@ -114,6 +116,9 @@ function main() {
 
   const manifest = readJson(manifestPath);
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) throw new Error('Manifest has no artifacts');
+  if (manifest.version !== packageJson.version) {
+    throw new Error(`Manifest version ${manifest.version || 'missing'} does not match package version ${packageJson.version}`);
+  }
   const sums = readChecksums(sumsPath);
   const seen = new Set();
   const verified = [];
@@ -121,6 +126,9 @@ function main() {
   for (const artifact of manifest.artifacts) {
     if (!artifact || typeof artifact !== 'object') throw new Error('Invalid manifest artifact entry');
     const name = safeArtifactName(artifact.name);
+    if (!/^latest.*\.ya?ml$/u.test(name) && !name.includes(manifest.version)) {
+      throw new Error(`Artifact does not belong to release ${manifest.version}: ${name}`);
+    }
     if (seen.has(name)) throw new Error(`Duplicate manifest artifact: ${name}`);
     seen.add(name);
     if (!/^[0-9a-f]{64}$/u.test(artifact.sha256 || '')) throw new Error(`Invalid manifest checksum for ${name}`);
@@ -139,6 +147,13 @@ function main() {
 
   for (const name of sums.keys()) {
     if (!seen.has(name)) throw new Error(`SHA256SUMS contains artifact absent from manifest: ${name}`);
+  }
+
+  const requiredKinds = ['appimage', 'deb', 'rpm', 'source-tarball', 'source-zip', 'cyclonedx-sbom', 'updater-metadata'];
+  for (const kind of requiredKinds) {
+    if (!manifest.artifacts.some((artifact) => artifact.kind === kind)) {
+      throw new Error(`Release manifest is missing required artifact kind: ${kind}`);
+    }
   }
 
   const signed = manifest.signing?.status === 'signed-detached-gpg';

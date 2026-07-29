@@ -21,14 +21,22 @@ const { KnownHostService } = require('./services/known-host-service.cjs');
 const { SftpService } = require('./services/sftp-service.cjs');
 const { SystemService } = require('./services/system-service.cjs');
 const { TerminalService } = require('./services/terminal-service.cjs');
+const { TransferQueue } = require('./services/transfer-queue.cjs');
 const { TunnelService } = require('./services/tunnel-service.cjs');
 const { UpdateService } = require('./services/update-service.cjs');
 const { VaultService } = require('./services/vault-service.cjs');
+const { VncBridgeService } = require('./services/vnc-bridge.cjs');
+const { NetworkToolService } = require('./services/network-tools.cjs');
+const { SshKeyService } = require('./services/ssh-key-service.cjs');
+const { ProfileSync } = require('./services/profile-sync.cjs');
+const { LiveMonitorService } = require('./services/live-monitor.cjs');
+const { RemoteDesktopGateway } = require('./services/rdp-gateway.cjs');
 const { registerIpc } = require('./ipc.cjs');
 
 app.setName('Aux Command');
 app.setAppUserModelId('tech.auxillo.command');
 app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
 
 let mainWindow = null;
 let services = null;
@@ -95,7 +103,9 @@ function createWindow() {
       rendererRecoveryTimer = null;
     }
   });
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  if (process.env.AUX_COMMAND_HEADLESS !== '1') {
+    mainWindow.once('ready-to-show', () => mainWindow?.show());
+  }
   mainWindow.on('closed', () => {
     if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer);
     rendererRecoveryTimer = null;
@@ -121,6 +131,21 @@ function initializeServices() {
   const externalService = new ExternalService();
   const systemService = new SystemService();
   const updateService = new UpdateService(app, getWindow);
+  const transferQueue = new TransferQueue(getWindow);
+  const vncBridge = new VncBridgeService();
+  const networkTools = new NetworkToolService();
+  const sshKeyService = new SshKeyService();
+  const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
+  const liveMonitor = new LiveMonitorService();
+  const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow });
+
+  // Route managed transfers through the correct protocol service with full profile data.
+  const transferServiceFor = (profile) => profile.protocol === 'ftp' || profile.protocol === 'ftps' ? ftpService : sftpService;
+  transferQueue.transferService = {
+    upload: (profile, localPath, remotePath, opts) => transferServiceFor(profile).upload(profile, localPath, remotePath, opts),
+    download: (profile, remotePath, localPath, opts) => transferServiceFor(profile).download(profile, remotePath, localPath, opts),
+    cleanup: (profile, direction, localPath, remotePath, opts) => transferServiceFor(profile).cleanupTransfer?.(profile, direction, localPath, remotePath, opts)
+  };
 
   services = {
     profileStore,
@@ -134,7 +159,14 @@ function initializeServices() {
     ftpService,
     externalService,
     systemService,
-    updateService
+    updateService,
+    transferQueue,
+    vncBridge,
+    networkTools,
+    sshKeyService,
+    profileSync,
+    liveMonitor,
+    remoteDesktopGateway
   };
 
   registerIpc({
@@ -171,8 +203,15 @@ app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
   services?.terminalService.closeAll();
   services?.tunnelService.stopAll();
+  services?.transferQueue.cancelAll();
+  services?.networkTools.cancelAll();
+  services?.liveMonitor.cancelAll();
+  services?.remoteDesktopGateway.disconnectAll();
+  services?.externalService.stopAll();
+  services?.profileSync.stop();
   services?.sftpService.disconnectAll();
   services?.ftpService.disconnectAll();
   services?.vaultService.clearMemory();
   services?.promptBroker.cancelAll();
+  services?.vncBridge.stopAll();
 });

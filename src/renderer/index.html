@@ -37,6 +37,11 @@
         <button id="tunnels-button" class="top-action" type="button" title="SSH tunnels"><span class="action-icon">⇄</span><span class="action-label">Tunnels</span></button>
         <button id="updates-button" class="top-action" type="button" title="GitHub release updates"><span class="action-icon">⇧</span><span class="action-label">Updates</span></button>
         <button id="diagnostics-button" class="top-action" type="button" title="System diagnostics"><span class="action-icon">◉</span><span class="action-label">Diagnostics</span></button>
+        <button id="network-tools-button" class="top-action" type="button" title="Network tools (ping, DNS, scan)"><span class="action-icon">NET</span><span class="action-label">Network</span></button>
+        <button id="monitor-button" class="top-action" type="button" title="Live server monitor"><span class="action-icon">MON</span><span class="action-label">Monitor</span></button>
+        <button id="gateway-button" class="top-action" type="button" title="Remote desktop gateway"><span class="action-icon">GW</span><span class="action-label">Gateway</span></button>
+        <button id="sync-button" class="top-action" type="button" title="Profile synchronization"><span class="action-icon">SYNC</span><span class="action-label">Sync</span></button>
+        <button id="sshkeys-button" class="top-action" type="button" title="SSH key manager"><span class="action-icon">KEY</span><span class="action-label">Keys</span></button>
         <button id="website-button" class="avatar-button" type="button" title="auxillo.tech">AUX</button>
       </nav>
     </header>
@@ -154,6 +159,13 @@
       <div id="file-list" class="file-list" aria-busy="false"></div>
       <div id="sftp-empty" class="panel-empty">Open an SSH session, then enable SFTP.</div>
       <div id="transfer-status" class="transfer-status" role="status" aria-live="polite">No active transfer</div>
+      <div class="transfer-queue-section">
+        <button id="queue-toggle" class="queue-toggle" type="button" aria-expanded="false">
+          <span>Transfer queue</span>
+          <span id="queue-count" class="queue-count">0</span>
+        </button>
+        <div id="transfer-queue" class="transfer-queue" hidden>No transfers</div>
+      </div>
     </aside>
 
     <footer class="statusbar">
