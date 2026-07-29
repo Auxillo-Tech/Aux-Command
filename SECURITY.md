@@ -10,7 +10,7 @@ Aux Command is security-sensitive remote-operations software. Do not publish vul
 
 ## Reporting a vulnerability
 
-Report privately through the Auxillo contact channel listed at https://auxillo.tech.
+Report privately to [security@auxillo.tech](mailto:security@auxillo.tech) or through the contact path at https://auxillo.tech.
 
 Include, when safe:
 
