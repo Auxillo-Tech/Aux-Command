@@ -47,3 +47,7 @@ See `docs/GITHUB_RELEASES.md` for the full release workflow, including GPG signi
 ## License
 
 By contributing, you agree that your contributions will be licensed under AGPL-3.0-or-later.
+
+## Code of Conduct
+
+Please read and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
