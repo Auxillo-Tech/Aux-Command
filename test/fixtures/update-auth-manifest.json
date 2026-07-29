@@ -1,0 +1,17 @@
+{
+  "productName": "Aux Command",
+  "packageName": "aux-command",
+  "version": "9.9.9",
+  "signing": {
+    "status": "signed-detached-gpg",
+    "key": "FAC028574B9C6875D10DA4DC6443E86108ABD2A2"
+  },
+  "artifacts": [
+    {
+      "name": "latest-linux.yml",
+      "kind": "updater-metadata",
+      "size": 15,
+      "sha256": "e9dde19cea0ed7d7960949b4287939a3ff445866d4d174dcc9df4d0d5d00efa7"
+    }
+  ]
+}

@@ -90,7 +90,7 @@ test('recovers from a spawn failure and cleanly reuses the tunnel ID', async () 
     assert.equal(harness.events.filter((event) => event.status === 'failed').length, 0);
 
     const fakeSsh = path.join(directory, 'ssh');
-    fs.writeFileSync(fakeSsh, `#!${process.execPath}\nprocess.stderr.write('Local forwarding listening\\n');\nprocess.on('SIGTERM', () => process.exit(0));\nsetInterval(() => {}, 1000);\n`, { mode: 0o755 });
+    fs.writeFileSync(fakeSsh, "#!/bin/sh\nprintf '%s\\n' 'Local forwarding listening' >&2\ntrap 'exit 0' TERM\nwhile :; do sleep 1; done\n", { mode: 0o755 });
     fs.chmodSync(fakeSsh, 0o755);
 
     const started = service.start(tunnelInput());
@@ -116,7 +116,7 @@ test('does not mark a delayed SSH tunnel failure as running before exit', async 
     const service = new TunnelService(profileStore(), () => harness.window);
     process.env.PATH = directory;
     const fakeSsh = path.join(directory, 'ssh');
-    fs.writeFileSync(fakeSsh, `#!${process.execPath}\nsetTimeout(() => { process.stderr.write('Permission denied\\n'); process.exit(255); }, 1500);\n`, { mode: 0o755 });
+    fs.writeFileSync(fakeSsh, "#!/bin/sh\nsleep 1\nprintf '%s\\n' 'Permission denied' >&2\nexit 255\n", { mode: 0o755 });
     fs.chmodSync(fakeSsh, 0o755);
 
     service.start(tunnelInput());

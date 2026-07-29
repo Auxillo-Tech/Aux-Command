@@ -144,10 +144,28 @@ function defaultLocalProfile() {
   }, 'local-shell');
 }
 
+function defaultInfraProfiles() {
+  // Personal infrastructure belongs in ~/.ssh/config or an explicit profile import,
+  // never in the public application source or packaged defaults.
+  return [];
+}
+
+function defaultInfraSnippets() {
+  return [
+    { id: 'sys-health', name: 'System health', command: "echo '=== UPTIME ==='; uptime; echo '=== DISK ==='; df -h; echo '=== MEMORY ==='; free -h; echo '=== FAILED SERVICES ==='; systemctl --failed --no-pager 2>/dev/null || true" },
+    { id: 'net-diag', name: 'Network diagnosis', command: "echo '=== INTERFACES ==='; ip -br addr; echo '=== ROUTES ==='; ip route show; echo '=== LISTENERS ==='; ss -tlnp; echo '=== DNS ==='; resolvectl status 2>/dev/null || cat /etc/resolv.conf" },
+    { id: 'process-health', name: 'Process health', command: "echo '=== LOAD ==='; uptime; echo '=== TOP CPU ==='; ps -eo pid,user,comm,%cpu,%mem --sort=-%cpu | head -15; echo '=== TOP MEMORY ==='; ps -eo pid,user,comm,%cpu,%mem --sort=-%mem | head -15" },
+    { id: 'containers', name: 'Containers', command: "echo '=== DOCKER ==='; docker ps -a 2>/dev/null || echo 'Docker unavailable'; echo '=== PODMAN ==='; podman ps -a 2>/dev/null || echo 'Podman unavailable'" },
+    { id: 'security-quick', name: 'Security quick check', command: "echo '=== LOGINS ==='; last -n 10; echo '=== FAILED SSH ==='; journalctl -u sshd -p warning -n 20 --no-pager 2>/dev/null || journalctl -u ssh -p warning -n 20 --no-pager 2>/dev/null || true; echo '=== FIREWALL ==='; firewall-cmd --state 2>/dev/null || ufw status 2>/dev/null || true" }
+  ];
+}
+
 module.exports = {
   buildExternalCommand,
   buildTerminalCommand,
   buildTunnelCommand,
+  defaultInfraProfiles,
+  defaultInfraSnippets,
   defaultLocalProfile,
   resolveHelper,
   sshBaseArgs

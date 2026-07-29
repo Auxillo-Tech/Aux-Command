@@ -37,7 +37,9 @@
   window.auxCommand = {
     app: {
       getState: async () => ({ version: '0.1.0', name: 'Aux Command', profiles, settings: { version: 1, workspace: { layout: 'single', paneMinWidth: 320, paneMinHeight: 220 } }, snippets: [], sessions: [], tunnels: [], vault: { persistentEncryptionAvailable: true }, diagnostics }),
-      saveWorkspaceSettings: async (workspace) => ({ version: 1, workspace })
+      saveWorkspaceSettings: async (workspace) => ({ version: 1, workspace }),
+      getSessions: async () => [],
+      saveSessions: async (sessions) => sessions
     },
     profiles: {
       list: async () => profiles,
@@ -76,8 +78,29 @@
       upload: async () => ({ canceled: true }), download: async () => ({ canceled: true }), disconnect: async () => true,
       onProgress: (callback) => on('sftp:progress', callback), onError: (callback) => on('sftp:error', callback)
     },
+    transfer: {
+      enqueue: async (spec) => ({ id: `transfer-${++counter}`, status: 'queued', ...spec }),
+      pause: async () => true, resume: async () => true, cancel: async () => true, retry: async () => true,
+      list: async () => [], clearCompleted: async () => 0, onUpdate: (callback) => on('transfer:update', callback)
+    },
+    vnc: { start: async () => ({ id: `vnc-${++counter}`, vncUrl: 'vnc.html?url=ws%3A%2F%2F127.0.0.1%3A5900' }), stop: async () => true, list: async () => [] },
     vault: { status: async () => ({ persistentEncryptionAvailable: true }), has: async () => false, set: async () => ({ persistent: true }), delete: async () => true },
+    updates: {
+      status: async () => ({ state: 'idle', currentVersion: '0.1.0', availableVersion: null }),
+      check: async () => ({ state: 'up-to-date', currentVersion: '0.1.0', availableVersion: null }),
+      download: async () => ({ state: 'idle' }),
+      quitAndInstall: async () => false,
+      onStatus: (callback) => on('updates:status', callback)
+    },
     prompts: { respond: async () => true, onRequest: (callback) => on('prompt:request', callback) },
-    system: { diagnostics: async () => diagnostics, clipboardRead: async () => '', clipboardWrite: async () => true, openWebsite: async () => true }
+    system: { diagnostics: async () => diagnostics, filePath: () => '/tmp/preview-file', clipboardRead: async () => '', clipboardWrite: async () => true, openWebsite: async () => true },
+    network: {
+      ping: async () => ({ stdout: 'ok' }), traceroute: async () => ({ stdout: 'ok' }), dns: async () => ({ stdout: '127.0.0.1' }),
+      portScan: async () => [], whois: async () => ({ stdout: 'ok' }), wakeOnLan: async () => ({ sent: true }), cancelAll: async () => 0
+    },
+    sshKeys: { list: async () => [], generate: async (name) => ({ name, fingerprint: 'SHA256:preview', type: 'ssh-ed25519', comment: '' }), getPublicKey: async () => 'ssh-ed25519 preview', fingerprint: async () => 'SHA256:preview', delete: async () => true },
+    sync: { configure: async (config) => config, syncNow: async () => ({ added: 0, updated: 0 }), status: async () => ({ configured: false }), config: async () => null, disable: async () => ({ configured: false }), onStatus: (callback) => on('sync:status', callback) },
+    monitor: { snapshot: async () => ({ hostname: 'preview', uptime: 'up 1 day', load: '0.10', memory: '1/4 GiB', disk: '10%' }) },
+    gateway: { connect: async () => ({ id: `gateway-${++counter}`, status: 'connected' }), disconnect: async () => true, list: async () => [], onStatus: (callback) => on('gateway:status', callback) }
   };
 })();

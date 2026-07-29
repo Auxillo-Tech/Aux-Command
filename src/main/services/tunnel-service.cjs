@@ -23,7 +23,7 @@ class TunnelService {
     if (!python) throw new Error('Python 3 is required for guarded tunnels');
     if (!executable) throw new Error(`${spec.command} is required for tunnels`);
     const guard = resolveHelper('process_guard.py');
-    const guardArgs = [guard, '--parent-pid', String(process.pid), '--', executable, ...spec.args];
+    const guardArgs = [guard, '--parent-pid', String(process.pid), '--ready-fd', '3', '--', executable, ...spec.args];
     const child = spawn(python, guardArgs, {
       stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
       shell: false,

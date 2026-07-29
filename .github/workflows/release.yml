@@ -2,13 +2,6 @@ name: release
 
 on:
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish artifacts to the matching GitHub Release
-        required: true
-        default: "false"
-        type: choice
-        options: ["false", "true"]
   push:
     tags:
       - "v*.*.*"
@@ -17,6 +10,10 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
@@ -27,8 +24,23 @@ jobs:
     name: Linux x64 release artifacts
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
+      - name: Checkout immutable source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify version and release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid package version: $version" >&2; exit 1; }
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -47,49 +59,66 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit production dependency graph
-        run: npm audit --omit=dev --audit-level=moderate
-
-      - name: Audit complete dependency graph
-        run: npm audit --audit-level=moderate
-
-      - name: Verify npm registry signatures
-        run: npm audit signatures
+      - name: Audit dependency graphs and registry signatures
+        run: |
+          npm audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=moderate
+          npm audit signatures
 
       - name: Run validation suite
         run: npm run check
 
-      - name: Build AppImage, deb and rpm without publishing
+      - name: Import and verify release signing key
+        id: signing
+        shell: bash
+        env:
+          RELEASE_PRIVATE_KEY: ${{ secrets.AUX_COMMAND_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RELEASE_PRIVATE_KEY" ]] || { echo "AUX_COMMAND_GPG_PRIVATE_KEY is required" >&2; exit 1; }
+          printf '%s' "$RELEASE_PRIVATE_KEY" | gpg --batch --import
+          expected="$(gpg --batch --with-colons --show-keys SIGNING_KEY.asc | awk -F: '$1=="fpr" {print toupper($10); exit}')"
+          actual="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1=="fpr" {print toupper($10); exit}')"
+          [[ -n "$expected" && "$actual" == "$expected" ]] || { echo "Release signing key does not match SIGNING_KEY.asc" >&2; exit 1; }
+          echo "fingerprint=$actual" >> "$GITHUB_OUTPUT"
+
+      - name: Build AppImage, deb and rpm
         run: npm run dist:x64 -- --publish never
 
-      - name: Build source archives
+      - name: Build corresponding source archives
         run: bash scripts/source-archives.sh
 
-      - name: Generate release manifest and checksums
-        run: npm run release:manifest -- --no-sign
+      - name: Generate and sign release metadata
+        run: node scripts/release-manifest.cjs --key "${{ steps.signing.outputs.fingerprint }}"
 
-      - name: Verify release integrity
-        run: npm run release:verify -- --allow-unsigned
+      - name: Verify signed release integrity
+        env:
+          AUX_COMMAND_GPG_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
+        run: npm run release:verify
 
       - name: Verify source archive exclusions
+        shell: bash
         run: |
-          tar -tzf dist/aux-command-0.1.0-source.tar.gz | grep -E '(^|/)(node_modules|dist|\.cache)(/|$)' && exit 1 || true
-          unzip -Z1 dist/aux-command-0.1.0-source.zip | grep -E '(^|/)(node_modules|dist|\.cache)(/|$)' && exit 1 || true
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tar -tzf "dist/aux-command-${version}-source.tar.gz" | grep -E '(^|/)(node_modules|dist|\.cache|__pycache__)(/|$)|\.py[co]$' && exit 1 || true
+          unzip -Z1 "dist/aux-command-${version}-source.zip" | grep -E '(^|/)(node_modules|dist|\.cache|__pycache__)(/|$)|\.py[co]$' && exit 1 || true
 
       - name: Attest release artifacts
         if: github.event.repository.private == false
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: |
-            dist/Aux-Command-*.AppImage
-            dist/Aux-Command-*.deb
-            dist/Aux-Command-*.rpm
-            dist/aux-command-*-sbom.cdx.json
-            dist/aux-command-*-source.tar.gz
-            dist/aux-command-*-source.zip
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.AppImage
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.deb
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.rpm
+            dist/aux-command-${{ steps.version.outputs.version }}-sbom.cdx.json
+            dist/aux-command-${{ steps.version.outputs.version }}-source.tar.gz
+            dist/aux-command-${{ steps.version.outputs.version }}-source.zip
             dist/latest*.yml
             dist/release-manifest.json
             dist/SHA256SUMS
+            dist/*.asc
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -97,36 +126,38 @@ jobs:
           name: aux-command-linux-x64-${{ github.ref_name }}
           if-no-files-found: error
           path: |
-            dist/Aux-Command-*.AppImage
-            dist/Aux-Command-*.deb
-            dist/Aux-Command-*.rpm
-            dist/aux-command-*-sbom.cdx.json
-            dist/aux-command-*-source.tar.gz
-            dist/aux-command-*-source.zip
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.AppImage
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.deb
+            dist/Aux-Command-${{ steps.version.outputs.version }}-*.rpm
+            dist/aux-command-${{ steps.version.outputs.version }}-sbom.cdx.json
+            dist/aux-command-${{ steps.version.outputs.version }}-source.tar.gz
+            dist/aux-command-${{ steps.version.outputs.version }}-source.zip
             dist/latest*.yml
             dist/release-manifest.json
             dist/SHA256SUMS
             dist/*.asc
 
-      - name: Publish GitHub Release assets
-        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == 'true'
+      - name: Publish authenticated GitHub Release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "$tag" --notes "Aux Command $tag release candidate."
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tag="v${version}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --verify-tag --title "$tag" --generate-notes
           assets=(
-            dist/Aux-Command-*.AppImage
-            dist/Aux-Command-*.deb
-            dist/Aux-Command-*.rpm
-            dist/aux-command-*-sbom.cdx.json
-            dist/aux-command-*-source.tar.gz
-            dist/aux-command-*-source.zip
+            dist/Aux-Command-${version}-*.AppImage
+            dist/Aux-Command-${version}-*.deb
+            dist/Aux-Command-${version}-*.rpm
+            dist/aux-command-${version}-sbom.cdx.json
+            dist/aux-command-${version}-source.tar.gz
+            dist/aux-command-${version}-source.zip
             dist/latest*.yml
             dist/release-manifest.json
+            dist/release-manifest.json.asc
             dist/SHA256SUMS
+            dist/SHA256SUMS.asc
           )
-          if compgen -G 'dist/*.asc' >/dev/null; then
-            assets+=(dist/*.asc)
-          fi
           gh release upload "$tag" "${assets[@]}" --clobber
