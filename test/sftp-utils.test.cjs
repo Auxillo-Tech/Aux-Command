@@ -10,6 +10,7 @@ const {
   parseProxyJump,
   safeTimestampToIso
 } = require('../src/main/lib/sftp-utils.cjs');
+const { replaceRemoteFile } = require('../src/main/services/sftp-service.cjs');
 
 test('formats SFTP modes and safely handles timestamps', () => {
   assert.equal(modeToString(0o040750), 'drwxr-x---');
@@ -47,4 +48,44 @@ test('parses one ProxyJump hop including usernames, ports and IPv6', () => {
   assert.equal(formatHostPort('2001:db8::20', 22), '[2001:db8::20]:22');
   assert.throws(() => parseProxyJump('one,two'), /one explicit ProxyJump hop/u);
   assert.throws(() => parseProxyJump('host:70000'), /Invalid ProxyJump target/u);
+});
+
+test('remote replacement restores the original if installing the partial file fails', async () => {
+  const calls = [];
+  let backupPath = '';
+  const sftp = {
+    rename(from, to, callback) {
+      calls.push(['rename', from, to]);
+      if (from === '/file.part' && to === '/file.txt') {
+        const error = new Error(calls.length === 1 ? 'destination exists' : 'replacement failed');
+        error.code = calls.length === 1 ? 4 : 5;
+        callback(error);
+        return;
+      }
+      if (from === '/file.txt') backupPath = to;
+      callback(null);
+    },
+    unlink(target, callback) { calls.push(['unlink', target]); callback(null); }
+  };
+  await assert.rejects(() => replaceRemoteFile(sftp, '/file.part', '/file.txt'), /replacement failed/u);
+  assert.match(backupPath, /^\/file\.txt\.aux-backup-/u);
+  assert.deepEqual(calls.at(-1), ['rename', backupPath, '/file.txt']);
+  assert.equal(calls.some(([method, target]) => method === 'unlink' && target === '/file.txt'), false);
+});
+
+test('remote replacement removes only the backup after a successful install', async () => {
+  const calls = [];
+  let first = true;
+  const sftp = {
+    rename(from, to, callback) {
+      calls.push(['rename', from, to]);
+      if (first) { first = false; callback(Object.assign(new Error('destination exists'), { code: 4 })); }
+      else callback(null);
+    },
+    unlink(target, callback) { calls.push(['unlink', target]); callback(null); }
+  };
+  await replaceRemoteFile(sftp, '/file.part', '/file.txt');
+  const backupPath = calls[1][2];
+  assert.deepEqual(calls.at(-1), ['unlink', backupPath]);
+  assert.equal(calls.some(([method, target]) => method === 'unlink' && target === '/file.txt'), false);
 });

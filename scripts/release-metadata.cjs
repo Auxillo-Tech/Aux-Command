@@ -50,8 +50,8 @@ function renderLicenses(components) {
   const header = [
     `Third-party licenses bundled with ${packageJson.build?.productName || packageJson.name} ${packageJson.version}`,
     '',
-    'Generated from the production dependency graph. Aux Command itself remains',
-    'proprietary under the terms in LICENSE.',
+    'Generated from the production dependency graph. Aux Command itself is free',
+    'and open-source software under AGPL-3.0-or-later; see LICENSE.',
     ''
   ].join('\n');
   return `${header}${sections.map((item) => [

@@ -20,10 +20,12 @@
       this.pre.textContent = '';
       container.append(this.pre);
     }
-    write(data) {
+    write(data, callback) {
       if (!this.pre) return;
       this.pre.textContent += String(data).replace(/\x1b\[[0-9;]*m/gu, '').replaceAll('\r', '');
+      callback?.();
     }
+    refresh() {}
     onData(callback) { this.dataListeners.push(callback); return { dispose() {} }; }
     onResize(callback) { this.resizeListeners.push(callback); return { dispose() {} }; }
     onTitleChange(callback) { this.titleListeners.push(callback); return { dispose() {} }; }
@@ -42,6 +44,13 @@
     }
   }
 
+  class SearchAddon {
+    findNext() { return true; }
+    findPrevious() { return true; }
+    clearDecorations() {}
+  }
+
   window.Terminal = Terminal;
   window.FitAddon = { FitAddon };
+  window.SearchAddon = { SearchAddon };
 })();

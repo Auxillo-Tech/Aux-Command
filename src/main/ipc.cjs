@@ -20,6 +20,13 @@ function registerIpc({
   promptBroker,
   systemService,
   updateService,
+  transferQueue,
+  vncBridge,
+  networkTools,
+  sshKeyService,
+  profileSync,
+  liveMonitor,
+  remoteDesktopGateway,
   getWindow
 }) {
   const handle = (channel, handler) => {
@@ -73,6 +80,8 @@ function registerIpc({
   });
 
   handle('app:save-workspace-settings', (workspace) => settingsStore.saveWorkspace(workspace));
+  handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
+  handle('app:get-sessions', () => settingsStore.getSessions());
 
   handle('snippets:list', () => profileStore.snippets());
   handle('snippets:save', (snippet) => profileStore.saveSnippet(snippet));
@@ -129,6 +138,16 @@ function registerIpc({
   handle('terminal:close', (id) => terminalService.close(id));
 
   handle('external:launch', (profile) => externalService.launch(profile));
+  handle('vnc:start', async (profile) => {
+    if (profile.protocol !== 'vnc') throw new Error('VNC bridge requires a VNC profile');
+    const result = await vncBridge.start(profile);
+    return {
+      ...result,
+      vncUrl: `vnc.html?url=${encodeURIComponent(result.url)}&host=${encodeURIComponent(result.host)}&port=${result.port}`
+    };
+  });
+  handle('vnc:stop', (id) => vncBridge.stop(id));
+  handle('vnc:list', () => vncBridge.list());
   handle('tunnel:start', (tunnel) => tunnelService.start(tunnel));
   handle('tunnel:stop', (id) => tunnelService.stop(id));
   handle('tunnel:list', () => tunnelService.list());
@@ -144,8 +163,8 @@ function registerIpc({
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
     const localPath = result.filePaths[0];
     const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-    await fileTransferServiceFor(profile, sftpService, ftpService).upload(profile, localPath, remotePath);
-    return { canceled: false, localPath, remotePath };
+    const transfer = transferQueue.enqueue({ profile, direction: 'upload', localPath, remotePath });
+    return { canceled: false, localPath, remotePath, transfer };
   });
   handle('sftp:upload-paths', async (profile, remoteDirectory, localPaths) => {
     if (!Array.isArray(localPaths) || !localPaths.length) return { uploaded: [] };
@@ -153,8 +172,8 @@ function registerIpc({
     for (const localPath of localPaths.slice(0, 32)) {
       if (typeof localPath !== 'string' || !path.isAbsolute(localPath)) throw new Error('Dropped upload paths must be absolute local files');
       const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-      await fileTransferServiceFor(profile, sftpService, ftpService).upload(profile, localPath, remotePath);
-      uploaded.push({ localPath, remotePath });
+      const transfer = transferQueue.enqueue({ profile, direction: 'upload', localPath, remotePath });
+      uploaded.push({ localPath, remotePath, transferId: transfer.id });
     }
     return { uploaded };
   });
@@ -164,10 +183,23 @@ function registerIpc({
       defaultPath: path.join(app.getPath('downloads'), path.posix.basename(remotePath))
     });
     if (result.canceled || !result.filePath) return { canceled: true };
-    await fileTransferServiceFor(profile, sftpService, ftpService).download(profile, remotePath, result.filePath);
-    return { canceled: false, localPath: result.filePath };
+    const transfer = transferQueue.enqueue({
+      profile,
+      direction: 'download',
+      remotePath,
+      localPath: result.filePath
+    });
+    return { canceled: false, localPath: result.filePath, remotePath, transfer };
   });
   handle('sftp:disconnect', (profileId, protocol) => protocol === 'ftp' || protocol === 'ftps' ? ftpService.disconnect(profileId) : sftpService.disconnect(profileId));
+
+  handle('transfer:enqueue', (spec) => transferQueue.enqueue(spec));
+  handle('transfer:pause', (id) => transferQueue.pause(id));
+  handle('transfer:resume', (id) => transferQueue.resume(id));
+  handle('transfer:cancel', (id) => transferQueue.cancel(id));
+  handle('transfer:retry', (id) => transferQueue.retry(id));
+  handle('transfer:list', () => transferQueue.list());
+  handle('transfer:clear-completed', () => transferQueue.clearCompleted());
 
   handle('vault:status', () => vaultService.status());
   handle('vault:has', (id) => vaultService.has(id));
@@ -176,6 +208,28 @@ function registerIpc({
 
   handle('prompt:respond', (id, response) => promptBroker.respond(id, response));
   handle('system:diagnostics', () => systemService.diagnostics());
+  handle('network:ping', (host, count) => networkTools.ping(host, count));
+  handle('network:traceroute', (host) => networkTools.traceroute(host));
+  handle('network:dns', (host, type) => networkTools.dnsLookup(host, type));
+  handle('network:portscan', (host, ports) => networkTools.portScan(host, ports));
+  handle('network:whois', (query) => networkTools.whois(query));
+  handle('network:wol', (mac) => networkTools.wakeOnLan(mac));
+  handle('network:cancel-all', () => networkTools.cancelAll());
+  const keyMetadata = (key) => ({ name: key.name, fingerprint: key.fingerprint, type: key.type, comment: key.comment || '' });
+  handle('sshkey:list', () => sshKeyService.listKeys().map(keyMetadata));
+  handle('sshkey:generate', (name, type, passphrase) => keyMetadata(sshKeyService.generateKey(name, type, passphrase)));
+  handle('sshkey:pubkey', (name) => sshKeyService.getPublicKey(name));
+  handle('sshkey:fingerprint', (name) => sshKeyService.getFingerprint(name));
+  handle('sshkey:delete', (name) => sshKeyService.deleteKey(name));
+  handle('sync:configure', (config) => profileSync.configure(config));
+  handle('sync:now', () => profileSync.syncNow());
+  handle('sync:status', () => profileSync.getStatus());
+  handle('sync:config', () => profileSync.getConfig());
+  handle('sync:disable', () => profileSync.disable());
+  handle('monitor:snapshot', (profile) => liveMonitor.snapshot(profile));
+  handle('gateway:connect', (spec) => remoteDesktopGateway.connect(spec));
+  handle('gateway:disconnect', (id) => remoteDesktopGateway.disconnect(id));
+  handle('gateway:list', () => remoteDesktopGateway.list());
   handle('updates:status', () => updateService.getStatus());
   handle('updates:check', () => updateService.check());
   handle('updates:download', () => updateService.download());

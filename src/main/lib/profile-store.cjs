@@ -2,19 +2,47 @@
 
 const path = require('node:path');
 const { JsonStore } = require('./json-store.cjs');
-const { defaultLocalProfile } = require('./command-builder.cjs');
+const { defaultLocalProfile, defaultInfraProfiles, defaultInfraSnippets } = require('./command-builder.cjs');
 const { normalizeProfile, normalizeSnippet } = require('./validation.cjs');
 const { readDefaultSshConfig } = require('./ssh-config-parser.cjs');
+
+const PROFILE_STORE_VERSION = 2;
+const MANAGED_CONNECTIVITY_FIELDS = Object.freeze([
+  'name', 'protocol', 'group', 'host', 'port', 'username', 'identityFile', 'knownHostsFile',
+  'sshAlias', 'useSshConfig', 'proxyJump', 'keepAliveSeconds', 'notes'
+]);
 
 class ProfileStore {
   constructor(dataDir) {
     this.store = new JsonStore(path.join(dataDir, 'profiles.json'), {
-      version: 1,
-      profiles: [defaultLocalProfile()],
-      snippets: [
-        { id: 'system-health', name: 'System health', command: 'uptime; free -h; df -h' },
-        { id: 'list-services', name: 'Failed services', command: 'systemctl --failed --no-pager' }
-      ]
+      version: PROFILE_STORE_VERSION,
+      profiles: [defaultLocalProfile(), ...defaultInfraProfiles()],
+      snippets: defaultInfraSnippets()
+    });
+    this.#migrateManagedProfiles();
+  }
+
+  #migrateManagedProfiles() {
+    const current = this.store.get();
+    if (Number(current.version || 1) >= PROFILE_STORE_VERSION) return;
+
+    const managedProfiles = defaultInfraProfiles();
+    this.store.update((data) => {
+      data.profiles = Array.isArray(data.profiles) ? data.profiles : [defaultLocalProfile()];
+      for (const managed of managedProfiles) {
+        const index = data.profiles.findIndex((profile) => profile.id === managed.id);
+        if (index < 0) {
+          data.profiles.push(managed);
+          continue;
+        }
+
+        const migrated = { ...data.profiles[index] };
+        for (const field of MANAGED_CONNECTIVITY_FIELDS) migrated[field] = managed[field];
+        data.profiles[index] = normalizeProfile(migrated, managed.id);
+      }
+      data.snippets = Array.isArray(data.snippets) ? data.snippets : defaultInfraSnippets();
+      data.version = PROFILE_STORE_VERSION;
+      return data;
     });
   }
 
@@ -99,13 +127,15 @@ class ProfileStore {
   }
 
   exportSafe() {
-    const data = this.store.get();
+    // Export only fields accepted by the current profile schema. Reading through
+    // list() deliberately drops legacy or manually injected password/token fields.
+    const profiles = this.list();
     return {
       format: 'aux-command-profiles',
       version: 1,
       exportedAt: new Date().toISOString(),
-      profiles: data.profiles.map(({ credentialId, ...profile }) => ({ ...profile, credentialId: '' })),
-      snippets: data.snippets || []
+      profiles: profiles.map((profile) => ({ ...profile, credentialId: '' })),
+      snippets: this.snippets()
     };
   }
 

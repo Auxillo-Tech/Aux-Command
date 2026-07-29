@@ -16,7 +16,9 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   app: Object.freeze({
     getState: () => invoke('app:get-state'),
-    saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace)
+    saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace),
+    saveSessions: (sessions) => invoke('app:save-sessions', sessions),
+    getSessions: () => invoke('app:get-sessions')
   }),
   profiles: Object.freeze({
     list: () => invoke('profiles:list'),
@@ -40,6 +42,11 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     onExit: (callback) => subscribe('terminal:exit', callback)
   }),
   external: Object.freeze({ launch: (profile) => invoke('external:launch', profile) }),
+  vnc: Object.freeze({
+    start: (profile) => invoke('vnc:start', profile),
+    stop: (id) => invoke('vnc:stop', id),
+    list: () => invoke('vnc:list')
+  }),
   snippets: Object.freeze({
     list: () => invoke('snippets:list'),
     save: (snippet) => invoke('snippets:save', snippet),
@@ -65,6 +72,17 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     onProgress: (callback) => subscribe('sftp:progress', callback),
     onError: (callback) => subscribe('sftp:error', callback)
   }),
+  transfer: Object.freeze({
+    enqueue: (spec) => invoke('transfer:enqueue', spec),
+    pause: (id) => invoke('transfer:pause', id),
+    resume: (id) => invoke('transfer:resume', id),
+    cancel: (id) => invoke('transfer:cancel', id),
+    retry: (id) => invoke('transfer:retry', id),
+    list: () => invoke('transfer:list'),
+    clearCompleted: () => invoke('transfer:clear-completed'),
+    onUpdate: (callback) => subscribe('transfer:update', callback),
+    onList: (callback) => subscribe('transfer:list', callback)
+  }),
   vault: Object.freeze({
     status: () => invoke('vault:status'),
     has: (id) => invoke('vault:has', id),
@@ -88,5 +106,38 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     clipboardRead: () => invoke('clipboard:read-text'),
     clipboardWrite: (text) => invoke('clipboard:write-text', text),
     openWebsite: () => invoke('system:open-website')
+  }),
+  network: Object.freeze({
+    ping: (host, count) => invoke('network:ping', host, count),
+    traceroute: (host) => invoke('network:traceroute', host),
+    dns: (host, type) => invoke('network:dns', host, type),
+    portScan: (host, ports) => invoke('network:portscan', host, ports),
+    whois: (query) => invoke('network:whois', query),
+    wakeOnLan: (mac) => invoke('network:wol', mac),
+    cancelAll: () => invoke('network:cancel-all')
+  }),
+  sshKeys: Object.freeze({
+    list: () => invoke('sshkey:list'),
+    generate: (name, type, passphrase) => invoke('sshkey:generate', name, type, passphrase),
+    getPublicKey: (name) => invoke('sshkey:pubkey', name),
+    fingerprint: (name) => invoke('sshkey:fingerprint', name),
+    delete: (name) => invoke('sshkey:delete', name)
+  }),
+  sync: Object.freeze({
+    configure: (config) => invoke('sync:configure', config),
+    syncNow: () => invoke('sync:now'),
+    status: () => invoke('sync:status'),
+    config: () => invoke('sync:config'),
+    disable: () => invoke('sync:disable'),
+    onStatus: (callback) => subscribe('sync:status', callback)
+  }),
+  monitor: Object.freeze({
+    snapshot: (profile) => invoke('monitor:snapshot', profile)
+  }),
+  gateway: Object.freeze({
+    connect: (spec) => invoke('gateway:connect', spec),
+    disconnect: (id) => invoke('gateway:disconnect', id),
+    list: () => invoke('gateway:list'),
+    onStatus: (callback) => subscribe('gateway:status', callback)
   })
 }));

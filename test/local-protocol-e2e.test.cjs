@@ -110,8 +110,17 @@ async function createSshdFixture() {
   };
 }
 
-test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { skip: hasSshFixtureTools ? false : 'OpenSSH server/client tools are not installed' }, async () => {
-  const fixture = await createSshdFixture();
+test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { skip: hasSshFixtureTools ? false : 'OpenSSH server/client tools are not installed' }, async (t) => {
+  let fixture;
+  try {
+    fixture = await createSshdFixture();
+  } catch (error) {
+    if (error?.code === 'EPERM') {
+      t.skip('Loopback listening is not permitted in this environment');
+      return;
+    }
+    throw error;
+  }
   const originalHome = process.env.HOME;
   process.env.HOME = path.join(fixture.directory, 'home');
   try {
@@ -303,7 +312,8 @@ test('local socat fixture supports bundled serial bridge terminal flows', { skip
     '-d', '-d',
     `pty,link=${left},raw,echo=0`,
     `pty,link=${right},raw,echo=0`
-  ], { stdio: ['ignore', 'ignore', 'pipe'], shell: false });
+  ], { stdio: 'ignore', shell: false });
+  socat.unref();
   try {
     for (let attempt = 0; attempt < 50 && (!fs.existsSync(left) || !fs.existsSync(right)); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -330,21 +340,27 @@ test('local socat fixture supports bundled serial bridge terminal flows', { skip
       cwd: directory
     });
 
-    const peer = fs.createReadStream(right, { encoding: 'utf8' });
-    const peerWriter = fs.createWriteStream(right, { encoding: 'utf8' });
+    const peerFd = fs.openSync(right, fs.constants.O_RDWR | fs.constants.O_NONBLOCK);
     let peerInput = '';
-    peer.on('data', (chunk) => { peerInput += chunk; });
-    peer.on('error', (error) => {
-      if (error.code !== 'EIO') throw error;
-    });
-    peerWriter.on('error', (error) => {
-      if (error.code !== 'EIO') throw error;
-    });
-    peerWriter.write('AUX_SERIAL_FROM_DEVICE\n');
+    const peerBuffer = Buffer.alloc(4096);
+    const readPeer = () => {
+      while (true) {
+        try {
+          const bytes = fs.readSync(peerFd, peerBuffer, 0, peerBuffer.length, null);
+          if (bytes <= 0) return;
+          peerInput += peerBuffer.subarray(0, bytes).toString('utf8');
+        } catch (error) {
+          if (error.code === 'EAGAIN' || error.code === 'EWOULDBLOCK' || error.code === 'EIO') return;
+          throw error;
+        }
+      }
+    };
+    fs.writeSync(peerFd, 'AUX_SERIAL_FROM_DEVICE\n');
     terminalService.write(session.id, 'AUX_SERIAL_FROM_TERMINAL\n');
 
     let output = '';
     for (let attempt = 0; attempt < 50; attempt += 1) {
+      readPeer();
       for (const event of terminalEvents.splice(0)) {
         if (event.channel === 'terminal:data' && event.payload.id === session.id) output += event.payload.data;
       }
@@ -352,8 +368,7 @@ test('local socat fixture supports bundled serial bridge terminal flows', { skip
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     terminalService.close(session.id);
-    peer.destroy();
-    peerWriter.destroy();
+    try { fs.closeSync(peerFd); } catch { /* already closed */ }
     assert.match(output, /AUX_SERIAL_FROM_DEVICE/u);
     assert.match(peerInput, /AUX_SERIAL_FROM_TERMINAL/u);
   } finally {
@@ -362,7 +377,7 @@ test('local socat fixture supports bundled serial bridge terminal flows', { skip
   }
 });
 
-test('loopback TCP fixture supports bundled telnet bridge terminal flows', async () => {
+test('loopback TCP fixture supports bundled telnet bridge terminal flows', async (t) => {
   const server = net.createServer((socket) => {
     socket.write('AUX_TELNET_READY\n');
     socket.on('data', (chunk) => {
@@ -372,7 +387,14 @@ test('loopback TCP fixture supports bundled telnet bridge terminal flows', async
   const port = await new Promise((resolve, reject) => {
     server.listen(0, '127.0.0.1', () => resolve(server.address().port));
     server.on('error', reject);
+  }).catch((error) => {
+    if (error?.code === 'EPERM') return null;
+    throw error;
   });
+  if (port === null) {
+    t.skip('Loopback listening is not permitted in this environment');
+    return;
+  }
   try {
     const terminalEvents = [];
     const terminalService = new TerminalService(() => ({

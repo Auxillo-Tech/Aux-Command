@@ -22,6 +22,18 @@ test('creates, updates, exports and deletes profiles without exporting credentia
     const exported = store.exportSafe();
     assert.equal(exported.format, 'aux-command-profiles');
     assert.equal(exported.profiles.find((profile) => profile.id === created.id).credentialId, '');
+
+    const profileFile = path.join(directory, 'profiles.json');
+    const raw = JSON.parse(fs.readFileSync(profileFile, 'utf8'));
+    const stored = raw.profiles.find((profile) => profile.id === created.id);
+    stored.password = 'legacy-password';
+    stored.passphrase = 'legacy-passphrase';
+    stored.apiToken = 'legacy-token';
+    stored.nestedSecret = { token: 'nested-token' };
+    fs.writeFileSync(profileFile, JSON.stringify(raw));
+    const hardenedExport = new ProfileStore(directory).exportSafe();
+    const serialized = JSON.stringify(hardenedExport);
+    assert.doesNotMatch(serialized, /legacy-password|legacy-passphrase|legacy-token|nested-token/u);
     assert.equal(store.delete(created.id), true);
     assert.equal(store.get(created.id), null);
   } finally {
@@ -90,6 +102,33 @@ test('creates, updates and deletes command snippets without storing control char
     assert.throws(() => store.saveSnippet({ name: 'Bad', command: 'printf "bad\u0000"' }), /control characters/u);
     assert.equal(store.deleteSnippet(created.id), true);
     assert.equal(store.snippets().some((snippet) => snippet.id === created.id), false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('migrates old stores without injecting vendor infrastructure or deleting custom profiles', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-profiles-migrate-'));
+  const filename = path.join(directory, 'profiles.json');
+  try {
+    fs.writeFileSync(filename, JSON.stringify({
+      version: 1,
+      profiles: [
+        { id: 'local-shell', name: 'Local', protocol: 'local', group: 'Local' },
+        {
+          id: 'custom-lab', name: 'Custom lab', protocol: 'ssh', group: 'Custom', host: 'lab.example.test', port: 2200
+        }
+      ],
+      snippets: [{ id: 'custom-snippet', name: 'Custom', command: 'true' }]
+    }), { mode: 0o600 });
+
+    const store = new ProfileStore(directory);
+    assert.equal(store.get('custom-lab').port, 2200, 'custom profiles must survive migration unchanged');
+    assert.equal(store.list().some((profile) => profile.id.startsWith('infra-')), false);
+    assert.ok(store.snippets().some((snippet) => snippet.id === 'custom-snippet'));
+
+    const persisted = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    assert.equal(persisted.version, 2);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
