@@ -22,26 +22,45 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Install Linux packaging dependencies
-        run: sudo apt-get update && sudo apt-get install -y python3 rpm
+
+      - name: Install Linux packaging and diagnostics dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 \
+            rpm \
+            libarchive-tools \
+            xz-utils \
+            iputils-ping \
+            traceroute \
+            dnsutils \
+            whois \
+            socat
+
       - name: Install JavaScript dependencies deterministically
         run: npm ci
+
       - name: Validate source and tests
         run: npm run check
+
       - name: Audit dependency vulnerabilities and registry signatures
         run: |
           npm audit --omit=dev --audit-level=high
           npm audit signatures
+
       - name: Build x64 Linux packages and production SBOM without publishing
         run: npm run dist:x64 -- --publish never
+
       - name: Build source archives
         run: bash scripts/source-archives.sh
+
       - name: Generate and verify unsigned CI release metadata
         run: |
           npm run release:manifest -- --no-sign
           npm run release:verify -- --allow-unsigned
+
       - name: Attest build provenance
-        if: github.event_name != 'pull_request' && github.event.repository.private == false
+        if: github.event_name != 'pull_request' && github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: |
@@ -54,9 +73,16 @@ jobs:
             dist/latest*.yml
             dist/SHA256SUMS
             dist/release-manifest.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+
+      # Full package artifacts are ~330MB each. Uploading on every main push exhausted
+      # GitHub Actions artifact storage and failed otherwise-green builds. Keep build
+      # verification on every push; only upload on tags or manual dispatch.
+      - name: Upload workflow artifacts
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: aux-command-linux-x64
+          retention-days: 5
           path: |
             dist/*.AppImage
             dist/*.deb
