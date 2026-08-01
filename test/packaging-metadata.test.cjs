@@ -43,3 +43,17 @@ test('AUR PKGBUILDs match the current version and hard dependencies', () => {
     assert.match(pkgbuild, /freerdp: RDP sessions/u, `${rel} optdepends`);
   }
 });
+
+test('website kit references bundled assets and current version', () => {
+  const html = read('website/index.html');
+  // Every referenced local asset exists.
+  for (const match of html.matchAll(/(?:src|href)="((?:assets|screenshots)\/[^"]+)"/gu)) {
+    assert.ok(fs.existsSync(path.join(root, 'website', match[1])), `missing website asset ${match[1]}`);
+  }
+  assert.match(html, /<title>Aux Command/u);
+  assert.match(html, new RegExp(`Aux-Command-${pkg.version.replace(/\./gu, '\\.')}-x86_64\\.AppImage`, 'u'));
+  assert.match(html, /auxillo\.tech/u);
+  assert.match(html, /AGPL-3\.0/u);
+  // Section tags are balanced.
+  assert.equal((html.match(/<section/gu) || []).length, (html.match(/<\/section>/gu) || []).length);
+});
