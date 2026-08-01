@@ -622,6 +622,15 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .status-dot.error { background: var(--danger); box-shadow: 0 0 6px rgba(255, 92, 119, .5); }
 .statusbar-link { padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; font-size: 11px; letter-spacing: .01em; }
 .statusbar-link:hover { background: rgba(255, 255, 255, .06); color: var(--accent); }
+.statusbar-cluster { display: flex; align-items: center; gap: 8px; margin-left: 4px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(53, 211, 201, .08); color: var(--muted); cursor: pointer; font-size: 11px; transition: border-color .14s ease, background .14s ease, color .14s ease; }
+.statusbar-cluster:hover { border-color: rgba(53, 211, 201, .4); background: rgba(53, 211, 201, .16); color: var(--text); }
+.cluster-icon { color: var(--accent-2); font-family: var(--mono); font-weight: 700; }
+.cluster-summary { font-weight: 560; }
+.cluster-dots { display: flex; gap: 4px; }
+.cluster-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.cluster-dot.status-running { background: var(--accent-2); box-shadow: 0 0 6px rgba(53, 211, 201, .55); }
+.cluster-dot.status-starting, .cluster-dot.status-stopping { background: var(--warning); animation: pulse 1s infinite alternate; }
+.cluster-dot.status-failed { background: var(--danger); }
 @keyframes pulse { to { opacity: .35; } }
 
 /* ── Toasts ────────────────────────────────────────────────────────────── */

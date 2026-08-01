@@ -482,3 +482,11 @@ test('log keyword highlighting is escape-aware, display-only, and persisted', ()
   assert.match(indexHtml, /id="highlight-toggle"/u);
   assert.match(styles, /\.highlight-row/u);
 });
+
+test('pinned tunnel status cluster reflects live tunnel state', () => {
+  assert.match(indexHtml, /id="tunnel-status-cluster"/u);
+  assert.match(renderer, /function renderTunnelStatusCluster\(\)/u);
+  assert.match(renderer, /\['running', 'starting', 'stopping'\]\.includes\(tunnel\.status\)/u);
+  assert.match(renderer, /elements\.tunnelStatusCluster\.addEventListener\('click', openTunnelsModal\)/u);
+  assert.match(styles, /\.statusbar-cluster/u);
+});
