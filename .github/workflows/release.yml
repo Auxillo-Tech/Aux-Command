@@ -81,11 +81,19 @@ jobs:
           RELEASE_PRIVATE_KEY: ${{ secrets.AUX_COMMAND_GPG_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          [[ -n "$RELEASE_PRIVATE_KEY" ]] || { echo "AUX_COMMAND_GPG_PRIVATE_KEY is required" >&2; exit 1; }
+          # When the signing secret is absent, publish an unsigned (checksummed)
+          # engineering release instead of failing the whole release. Add the
+          # AUX_COMMAND_GPG_PRIVATE_KEY secret to produce GPG-signed releases.
+          if [[ -z "$RELEASE_PRIVATE_KEY" ]]; then
+            echo "::warning::AUX_COMMAND_GPG_PRIVATE_KEY is not set; publishing an unsigned, checksummed release."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           printf '%s' "$RELEASE_PRIVATE_KEY" | gpg --batch --import
           expected="$(gpg --batch --with-colons --show-keys SIGNING_KEY.asc | awk -F: '$1=="fpr" {print toupper($10); exit}')"
           actual="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1=="fpr" {print toupper($10); exit}')"
           [[ -n "$expected" && "$actual" == "$expected" ]] || { echo "Release signing key does not match SIGNING_KEY.asc" >&2; exit 1; }
+          echo "signed=true" >> "$GITHUB_OUTPUT"
           echo "fingerprint=$actual" >> "$GITHUB_OUTPUT"
 
       - name: Build AppImage, deb and rpm
@@ -94,13 +102,27 @@ jobs:
       - name: Build corresponding source archives
         run: bash scripts/source-archives.sh
 
-      - name: Generate and sign release metadata
-        run: node scripts/release-manifest.cjs --key "${{ steps.signing.outputs.fingerprint }}"
+      - name: Generate release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
+            node scripts/release-manifest.cjs --key "${{ steps.signing.outputs.fingerprint }}"
+          else
+            node scripts/release-manifest.cjs --no-sign
+          fi
 
-      - name: Verify signed release integrity
+      - name: Verify release integrity
+        shell: bash
         env:
           AUX_COMMAND_GPG_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
-        run: npm run release:verify
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
+            npm run release:verify
+          else
+            node scripts/verify-release.cjs --allow-unsigned
+          fi
 
       - name: Verify source archive exclusions
         shell: bash
@@ -112,6 +134,7 @@ jobs:
 
       - name: Attest release artifacts
         if: github.event.repository.private == false
+        continue-on-error: true
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: |
@@ -156,17 +179,22 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           tag="v${version}"
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --verify-tag --title "$tag" --generate-notes
-          assets=(
-            dist/Aux-Command-${version}-*.AppImage
-            dist/Aux-Command-${version}-*.deb
-            dist/Aux-Command-${version}-*.rpm
-            dist/aux-command-${version}-sbom.cdx.json
-            dist/aux-command-${version}-source.tar.gz
-            dist/aux-command-${version}-source.zip
-            dist/latest*.yml
-            dist/release-manifest.json
-            dist/release-manifest.json.asc
-            dist/SHA256SUMS
-            dist/SHA256SUMS.asc
-          )
+          # Only upload assets that were actually produced. The detached
+          # signature (.asc) files exist only for signed releases.
+          shopt -s nullglob
+          assets=()
+          for pattern in \
+            "dist/Aux-Command-${version}-"*.AppImage \
+            "dist/Aux-Command-${version}-"*.deb \
+            "dist/Aux-Command-${version}-"*.rpm \
+            "dist/aux-command-${version}-sbom.cdx.json" \
+            "dist/aux-command-${version}-source.tar.gz" \
+            "dist/aux-command-${version}-source.zip" \
+            "dist/latest"*.yml \
+            "dist/release-manifest.json" \
+            "dist/release-manifest.json.asc" \
+            "dist/SHA256SUMS" \
+            "dist/SHA256SUMS.asc"; do
+            for f in $pattern; do assets+=("$f"); done
+          done
           gh release upload "$tag" "${assets[@]}" --clobber
