@@ -135,23 +135,23 @@ Packaged accessibility/source assertions passed:
 - Latest GitHub Actions `Linux build` on `main` completed successfully for commit `a52e0fa` and produced the `aux-command-linux-x64` workflow artifact.
 - Public-facing GitHub documentation now includes professional README content, supported operating system/package guidance, and a dedicated `INSTALL.md`.
 
-## 0.2.3 local build
+## 0.3.0 local build
 
-The 0.2.3 codebase (embedded RDP, SSH config Include parsing, multi-hop
+The 0.3.0 codebase (embedded RDP, SSH config Include parsing, multi-hop
 ProxyJump, log highlighting, connection health, redesigned interface) builds
 cleanly into all three Linux package formats with `npm run dist:x64`:
 
 | Artifact | Size (bytes) |
 |---|---:|
-| `Aux-Command-0.2.3-x86_64.AppImage` | 136,153,785 |
-| `Aux-Command-0.2.3-amd64.deb` | 105,780,888 |
-| `Aux-Command-0.2.3-x86_64.rpm` | 91,592,777 |
+| `Aux-Command-0.3.0-x86_64.AppImage` | 136,153,733 |
+| `Aux-Command-0.3.0-amd64.deb` | 105,780,516 |
+| `Aux-Command-0.3.0-x86_64.rpm` | 91,604,597 |
 
 Structural validation: the AppImage is a valid type-2 image and boots to the
-real renderer (CDP-confirmed); the `.deb` control declares `aux-command 0.2.3
+real renderer (CDP-confirmed); the `.deb` control declares `aux-command 0.3.0
 amd64` with the correct runtime `Depends`; the `.rpm` header reports
-`aux-command 0.2.3 x86_64`, `AGPL-3.0-or-later`. SHA-256 digests for a given
-build are written to `dist/Aux-Command-0.2.3-SHA256SUMS.txt`. Canonical,
+`aux-command 0.3.0 x86_64`, `AGPL-3.0-or-later`. SHA-256 digests for a given
+build are written to `dist/Aux-Command-0.3.0-SHA256SUMS.txt`. Canonical,
 GPG-signed release artifacts are produced by the GitHub Actions release
 workflow on tag; local build digests are not pinned here because they differ
 per build host.

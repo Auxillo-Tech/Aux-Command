@@ -2,7 +2,7 @@
 
 Aux Command currently ships as a Linux x86_64 desktop application.
 
-Supported package outputs for the 0.2.x release line:
+Supported package outputs for the 0.3.x release line:
 
 ```text
 Aux-Command-<version>-x86_64.AppImage
@@ -68,14 +68,14 @@ The helper supports `apt-get`, `dnf`, `pacman`, and `zypper` based distributions
 Best for portable use or distributions without a native package.
 
 ```bash
-chmod +x Aux-Command-0.2.3-x86_64.AppImage
-./Aux-Command-0.2.3-x86_64.AppImage
+chmod +x Aux-Command-0.3.0-x86_64.AppImage
+./Aux-Command-0.3.0-x86_64.AppImage
 ```
 
 If your system does not support AppImage FUSE mounting:
 
 ```bash
-./Aux-Command-0.2.3-x86_64.AppImage --appimage-extract
+./Aux-Command-0.3.0-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
@@ -88,7 +88,7 @@ Optional desktop integration can be handled by your desktop environment or an Ap
 Tested target family: Ubuntu LTS x86_64.
 
 ```bash
-sudo apt install ./Aux-Command-0.2.3-amd64.deb
+sudo apt install ./Aux-Command-0.3.0-amd64.deb
 aux-command
 ```
 
@@ -108,7 +108,7 @@ If `freerdp3-x11` is unavailable on your Ubuntu release, use `freerdp2-x11`.
 Expected target family: Debian 12+ x86_64.
 
 ```bash
-sudo apt install ./Aux-Command-0.2.3-amd64.deb
+sudo apt install ./Aux-Command-0.3.0-amd64.deb
 aux-command
 ```
 
@@ -126,7 +126,7 @@ sudo apt install python3 openssh-client mosh freerdp2-x11 tigervnc-viewer
 Primary engineering target family: Fedora x86_64.
 
 ```bash
-sudo dnf install ./Aux-Command-0.2.3-x86_64.rpm
+sudo dnf install ./Aux-Command-0.3.0-x86_64.rpm
 aux-command
 ```
 
@@ -143,7 +143,7 @@ sudo dnf install python3 openssh-clients mosh freerdp tigervnc
 Expected target family: modern RHEL-compatible x86_64 desktop deployments.
 
 ```bash
-sudo dnf install ./Aux-Command-0.2.3-x86_64.rpm
+sudo dnf install ./Aux-Command-0.3.0-x86_64.rpm
 aux-command
 ```
 
@@ -162,7 +162,7 @@ Some enterprise images may require enabling the appropriate desktop, EPEL, or op
 Expected target family: openSUSE Leap/Tumbleweed x86_64.
 
 ```bash
-sudo zypper install ./Aux-Command-0.2.3-x86_64.rpm
+sudo zypper install ./Aux-Command-0.3.0-x86_64.rpm
 aux-command
 ```
 
@@ -289,7 +289,7 @@ For AppImage usage, run the AppImage path directly.
 Try extraction mode:
 
 ```bash
-./Aux-Command-0.2.3-x86_64.AppImage --appimage-extract
+./Aux-Command-0.3.0-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
