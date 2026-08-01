@@ -24,6 +24,7 @@ function registerIpc({
   vncBridge,
   rdpEmbed,
   networkTools,
+  reachabilityService,
   sshKeyService,
   profileSync,
   liveMonitor,
@@ -158,6 +159,7 @@ function registerIpc({
   });
   handle('rdp:stop-embedded', (id) => rdpEmbed.stop(id));
   handle('rdp:list-embedded', () => rdpEmbed.list());
+  handle('reachability:check', (targets) => reachabilityService.check(targets));
   handle('tunnel:start', (tunnel) => tunnelService.start(tunnel));
   handle('tunnel:stop', (id) => tunnelService.stop(id));
   handle('tunnel:list', () => tunnelService.list());

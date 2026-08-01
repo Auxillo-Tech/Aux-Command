@@ -28,6 +28,7 @@ const { VaultService } = require('./services/vault-service.cjs');
 const { VncBridgeService } = require('./services/vnc-bridge.cjs');
 const { RdpEmbedService } = require('./services/rdp-embed.cjs');
 const { NetworkToolService } = require('./services/network-tools.cjs');
+const { ReachabilityService } = require('./services/reachability-service.cjs');
 const { SshKeyService } = require('./services/ssh-key-service.cjs');
 const { ProfileSync } = require('./services/profile-sync.cjs');
 const { LiveMonitorService } = require('./services/live-monitor.cjs');
@@ -142,6 +143,7 @@ function initializeServices() {
   const vncBridge = new VncBridgeService();
   const rdpEmbed = new RdpEmbedService({ vaultService, vncBridge });
   const networkTools = new NetworkToolService();
+  const reachabilityService = new ReachabilityService();
   const sshKeyService = new SshKeyService();
   const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
   const liveMonitor = new LiveMonitorService();
@@ -172,6 +174,7 @@ function initializeServices() {
     vncBridge,
     rdpEmbed,
     networkTools,
+    reachabilityService,
     sshKeyService,
     profileSync,
     liveMonitor,
