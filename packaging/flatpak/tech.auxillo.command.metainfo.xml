@@ -45,7 +45,7 @@
     <keyword>serial</keyword>
   </keywords>
   <releases>
-    <release version="0.2.3" date="2026-07-29">
+    <release version="0.3.0" date="2026-08-01">
       <description>
         <p>Embedded RDP, SSH config Include parsing, multi-hop ProxyJump, log highlighting, connection health, and a redesigned interface.</p>
       </description>

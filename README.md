@@ -68,21 +68,21 @@ Full instructions are in [`INSTALL.md`](INSTALL.md).
 Use this when you want the least invasive installation path.
 
 ```bash
-chmod +x Aux-Command-0.2.3-x86_64.AppImage
-./Aux-Command-0.2.3-x86_64.AppImage
+chmod +x Aux-Command-0.3.0-x86_64.AppImage
+./Aux-Command-0.3.0-x86_64.AppImage
 ```
 
 If the host does not support AppImage FUSE mounting, extract and run it:
 
 ```bash
-./Aux-Command-0.2.3-x86_64.AppImage --appimage-extract
+./Aux-Command-0.3.0-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 ### Debian / Ubuntu
 
 ```bash
-sudo apt install ./Aux-Command-0.2.3-amd64.deb
+sudo apt install ./Aux-Command-0.3.0-amd64.deb
 aux-command
 ```
 
@@ -96,14 +96,14 @@ The Debian package declares the core runtime dependencies:
 Fedora / RHEL-style systems:
 
 ```bash
-sudo dnf install ./Aux-Command-0.2.3-x86_64.rpm
+sudo dnf install ./Aux-Command-0.3.0-x86_64.rpm
 aux-command
 ```
 
 openSUSE-style systems:
 
 ```bash
-sudo zypper install ./Aux-Command-0.2.3-x86_64.rpm
+sudo zypper install ./Aux-Command-0.3.0-x86_64.rpm
 aux-command
 ```
 
@@ -299,7 +299,7 @@ Syntax validated for 5 shell scripts.
 
 Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
 
-Current public release line: **v0.2.3** on GitHub Releases (AppImage, `.deb`, `.rpm`, source archives, SBOM, `SHA256SUMS` + GPG signatures, `SIGNING_KEY.asc`).
+Current public release line: **v0.3.0** on GitHub Releases (AppImage, `.deb`, `.rpm`, source archives, SBOM, `SHA256SUMS` + GPG signatures, `SIGNING_KEY.asc`).
 
 Still open for broader product qualification:
 
