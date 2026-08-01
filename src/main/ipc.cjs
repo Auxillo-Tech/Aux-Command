@@ -82,6 +82,7 @@ function registerIpc({
 
   handle('app:save-workspace-settings', (workspace) => settingsStore.saveWorkspace(workspace));
   handle('app:save-sidebar-settings', (sidebar) => settingsStore.saveSidebar(sidebar));
+  handle('app:save-highlight-settings', (highlight) => settingsStore.saveHighlight(highlight));
   handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
   handle('app:get-sessions', () => settingsStore.getSessions());
 
