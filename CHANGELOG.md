@@ -50,6 +50,10 @@
 - SFTP keyboard activation opens the focused row instead of the previous selection; profile-sync modal buttons enable after the first save; diagnostics refresh replaces the dialog instead of stacking; snippet delete, SSH-key copy/delete, and gateway stop surface errors instead of failing silently.
 - Remote text editing stages downloads in private 0700 temp directories, and the PTY bridge no longer leaks its IPC descriptors into user sessions.
 
+### Packaging
+
+- Added a Flatpak manifest (Flathub-ready, on the Electron base app) with an AppStream metainfo file and desktop entry, plus binary and from-source AUR PKGBUILDs, under `packaging/`. INSTALL.md documents both paths and a metadata test keeps them in sync with the release version.
+
 ### Documentation
 
 - Removed third-party product comparisons; the project now documents its own scope on its own terms.

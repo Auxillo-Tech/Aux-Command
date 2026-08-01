@@ -1,0 +1,69 @@
+# Flatpak manifest for Aux Command.
+#
+# This wraps the released x86_64 AppImage so the Flatpak build does not need a
+# full Node/Electron toolchain. Update `url` and `sha256` for each release
+# (scripts/release-manifest.cjs prints the AppImage SHA-256), then build with:
+#
+#   flatpak-builder --user --install --force-clean build-dir \
+#     packaging/flatpak/tech.auxillo.command.yml
+#
+# Submission to Flathub uses this same manifest with a pinned release URL.
+app-id: tech.auxillo.command
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '23.08'
+command: aux-command
+separate-locales: false
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  # Serial consoles need access to TTY character devices.
+  - --device=all
+  # Aux Command reads the user's SSH configuration and identities.
+  - --filesystem=~/.ssh
+  - --filesystem=xdg-download
+  - --filesystem=host
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.kwalletd5
+  - --env=TMPDIR=/var/tmp
+
+modules:
+  - name: aux-command
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 apprun.sh /app/bin/aux-command
+      - install -Dm644 tech.auxillo.command.desktop /app/share/applications/tech.auxillo.command.desktop
+      - install -Dm644 tech.auxillo.command.metainfo.xml /app/share/metainfo/tech.auxillo.command.metainfo.xml
+      - install -Dm644 icon-256.png /app/share/icons/hicolor/256x256/apps/tech.auxillo.command.png
+      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/tech.auxillo.command.png
+      - install -Dm755 Aux-Command.AppImage /app/extra/Aux-Command.AppImage
+    sources:
+      - type: file
+        # Replace with the pinned release AppImage URL and its SHA-256.
+        url: https://github.com/Auxillo-Tech/Aux-Command/releases/download/v0.2.3/Aux-Command-0.2.3-x86_64.AppImage
+        sha256: REPLACE_WITH_APPIMAGE_SHA256
+        dest-filename: Aux-Command.AppImage
+        only-arches: [x86_64]
+      - type: script
+        dest-filename: apprun.sh
+        commands:
+          - '#!/bin/sh'
+          # --appimage-extract-and-run avoids needing FUSE inside the sandbox.
+          - exec /app/extra/Aux-Command.AppImage --appimage-extract-and-run "$@"
+      - type: file
+        path: tech.auxillo.command.desktop
+      - type: file
+        path: tech.auxillo.command.metainfo.xml
+      - type: file
+        path: ../../build/icons/256x256.png
+        dest-filename: icon-256.png
+      - type: file
+        path: ../../build/icons/512x512.png
+        dest-filename: icon-512.png

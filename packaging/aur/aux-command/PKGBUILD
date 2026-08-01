@@ -1,0 +1,54 @@
+# Maintainer: Auxillo <https://auxillo.tech>
+# From-source AUR package: builds the unpacked Electron app with electron-builder.
+pkgname=aux-command
+pkgver=0.2.3
+pkgrel=1
+pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial"
+arch=('x86_64')
+url="https://auxillo.tech"
+license=('AGPL-3.0-or-later')
+depends=('openssh' 'python')
+makedepends=('nodejs>=22' 'npm' 'git')
+optdepends=(
+  'freerdp: RDP sessions (native and embedded)'
+  'tigervnc: external VNC viewer fallback'
+  'xorg-server-xvfb: embedded RDP rendering'
+  'x11vnc: embedded RDP rendering'
+  'mosh: Mosh sessions'
+  'whois: whois lookups in network tools'
+  'bind: dig-based DNS lookups in network tools'
+)
+provides=('aux-command')
+conflicts=('aux-command-bin')
+options=('!strip')
+source=("git+https://github.com/Auxillo-Tech/Aux-Command.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+  cd "Aux-Command"
+  npm ci
+  # Unpacked directory build; the AUR package installs the resulting tree.
+  npm run pack
+}
+
+check() {
+  cd "Aux-Command"
+  npm run check || true
+}
+
+package() {
+  cd "Aux-Command"
+  install -dm755 "${pkgdir}/opt/${pkgname}"
+  cp -a dist/linux-unpacked/. "${pkgdir}/opt/${pkgname}/"
+
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s "/opt/${pkgname}/aux-command" "${pkgdir}/usr/bin/aux-command"
+
+  install -Dm644 "packaging/flatpak/tech.auxillo.command.desktop" \
+    "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
+  for size in 16 24 32 48 64 96 128 256 512; do
+    install -Dm644 "build/icons/${size}x${size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/tech.auxillo.command.png"
+  done
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
