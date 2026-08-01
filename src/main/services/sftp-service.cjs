@@ -12,7 +12,7 @@ const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { expandHome, normalizeProfile, normalizeRemotePath } = require('../lib/validation.cjs');
 const {
-  connectionSignature, formatHostPort, isDirectory, modeToString, parseProxyJump, safeTimestampToIso
+  connectionSignature, formatHostPort, formatProxyJumpHop, isDirectory, modeToString, parseProxyJumpChain, safeTimestampToIso
 } = require('../lib/sftp-utils.cjs');
 
 function spawnGuarded(command, args, stdio) {
@@ -152,14 +152,19 @@ async function replaceRemoteFile(sftp, partialPath, targetPath) {
 }
 
 function createOpenSshProxy(profile) {
-  const jump = parseProxyJump(profile.proxyJump);
+  // OpenSSH performs the hop-to-hop chaining itself: earlier hops ride the -J
+  // option while the final hop carries the -W stream to the destination.
+  const hops = parseProxyJumpChain(profile.proxyJump);
+  const finalHop = hops[hops.length - 1];
   const args = [
     '-T',
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=15'
   ];
-  if (jump.port !== 22) args.push('-p', String(jump.port));
-  args.push('-W', formatHostPort(profile.host, profile.port), jump.destination);
+  if (profile.knownHostsFile) args.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
+  if (hops.length > 1) args.push('-J', hops.slice(0, -1).map(formatProxyJumpHop).join(','));
+  if (finalHop.port !== 22) args.push('-p', String(finalHop.port));
+  args.push('-W', formatHostPort(profile.host, profile.port), finalHop.destination);
   const child = spawnGuarded('ssh', args, ['pipe', 'pipe', 'pipe']);
 
   let stderr = '';

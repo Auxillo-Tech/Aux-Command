@@ -55,7 +55,6 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 
 - Global terminal appearance presets and import/exportable workspace-level defaults.
 - Per-profile tiled-pane defaults.
-- SSH config Include parsing and stronger ProxyJump chain support.
 - Terminal output logging presets for operator-selected local directories.
 - Detached terminal windows and fullscreen terminal workspace mode.
 - Terminal keyword/syntax highlighting definitions for log triage.

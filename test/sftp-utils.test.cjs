@@ -46,7 +46,7 @@ test('parses one ProxyJump hop including usernames, ports and IPv6', () => {
     host: '2001:db8::10', port: 2200, username: 'ops', destination: 'ops@2001:db8::10'
   });
   assert.equal(formatHostPort('2001:db8::20', 22), '[2001:db8::20]:22');
-  assert.throws(() => parseProxyJump('one,two'), /one explicit ProxyJump hop/u);
+  assert.throws(() => parseProxyJump('one,two'), /single hop/u);
   assert.throws(() => parseProxyJump('host:70000'), /Invalid ProxyJump target/u);
 });
 
@@ -88,4 +88,16 @@ test('remote replacement removes only the backup after a successful install', as
   const backupPath = calls[1][2];
   assert.deepEqual(calls.at(-1), ['unlink', backupPath]);
   assert.equal(calls.some(([method, target]) => method === 'unlink' && target === '/file.txt'), false);
+});
+
+test('parses multi-hop ProxyJump chains and formats hops back for -J', () => {
+  const { parseProxyJumpChain, formatProxyJumpHop } = require('../src/main/lib/sftp-utils.cjs');
+  const hops = parseProxyJumpChain('bastion.example, ops@inner.example:2222 ,[2001:db8::1]:2200');
+  assert.equal(hops.length, 3);
+  assert.deepEqual(hops.map((hop) => hop.host), ['bastion.example', 'inner.example', '2001:db8::1']);
+  assert.deepEqual(hops.map((hop) => hop.port), [22, 2222, 2200]);
+  assert.deepEqual(hops.map(formatProxyJumpHop), ['bastion.example', 'ops@inner.example:2222', '[2001:db8::1]:2200']);
+  assert.deepEqual(parseProxyJumpChain(''), []);
+  assert.throws(() => parseProxyJumpChain('a,,b'), /Invalid ProxyJump chain/u);
+  assert.throws(() => parseProxyJumpChain(Array.from({ length: 9 }, (_, i) => `hop${i}`).join(',')), /at most 8 hops/u);
 });

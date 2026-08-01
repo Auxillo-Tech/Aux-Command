@@ -11,6 +11,8 @@
 
 ### Added
 
+- Added `~/.ssh/config` `Include` directive parsing (globs, nesting, and cycle protection) so hosts split across included files are imported.
+- Added multi-hop ProxyJump chains (`bastion,user@inner:2222`) across SSH terminals, tunnels, and graphical SFTP, replacing the previous single-hop limit.
 - Added a per-connection context menu (also on right-click) with Connect, Edit, Duplicate, Add/Remove favorite, Move to group, and a discoverable Delete with confirmation.
 - Added sidebar group management: create groups from the sidebar, rename or delete groups from their own menu, collapse/expand groups, per-group "new connection here", and a group picker with suggestions in the connection editor. Custom groups persist across restarts.
 

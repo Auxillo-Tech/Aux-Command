@@ -2070,7 +2070,7 @@
     const username = textInput('username', profile.username, { placeholder: 'admin' });
     const identityFile = textInput('identityFile', profile.identityFile, { placeholder: '~/.ssh/id_ed25519' });
     const knownHostsFile = textInput('knownHostsFile', profile.knownHostsFile, { placeholder: '~/.ssh/known_hosts' });
-    const proxyJump = textInput('proxyJump', profile.proxyJump, { placeholder: 'bastion.example.com' });
+    const proxyJump = textInput('proxyJump', profile.proxyJump, { placeholder: 'bastion or user@bastion:2222,inner' });
     const keepAlive = textInput('keepAliveSeconds', profile.keepAliveSeconds ?? 30, { type: 'number', min: 0, max: 600 });
     const startupCommand = node('textarea', { name: 'startupCommand', value: profile.startupCommand || '', placeholder: 'tmux attach || tmux new' });
     startupCommand.value = profile.startupCommand || '';
@@ -2126,7 +2126,7 @@
       field('Username', username, '', '',),
       field('Identity file', identityFile, 'OpenSSH key path. Agent authentication is used automatically when available.'),
       field('Known-hosts file', knownHostsFile, 'Optional OpenSSH known-hosts override for isolated lab or fixture hosts.'),
-      field('ProxyJump', proxyJump, 'SSH terminal sessions and tunnels use the OpenSSH -J option.'),
+      field('ProxyJump', proxyJump, 'One or more bastion hops for the OpenSSH -J option, e.g. bastion or user@bastion:2222,inner. Applies to terminals, tunnels, and graphical SFTP.'),
       field('Keepalive seconds', keepAlive),
       field('SFTP start path', sftpRoot, '', '',),
       field('SSH transfer mode', transferMode, 'SCP is upload/download fallback only for legacy SSH servers without SFTP.'),
