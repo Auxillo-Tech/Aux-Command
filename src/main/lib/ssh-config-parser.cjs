@@ -37,6 +37,66 @@ function tokenize(value) {
   return result;
 }
 
+// Resolve one Include pattern the way OpenSSH does for user configs:
+// "~" expands to the home directory, relative paths are relative to ~/.ssh,
+// and glob characters are supported in the final path segment.
+function resolveIncludePattern(pattern, baseDir) {
+  let candidate = String(pattern || '').trim();
+  if (!candidate) return [];
+  if (candidate.startsWith('~')) candidate = path.join(os.homedir(), candidate.slice(1));
+  if (!path.isAbsolute(candidate)) candidate = path.join(baseDir, candidate);
+  const directory = path.dirname(candidate);
+  const base = path.basename(candidate);
+  const hasGlob = /[*?]/u.test(base);
+  if (/[*?]/u.test(directory)) return []; // mid-path globs are not supported
+  try {
+    if (!hasGlob) {
+      return fs.statSync(candidate).isFile() ? [candidate] : [];
+    }
+    const matcher = new RegExp(`^${base
+      .replace(/[.+^${}()|[\]\\]/gu, '\\$&')
+      .replace(/\*/gu, '.*')
+      .replace(/\?/gu, '.')}$`, 'u');
+    return fs.readdirSync(directory)
+      .filter((name) => matcher.test(name))
+      .sort()
+      .map((name) => path.join(directory, name))
+      .filter((file) => {
+        try { return fs.statSync(file).isFile(); } catch { return false; }
+      });
+  } catch {
+    return [];
+  }
+}
+
+// Inline Include directives so the sequential parser sees one flat document,
+// which matches how OpenSSH treats included content at the include point.
+function expandIncludes(content, baseDir, visited = new Set(), depth = 0) {
+  if (depth > 8) return '';
+  const output = [];
+  for (const rawLine of String(content).split(/\r?\n/u)) {
+    const line = stripInlineComment(rawLine).trim();
+    const match = line.match(/^include\s*(?:=\s*)?(.+)$/iu);
+    if (!match) {
+      output.push(rawLine);
+      continue;
+    }
+    for (const pattern of tokenize(match[1])) {
+      for (const file of resolveIncludePattern(pattern, baseDir)) {
+        const key = path.resolve(file);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        try {
+          output.push(expandIncludes(fs.readFileSync(file, 'utf8'), path.dirname(file), visited, depth + 1));
+        } catch {
+          // Unreadable include files are skipped, matching a permissive import.
+        }
+      }
+    }
+  }
+  return output.join('\n');
+}
+
 function parseSshConfig(content) {
   const records = [];
   let currentRecords = [];
@@ -101,9 +161,11 @@ function parseSshConfig(content) {
 }
 
 function readDefaultSshConfig() {
-  const filename = path.join(os.homedir(), '.ssh', 'config');
+  const sshDir = path.join(os.homedir(), '.ssh');
+  const filename = path.join(sshDir, 'config');
   if (!fs.existsSync(filename)) return [];
-  return parseSshConfig(fs.readFileSync(filename, 'utf8'));
+  const visited = new Set([path.resolve(filename)]);
+  return parseSshConfig(expandIncludes(fs.readFileSync(filename, 'utf8'), sshDir, visited));
 }
 
-module.exports = { parseSshConfig, readDefaultSshConfig, stripInlineComment, tokenize };
+module.exports = { expandIncludes, parseSshConfig, readDefaultSshConfig, resolveIncludePattern, stripInlineComment, tokenize };

@@ -37,7 +37,7 @@ function connectionSignature(profile) {
 function parseProxyJump(value) {
   const source = String(value || '');
   if (!source || /\s/u.test(source) || source.startsWith('-')) throw new Error('Invalid ProxyJump target');
-  if (source.includes(',')) throw new Error('Graphical SFTP supports one explicit ProxyJump hop');
+  if (source.includes(',')) throw new Error('parseProxyJump takes a single hop; use parseProxyJumpChain for chains');
 
   const at = source.lastIndexOf('@');
   const username = at >= 0 ? source.slice(0, at) : '';
@@ -71,6 +71,23 @@ function parseProxyJump(value) {
   return { host, port, username, destination: username ? `${username}@${host}` : host };
 }
 
+// A ProxyJump chain in OpenSSH -J form: "hop1,user@hop2:2222,hop3".
+function parseProxyJumpChain(value) {
+  const source = String(value || '').trim();
+  if (!source) return [];
+  const parts = source.split(',').map((part) => part.trim());
+  if (parts.some((part) => !part)) throw new Error('Invalid ProxyJump chain');
+  if (parts.length > 8) throw new Error('ProxyJump chains support at most 8 hops');
+  return parts.map((part) => parseProxyJump(part));
+}
+
+// Rebuild a hop for OpenSSH -J syntax, restoring IPv6 brackets and ports.
+function formatProxyJumpHop(hop) {
+  const host = hop.host.includes(':') ? `[${hop.host}]` : hop.host;
+  const withPort = hop.port === 22 ? host : `${host}:${hop.port}`;
+  return hop.username ? `${hop.username}@${withPort}` : withPort;
+}
+
 function formatHostPort(host, port) {
   const value = String(host || '');
   if (!value) throw new Error('Host is required');
@@ -80,8 +97,10 @@ function formatHostPort(host, port) {
 module.exports = {
   connectionSignature,
   formatHostPort,
+  formatProxyJumpHop,
   isDirectory,
   modeToString,
+  parseProxyJumpChain,
   parseProxyJump,
   safeTimestampToIso
 };

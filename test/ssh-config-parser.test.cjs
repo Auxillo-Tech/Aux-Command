@@ -74,3 +74,36 @@ Host good
 `);
   assert.deepEqual(profiles.map((profile) => profile.name), ['good']);
 });
+
+test('expands Include directives with globs, nesting, and cycle protection', () => {
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { expandIncludes } = require('../src/main/lib/ssh-config-parser.cjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-ssh-config-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'config.d'));
+    fs.writeFileSync(path.join(dir, 'config.d', '10-app.conf'), 'Host app\n  HostName app.example\n');
+    fs.writeFileSync(path.join(dir, 'config.d', '20-db.conf'), 'Host db\n  HostName db.example\n  ProxyJump bastion,inner\n');
+    fs.writeFileSync(path.join(dir, 'nested.conf'), `Include ${path.join(dir, 'config.d', '10-app.conf')}\nHost nested\n  HostName nested.example\n`);
+    fs.writeFileSync(path.join(dir, 'loop-a.conf'), `Include ${path.join(dir, 'loop-b.conf')}\nHost loop-a\n  HostName loop-a.example\n`);
+    fs.writeFileSync(path.join(dir, 'loop-b.conf'), `Include ${path.join(dir, 'loop-a.conf')}\nHost loop-b\n  HostName loop-b.example\n`);
+
+    const flattened = expandIncludes([
+      'Include config.d/*.conf',
+      `Include ${path.join(dir, 'nested.conf')}`,
+      `Include ${path.join(dir, 'loop-a.conf')}`,
+      'Include /nonexistent/path/*.conf',
+      'Host direct',
+      '  HostName direct.example'
+    ].join('\n'), dir);
+    const profiles = parseSshConfig(flattened);
+    const names = profiles.map((profile) => profile.name);
+    // Glob matches sorted, nested include follows, cycles expand exactly once.
+    assert.deepEqual(names, ['app', 'db', 'nested', 'loop-b', 'loop-a', 'direct']);
+    assert.equal(profiles.find((profile) => profile.name === 'db').proxyJump, 'bastion,inner');
+    assert.equal((flattened.match(/Host app/gu) || []).length, 1, 'cycle/duplicate protection keeps one copy per file');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
