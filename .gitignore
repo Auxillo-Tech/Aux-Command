@@ -8,3 +8,5 @@ __pycache__/
 .DS_Store
 coverage/
 .env
+NEW_SIGNING_FINGERPRINT
+aux-command-release-private.asc
