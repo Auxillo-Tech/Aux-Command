@@ -176,13 +176,40 @@ sudo zypper install python3 openssh-clients mosh freerdp tigervnc
 
 ## Arch / EndeavourOS / Manjaro installation
 
-No native pacman package is currently produced. Use the AppImage or run from source.
-
-Optional tools:
+Install from the AUR (see [`packaging/aur/`](packaging/aur/)):
 
 ```bash
-sudo pacman -Sy --needed python openssh mosh freerdp tigervnc
+# Binary package built from the released AppImage:
+yay -S aux-command-bin
+# …or build from a tagged source checkout:
+yay -S aux-command
 ```
+
+Or use the AppImage, or run from source.
+
+Optional tools for the full feature set:
+
+```bash
+sudo pacman -Sy --needed python openssh mosh freerdp tigervnc xorg-server-xvfb x11vnc whois bind
+```
+
+---
+
+## Flatpak installation
+
+A Flatpak manifest is provided in [`packaging/flatpak/`](packaging/flatpak/)
+and targets Flathub. To build and install locally:
+
+```bash
+flatpak install -y flathub org.freedesktop.Sdk//23.08 \
+  org.freedesktop.Platform//23.08 org.electronjs.Electron2.BaseApp//23.08
+flatpak-builder --user --install --force-clean build-dir \
+  packaging/flatpak/tech.auxillo.command.yml
+flatpak run tech.auxillo.command
+```
+
+The sandbox is scoped to `~/.ssh`, downloads, host filesystem (for transfers),
+serial devices, and the Secret Service / KWallet credential store.
 
 ---
 

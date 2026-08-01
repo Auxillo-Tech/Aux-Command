@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Aux Command
+GenericName=Remote Operations Workstation
+Comment=SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial from one Linux workspace
+Exec=aux-command %U
+Icon=tech.auxillo.command
+Terminal=false
+Categories=Network;RemoteAccess;System;
+Keywords=ssh;sftp;ftp;terminal;rdp;vnc;mosh;tunnel;serial;telnet;
+StartupWMClass=Aux Command
+StartupNotify=true

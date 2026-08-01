@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>tech.auxillo.command</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Aux Command</name>
+  <summary>Linux-native remote operations workstation</summary>
+  <developer id="tech.auxillo">
+    <name>Auxillo</name>
+  </developer>
+  <description>
+    <p>
+      Aux Command is a Linux-native remote operations workstation. It brings
+      SSH, SFTP, FTP/FTPS, SSH tunnels, RDP, VNC, Mosh, Telnet, serial consoles
+      and local shells together in one polished workspace without hiding the
+      Linux tools you already trust.
+    </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Real PTY terminals for local, SSH, Mosh, Telnet and serial sessions</li>
+      <li>Graphical SFTP with drag-and-drop, inline editing and a resumable transfer queue</li>
+      <li>Embedded VNC and embedded RDP tabs, with native-client fallback</li>
+      <li>Local, remote and dynamic SSH tunnels with live status</li>
+      <li>Keyword highlighting for log triage and per-connection reachability</li>
+      <li>Encrypted credential vault, host-key verification and profile import/export</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">tech.auxillo.command.desktop</launchable>
+  <url type="homepage">https://auxillo.tech</url>
+  <url type="bugtracker">https://github.com/Auxillo-Tech/Aux-Command/issues</url>
+  <url type="vcs-browser">https://github.com/Auxillo-Tech/Aux-Command</url>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Network</category>
+    <category>System</category>
+  </categories>
+  <keywords>
+    <keyword>ssh</keyword>
+    <keyword>sftp</keyword>
+    <keyword>ftp</keyword>
+    <keyword>terminal</keyword>
+    <keyword>rdp</keyword>
+    <keyword>vnc</keyword>
+    <keyword>tunnel</keyword>
+    <keyword>serial</keyword>
+  </keywords>
+  <releases>
+    <release version="0.2.3" date="2026-07-29">
+      <description>
+        <p>Embedded RDP, SSH config Include parsing, multi-hop ProxyJump, log highlighting, connection health, and a redesigned interface.</p>
+      </description>
+    </release>
+  </releases>
+</component>

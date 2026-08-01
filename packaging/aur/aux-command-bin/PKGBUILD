@@ -1,0 +1,52 @@
+# Maintainer: Auxillo <https://auxillo.tech>
+# Binary AUR package: repackages the released x86_64 AppImage.
+pkgname=aux-command-bin
+_appname='Aux Command'
+pkgver=0.2.3
+pkgrel=1
+pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial"
+arch=('x86_64')
+url="https://auxillo.tech"
+license=('AGPL-3.0-or-later')
+depends=('openssh' 'python' 'fuse2')
+optdepends=(
+  'freerdp: RDP sessions (native and embedded)'
+  'tigervnc: external VNC viewer fallback'
+  'xorg-server-xvfb: embedded RDP rendering'
+  'x11vnc: embedded RDP rendering'
+  'mosh: Mosh sessions'
+  'whois: whois lookups in network tools'
+  'bind: dig-based DNS lookups in network tools'
+)
+provides=('aux-command')
+conflicts=('aux-command')
+options=('!strip')
+source=("https://github.com/Auxillo-Tech/Aux-Command/releases/download/v${pkgver}/Aux-Command-${pkgver}-x86_64.AppImage")
+# Replace with the release AppImage SHA-256 (scripts/release-manifest.cjs prints it).
+sha256sums=('SKIP')
+
+prepare() {
+  chmod +x "Aux-Command-${pkgver}-x86_64.AppImage"
+  ./"Aux-Command-${pkgver}-x86_64.AppImage" --appimage-extract >/dev/null
+}
+
+package() {
+  install -dm755 "${pkgdir}/opt/${pkgname}"
+  cp -a squashfs-root/. "${pkgdir}/opt/${pkgname}/"
+
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s "/opt/${pkgname}/AppRun" "${pkgdir}/usr/bin/aux-command"
+
+  # Desktop entry and icons from the extracted AppImage.
+  if [ -f "squashfs-root/aux-command.desktop" ]; then
+    install -Dm644 "squashfs-root/aux-command.desktop" \
+      "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
+    sed -i "s|^Exec=.*|Exec=aux-command %U|" \
+      "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
+  fi
+  for size in 16 32 48 64 128 256 512; do
+    icon=$(find squashfs-root -path "*/${size}x${size}/*aux-command.png" -o -path "*/${size}x${size}/*command.png" 2>/dev/null | head -1)
+    [ -n "$icon" ] && install -Dm644 "$icon" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/tech.auxillo.command.png"
+  done
+}
