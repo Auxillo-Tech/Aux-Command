@@ -178,9 +178,15 @@ jobs:
           set -euo pipefail
           version="${{ steps.version.outputs.version }}"
           tag="v${version}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --verify-tag --title "$tag" --generate-notes
-          # Only upload assets that were actually produced. The detached
-          # signature (.asc) files exist only for signed releases.
+          title="Aux Command ${tag}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$title" || true
+          else
+            gh release create "$tag" --verify-tag --title "$title" --generate-notes
+          fi
+          # Upload only files that were actually produced. The detached
+          # signature (.asc) files exist only for signed releases, and literal
+          # (non-glob) paths are not removed by nullglob, so guard with -e.
           shopt -s nullglob
           assets=()
           for pattern in \
@@ -195,6 +201,7 @@ jobs:
             "dist/release-manifest.json.asc" \
             "dist/SHA256SUMS" \
             "dist/SHA256SUMS.asc"; do
-            for f in $pattern; do assets+=("$f"); done
+            for f in $pattern; do [ -e "$f" ] && assets+=("$f"); done
           done
+          [ "${#assets[@]}" -gt 0 ] || { echo "No release assets were produced" >&2; exit 1; }
           gh release upload "$tag" "${assets[@]}" --clobber
