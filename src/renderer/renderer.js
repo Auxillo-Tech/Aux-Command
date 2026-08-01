@@ -18,6 +18,9 @@
     localButton: $('#local-button'),
     snippetsButton: $('#snippets-button'),
     tunnelsButton: $('#tunnels-button'),
+    tunnelStatusCluster: $('#tunnel-status-cluster'),
+    tunnelStatusSummary: $('#tunnel-status-summary'),
+    tunnelStatusDots: $('#tunnel-status-dots'),
     updatesButton: $('#updates-button'),
     diagnosticsButton: $('#diagnostics-button'),
     sshKeysButton: $('#sshkeys-button'),
@@ -3252,6 +3255,30 @@
     });
   }
 
+  function renderTunnelStatusCluster() {
+    const cluster = elements.tunnelStatusCluster;
+    if (!cluster) return;
+    const active = [...state.tunnels.values()].filter((tunnel) => ['running', 'starting', 'stopping'].includes(tunnel.status));
+    if (!active.length) {
+      cluster.hidden = true;
+      return;
+    }
+    cluster.hidden = false;
+    const running = active.filter((tunnel) => tunnel.status === 'running').length;
+    const pending = active.length - running;
+    elements.tunnelStatusSummary.textContent = pending
+      ? `${running}/${active.length} tunnels`
+      : `${running} tunnel${running === 1 ? '' : 's'}`;
+    elements.tunnelStatusDots.replaceChildren();
+    for (const tunnel of active.slice(0, 8)) {
+      elements.tunnelStatusDots.append(node('span', {
+        className: `cluster-dot status-${tunnel.status}`,
+        title: `${tunnel.name} · ${tunnel.status}`
+      }));
+    }
+    cluster.setAttribute('aria-label', `${active.length} active SSH tunnel${active.length === 1 ? '' : 's'} — open tunnel manager`);
+  }
+
   function renderTunnelList(container) {
     container.replaceChildren();
     const tunnels = [...state.tunnels.values()].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
@@ -3273,9 +3300,11 @@
         if (tunnel.status === 'stopped' || tunnel.status === 'failed') state.tunnels.delete(tunnel.id);
         else await api.tunnels.stop(tunnel.id).catch((error) => toast('Tunnel stop failed', errorMessage(error), 'error'));
         renderTunnelList(container);
+        renderTunnelStatusCluster();
       });
       container.append(row);
     }
+    renderTunnelStatusCluster();
   }
 
   function openTunnelsModal() {
@@ -3948,6 +3977,7 @@
     api.tunnels.onStatus((tunnel) => {
       state.tunnels.set(tunnel.id, tunnel);
       document.querySelectorAll('[data-live-tunnel-list]').forEach((container) => renderTunnelList(container));
+      renderTunnelStatusCluster();
       if (tunnel.status === 'running') toast('Tunnel ready', tunnel.name, 'success');
       if (tunnel.status === 'failed') toast('Tunnel failed', tunnel.lastError || tunnel.name, 'error');
     });
@@ -4013,6 +4043,7 @@
     elements.localButton.addEventListener('click', () => connectProfile(localProfile()));
     elements.snippetsButton.addEventListener('click', openSnippetsModal);
     elements.tunnelsButton.addEventListener('click', openTunnelsModal);
+    elements.tunnelStatusCluster.addEventListener('click', openTunnelsModal);
     elements.updatesButton.addEventListener('click', openUpdatesModal);
     elements.diagnosticsButton.addEventListener('click', openDiagnosticsModal);
     elements.sshKeysButton.addEventListener('click', () => openSshKeyManager().catch((error) => toast('Could not open SSH Key Manager', errorMessage(error), 'error')));
@@ -4141,6 +4172,7 @@
       updateUpdateState(initial.updates || {});
       state.vault = initial.vault || null;
       for (const tunnel of initial.tunnels || []) state.tunnels.set(tunnel.id, tunnel);
+      renderTunnelStatusCluster();
       updateProfiles(initial.profiles || []);
       state.initialProfiles = initial.profiles || [];
       restoreInitialSessions(initial.sessions || []);
