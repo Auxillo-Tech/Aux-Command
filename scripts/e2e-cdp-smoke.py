@@ -109,12 +109,28 @@ def main() -> int:
         """, timeout=20)
         expected_namespaces = [
             'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'rdp',
-            'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal', 'transfer', 'tunnels',
-            'updates', 'vault', 'vnc',
+            'reachability', 'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal',
+            'transfer', 'tunnels', 'updates', 'vault', 'vnc',
         ]
         require(baseline['title'] == 'Aux Command', 'wrong document title', baseline)
         require(baseline['apiKeys'] == expected_namespaces, 'unexpected preload API namespaces', baseline['apiKeys'])
         require(any('snippets-button' in text for text in baseline['buttonTexts']), 'snippets button missing', baseline['buttonTexts'])
+
+        # On a fresh profile the first-run guided tour auto-starts and its modal
+        # keyboard handler owns global shortcuts; dismiss it before driving the
+        # workstation with keyboard chords. Verifies the tour surface exists.
+        tour_dismissed = cdp.eval("""
+          (async () => {
+            const root = document.getElementById('tour-root');
+            const present = Boolean(root);
+            if (root && !root.hidden) {
+              document.getElementById('tour-skip').click();
+              await new Promise(r => setTimeout(r, 200));
+            }
+            return { present, hidden: !root || root.hidden };
+          })()
+        """)
+        require(tour_dismissed['present'] and tour_dismissed['hidden'], 'first-run tour did not dismiss', tour_dismissed)
 
         ui_foundation = cdp.eval("""
           ({
