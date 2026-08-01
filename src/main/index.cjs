@@ -26,6 +26,7 @@ const { TunnelService } = require('./services/tunnel-service.cjs');
 const { UpdateService } = require('./services/update-service.cjs');
 const { VaultService } = require('./services/vault-service.cjs');
 const { VncBridgeService } = require('./services/vnc-bridge.cjs');
+const { RdpEmbedService } = require('./services/rdp-embed.cjs');
 const { NetworkToolService } = require('./services/network-tools.cjs');
 const { SshKeyService } = require('./services/ssh-key-service.cjs');
 const { ProfileSync } = require('./services/profile-sync.cjs');
@@ -56,6 +57,7 @@ function recoverRenderer(reason, details = {}) {
   // claimed single-use WebSocket tokens cannot be reattached — stop them so
   // the bridge servers do not listen orphaned until app quit.
   services?.vncBridge.stopAll();
+  services?.rdpEmbed.stopAll();
   mainWindow.webContents.once('did-finish-load', () => { rendererRecoveryInFlight = false; });
   mainWindow.webContents.once('did-fail-load', () => { rendererRecoveryInFlight = false; });
   mainWindow.webContents.reloadIgnoringCache();
@@ -138,6 +140,7 @@ function initializeServices() {
   const updateService = new UpdateService(app, getWindow);
   const transferQueue = new TransferQueue(getWindow);
   const vncBridge = new VncBridgeService();
+  const rdpEmbed = new RdpEmbedService({ vaultService, vncBridge });
   const networkTools = new NetworkToolService();
   const sshKeyService = new SshKeyService();
   const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
@@ -167,6 +170,7 @@ function initializeServices() {
     updateService,
     transferQueue,
     vncBridge,
+    rdpEmbed,
     networkTools,
     sshKeyService,
     profileSync,
@@ -218,5 +222,6 @@ app.on('before-quit', () => {
   services?.ftpService.disconnectAll();
   services?.vaultService.clearMemory();
   services?.promptBroker.cancelAll();
+  services?.rdpEmbed.stopAll();
   services?.vncBridge.stopAll();
 });

@@ -19,6 +19,8 @@ test('diagnostics exposes protocol capability matrix with bundled and external b
   assert.equal(byProtocol.get('serial').mode, 'bundled-python-bridge');
   assert.equal(byProtocol.get('serial').available, true);
   assert.equal(byProtocol.get('x11-forwarding').mode, 'openssh-x11-forwarding');
-  assert.equal(byProtocol.get('rdp').mode, 'external-client');
-  assert.equal(byProtocol.get('vnc').mode, 'external-client');
+  // RDP is embedded when Xvfb + x11vnc + FreeRDP are present, else external.
+  assert.match(byProtocol.get('rdp').mode, /^(embedded-freerdp-x11vnc|external-client)$/u);
+  assert.equal(byProtocol.get('vnc').mode, 'embedded-novnc-bridge');
+  assert.equal(byProtocol.get('vnc').available, true);
 });

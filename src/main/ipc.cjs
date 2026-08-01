@@ -22,6 +22,7 @@ function registerIpc({
   updateService,
   transferQueue,
   vncBridge,
+  rdpEmbed,
   networkTools,
   sshKeyService,
   profileSync,
@@ -149,6 +150,13 @@ function registerIpc({
   });
   handle('vnc:stop', (id) => vncBridge.stop(id));
   handle('vnc:list', () => vncBridge.list());
+  handle('rdp:capabilities', () => rdpEmbed.capabilities());
+  handle('rdp:start-embedded', async (profile) => {
+    if (profile.protocol !== 'rdp') throw new Error('Embedded RDP requires an RDP profile');
+    return rdpEmbed.start(profile);
+  });
+  handle('rdp:stop-embedded', (id) => rdpEmbed.stop(id));
+  handle('rdp:list-embedded', () => rdpEmbed.list());
   handle('tunnel:start', (tunnel) => tunnelService.start(tunnel));
   handle('tunnel:stop', (id) => tunnelService.stop(id));
   handle('tunnel:list', () => tunnelService.list());

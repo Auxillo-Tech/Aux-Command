@@ -461,3 +461,11 @@ test('transfer queue UI hydrates, counts, clears, and drops cancelled entries', 
   assert.match(renderer, /queue-clear-completed/u);
   assert.match(renderer, /badge\.textContent = String\(active\);/u);
 });
+
+test('embedded RDP reuses the shared remote-desktop tab with external fallback', () => {
+  assert.match(renderer, /function createRemoteDesktopTab\(result, profile, protocol\)/u);
+  assert.match(renderer, /api\.rdp\.startEmbedded\(profile\)/u);
+  assert.match(renderer, /Embedded \$\{kind\} unavailable, launching external client/u);
+  assert.match(renderer, /if \(tab\.desktopKind === 'rdp'\) await api\.rdp\.stopEmbedded\(id\)/u);
+  assert.match(preload, /startEmbedded: \(profile\) => invoke\('rdp:start-embedded', profile\)/u);
+});

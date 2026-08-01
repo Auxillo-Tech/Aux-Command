@@ -43,8 +43,10 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 
 ## 0.3 - integrated remote desktop
 
-- Embedded RDP and VNC surfaces or a hardened native companion process.
-- Until that work is designed and audited, embedded RDP and VNC surfaces remain a 0.3 architecture item; 0.1 intentionally launches native FreeRDP/TigerVNC clients at the external-client boundary.
+- Embedded VNC (bundled noVNC bridge) and embedded RDP (FreeRDP rendered on a
+  headless Xvfb display exported through x11vnc) both ship as in-app tabs, with
+  automatic fallback to the native FreeRDP/TigerVNC clients when the embedded
+  toolchain is unavailable.
 - Certificate/fingerprint management.
 - Multi-monitor controls, audio and drive redirection policy.
 - Remote desktop session recording controls where legally permitted.

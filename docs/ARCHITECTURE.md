@@ -74,7 +74,7 @@ Telnet and serial sessions are not delegated to distro `telnet` or `picocom` bin
 
 ## Remote desktop integration decision
 
-RDP and VNC intentionally remain at the external-client boundary for the 0.1 engineering release. The shipped implementation launches audited, distro-managed FreeRDP/TigerVNC clients with direct argument arrays rather than embedding an unaudited remote-framebuffer surface inside the Electron renderer. This avoids weakening the renderer sandbox, avoids inventing certificate/clipboard/drive-redirection policy late in the release, and keeps the current blast radius equivalent to the user's installed native client.
+RDP and VNC render as embedded in-app tabs, with the external-client boundary kept as an automatic fallback. VNC streams through the bundled noVNC bridge — a localhost-only WebSocket relay gated by a single-use 32-byte token and a `file://` origin check. RDP reuses that same bridge: FreeRDP renders into a headless `Xvfb` display, `x11vnc` exports that display on a loopback-only ephemeral port, and the noVNC bridge streams it into the renderer. The renderer never speaks the RFB or RDP protocol directly; the iframe is sandboxed and only reaches the tokened localhost WebSocket. When `Xvfb`, `x11vnc`, or FreeRDP are not installed, or the embedded pipeline fails to start, Aux Command falls back to launching the audited, distro-managed FreeRDP/TigerVNC clients with direct argument arrays. This keeps the embedded blast radius confined to loopback while preserving the safe native-client path.
 
 X11 forwarding uses OpenSSH -X and the host X/Wayland Xwayland display. It is a trust-expanding SSH feature, disabled by default, and not an embedded graphical subsystem owned by Aux Command.
 
