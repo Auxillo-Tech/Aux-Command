@@ -57,3 +57,14 @@ test('website kit references bundled assets and current version', () => {
   // Section tags are balanced.
   assert.equal((html.match(/<section/gu) || []).length, (html.match(/<\/section>/gu) || []).length);
 });
+
+test('release-pinned packaging carries a real AppImage checksum, not a placeholder', () => {
+  const flatpak = read('packaging/flatpak/tech.auxillo.command.yml');
+  const aurBin = read('packaging/aur/aux-command-bin/PKGBUILD');
+  // The AppImage-pinned manifests must reference a 64-hex SHA-256, never a placeholder.
+  assert.doesNotMatch(flatpak, /REPLACE_WITH_APPIMAGE_SHA256/u);
+  assert.match(flatpak, /sha256: [0-9a-f]{64}\b/u);
+  assert.match(aurBin, /sha256sums=\('[0-9a-f]{64}'\)/u);
+  // The from-source AUR build legitimately uses SKIP (git tag provides integrity).
+  assert.match(read('packaging/aur/aux-command/PKGBUILD'), /sha256sums=\('SKIP'\)/u);
+});
