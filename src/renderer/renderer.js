@@ -765,7 +765,7 @@
       const button = node('button', {
         type: 'button',
         className: `context-menu-item${item.danger ? ' danger' : ''}`,
-        attrs: { role: 'menuitem' }
+        attrs: { role: 'menuitem', disabled: Boolean(item.disabled), title: item.title || false }
       }, [
         node('span', { className: 'context-menu-icon', text: item.icon || '' }),
         node('span', { className: 'context-menu-label', text: item.label }),
@@ -889,6 +889,16 @@
       items.push({ icon: '⇢', label: 'Move to group…', run: () => moveProfileToGroup(profile) });
       items.push('separator');
       items.push({ icon: '🗑', label: 'Delete…', danger: true, run: () => deleteProfileWithConfirm(profile) });
+    } else {
+      items.push('separator');
+      items.push({
+        icon: '🗑',
+        label: 'Delete…',
+        hint: 'Built-in',
+        disabled: true,
+        title: 'The default local shell profile cannot be deleted.',
+        run: () => {}
+      });
     }
     openContextMenu(anchor, items, { title: profile.name });
   }
