@@ -162,6 +162,7 @@
           <button id="welcome-profile" class="action-card" type="button"><span>＋</span><strong>New connection</strong><small>SSH, Mosh, Telnet, FTP, FTPS, RDP, VNC or serial</small></button>
           <button id="welcome-import" class="action-card" type="button"><span>⇣</span><strong>Import SSH config</strong><small>Use existing hosts and identities</small></button>
         </div>
+        <button id="welcome-tour" class="tour-launch" type="button"><span aria-hidden="true">✦</span> Take a 60-second tour</button>
         <div class="shortcut-strip">
           <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick connect</span>
           <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> Local shell</span>
@@ -235,6 +236,22 @@
 
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <div id="modal-root"></div>
+  <div id="tour-root" class="tour-root" hidden>
+    <div id="tour-backdrop" class="tour-backdrop"></div>
+    <div id="tour-highlight" class="tour-highlight" hidden></div>
+    <div id="tour-popover" class="tour-popover" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+      <div class="tour-step-count" id="tour-step-count"></div>
+      <h3 id="tour-title"></h3>
+      <p id="tour-body"></p>
+      <div class="tour-actions">
+        <button id="tour-skip" class="mini-button" type="button">Skip tour</button>
+        <div class="tour-nav">
+          <button id="tour-prev" class="mini-button" type="button">Back</button>
+          <button id="tour-next" class="mini-button primary" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>

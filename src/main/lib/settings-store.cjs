@@ -17,8 +17,16 @@ const DEFAULT_SETTINGS = Object.freeze({
     enabled: false,
     rules: Object.freeze([])
   }),
+  onboarding: Object.freeze({
+    tourCompleted: false
+  }),
   sessions: []
 });
+
+function normalizeOnboardingSettings(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  return { tourCompleted: Boolean(source.tourCompleted) };
+}
 
 const HIGHLIGHT_COLORS = new Set(['red', 'amber', 'green', 'blue', 'magenta', 'cyan']);
 
@@ -87,6 +95,7 @@ function normalizeSettings(input = {}) {
     workspace: normalizeWorkspaceSettings(source.workspace),
     sidebar: normalizeSidebarSettings(source.sidebar),
     highlight: normalizeHighlightSettings(source.highlight),
+    onboarding: normalizeOnboardingSettings(source.onboarding),
     sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
   };
 }
@@ -115,6 +124,12 @@ class SettingsStore {
   saveHighlight(input) {
     const highlight = normalizeHighlightSettings(input);
     this.store.update((data) => ({ ...normalizeSettings(data), highlight }));
+    return this.get();
+  }
+
+  saveOnboarding(input) {
+    const onboarding = normalizeOnboardingSettings(input);
+    this.store.update((data) => ({ ...normalizeSettings(data), onboarding }));
     return this.get();
   }
 

@@ -58,3 +58,10 @@ test('normalizes highlight settings with bounds and defaults', () => {
   const capped = normalizeHighlightSettings({ rules: Array.from({ length: 80 }, (_, i) => ({ pattern: `p${i}` })) });
   assert.equal(capped.rules.length, 50, 'rule count is capped');
 });
+
+test('normalizes onboarding settings', () => {
+  const { normalizeSettings } = require('../src/main/lib/settings-store.cjs');
+  assert.equal(normalizeSettings({}).onboarding.tourCompleted, false);
+  assert.equal(normalizeSettings({ onboarding: { tourCompleted: true } }).onboarding.tourCompleted, true);
+  assert.equal(normalizeSettings({ onboarding: 'nope' }).onboarding.tourCompleted, false);
+});
