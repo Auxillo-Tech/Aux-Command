@@ -82,6 +82,17 @@
     activeSessionLabel: $('#active-session-label'),
     appVersion: $('#app-version'),
     toastRegion: $('#toast-region'),
+    welcomeTour: $('#welcome-tour'),
+    tourRoot: $('#tour-root'),
+    tourBackdrop: $('#tour-backdrop'),
+    tourHighlight: $('#tour-highlight'),
+    tourPopover: $('#tour-popover'),
+    tourStepCount: $('#tour-step-count'),
+    tourTitle: $('#tour-title'),
+    tourBody: $('#tour-body'),
+    tourSkip: $('#tour-skip'),
+    tourPrev: $('#tour-prev'),
+    tourNext: $('#tour-next'),
     modalRoot: $('#modal-root')
   };
 
@@ -793,6 +804,105 @@
     probeConnectionHealth();
     // Re-probe periodically so the sidebar reflects endpoints going up or down.
     state.healthTimer = window.setInterval(probeConnectionHealth, 60_000);
+  }
+
+  // First-run guided tour: a spotlight walkthrough of the primary surfaces.
+  const TOUR_STEPS = [
+    { selector: '.tool-rail', title: 'Your tool rail', body: 'Every workstation tool lives here — snippets, tunnels, network diagnostics, the live monitor, the remote-desktop gateway, SSH keys, sync, diagnostics and updates. Hover any icon for its name.', placement: 'right' },
+    { selector: '.workspace-commandbar', title: 'Quick connect', body: 'Type ssh://user@host, user@host, or a /dev/ttyUSB0 serial path and press Connect. Press Ctrl+K from anywhere to jump here.', placement: 'bottom' },
+    { selector: '#new-group-button', title: 'Organize with groups', body: 'Create groups to file your connections. Each connection has a ⋯ menu (or right-click) to edit, duplicate, move, or delete it.', placement: 'bottom' },
+    { selector: '#palette-button', title: 'Command palette', body: 'Press Ctrl+Shift+P to search every action, connection and snippet from the keyboard — the fastest way to drive Aux Command.', placement: 'bottom' },
+    { selector: '#highlight-toggle', title: 'Log highlighting', body: 'Colour keywords in terminal output for fast log triage. Open it to add rules; toggle it any time with Ctrl+Shift+H.', placement: 'bottom' },
+    { selector: '#tunnel-status-cluster', title: 'Live status', body: 'Active SSH tunnels show here in the status bar, and each saved connection carries a reachability dot in the sidebar. You are ready to go.', placement: 'top', optional: true }
+  ];
+  let tourState = null;
+
+  function positionTourStep() {
+    if (!tourState) return;
+    const step = TOUR_STEPS[tourState.index];
+    const target = step.selector ? document.querySelector(step.selector) : null;
+    const highlight = elements.tourHighlight;
+    const popover = elements.tourPopover;
+    if (target && target.offsetParent !== null) {
+      const rect = target.getBoundingClientRect();
+      const pad = 6;
+      highlight.hidden = false;
+      highlight.style.left = `${rect.left - pad}px`;
+      highlight.style.top = `${rect.top - pad}px`;
+      highlight.style.width = `${rect.width + pad * 2}px`;
+      highlight.style.height = `${rect.height + pad * 2}px`;
+      const pop = popover.getBoundingClientRect();
+      let left = rect.left;
+      let top = rect.bottom + 14;
+      if (step.placement === 'right') { left = rect.right + 14; top = rect.top; }
+      else if (step.placement === 'top') { top = rect.top - pop.height - 14; }
+      else if (step.placement === 'bottom') { top = rect.bottom + 14; }
+      left = Math.max(14, Math.min(left, window.innerWidth - pop.width - 14));
+      top = Math.max(14, Math.min(top, window.innerHeight - pop.height - 14));
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+    } else {
+      // Center the popover when the target is hidden (e.g. the optional cluster).
+      highlight.hidden = true;
+      popover.style.left = `${(window.innerWidth - popover.offsetWidth) / 2}px`;
+      popover.style.top = `${(window.innerHeight - popover.offsetHeight) / 2}px`;
+    }
+  }
+
+  function renderTourStep() {
+    if (!tourState) return;
+    // Skip optional steps whose target is not present.
+    while (TOUR_STEPS[tourState.index]?.optional && !document.querySelector(TOUR_STEPS[tourState.index].selector)) {
+      if (tourState.direction < 0 && tourState.index > 0) tourState.index -= 1;
+      else if (tourState.index < TOUR_STEPS.length - 1) tourState.index += 1;
+      else break;
+    }
+    const step = TOUR_STEPS[tourState.index];
+    elements.tourStepCount.textContent = `Step ${tourState.index + 1} of ${TOUR_STEPS.length}`;
+    elements.tourTitle.textContent = step.title;
+    elements.tourBody.textContent = step.body;
+    elements.tourPrev.disabled = tourState.index === 0;
+    elements.tourNext.textContent = tourState.index === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+    positionTourStep();
+  }
+
+  function endTour(completed) {
+    if (!tourState) return;
+    tourState = null;
+    elements.tourRoot.hidden = true;
+    window.removeEventListener('resize', positionTourStep);
+    if (completed) {
+      api.app.saveOnboardingSettings({ tourCompleted: true }).catch(() => {});
+      toast('Tour complete', 'Reopen it any time from the command palette.', 'success');
+    }
+  }
+
+  function startTour() {
+    tourState = { index: 0, direction: 1 };
+    elements.tourRoot.hidden = false;
+    window.addEventListener('resize', positionTourStep);
+    renderTourStep();
+  }
+
+  function tourNext() {
+    if (!tourState) return;
+    if (tourState.index >= TOUR_STEPS.length - 1) { endTour(true); return; }
+    tourState.index += 1;
+    tourState.direction = 1;
+    renderTourStep();
+  }
+
+  function tourPrev() {
+    if (!tourState || tourState.index === 0) return;
+    tourState.index -= 1;
+    tourState.direction = -1;
+    renderTourStep();
+  }
+
+  function maybeStartFirstRunTour(settings) {
+    if (settings?.onboarding?.tourCompleted) return;
+    // Give the layout a moment to settle before measuring targets.
+    window.setTimeout(() => { if (!tourState) startTour(); }, 700);
   }
 
   function closeContextMenu() {
@@ -2817,6 +2927,7 @@
       { label: 'System diagnostics', category: 'Action', detail: 'Show runtime tool status', run: () => openDiagnosticsModal() },
       { label: 'Log highlighting rules', category: 'Action', detail: 'Configure keyword highlighting for terminal output', run: () => openHighlightManager() },
       { label: 'Check connection reachability', category: 'Action', detail: 'Probe every saved connection now', run: () => probeConnectionHealth() },
+      { label: 'Take the guided tour', category: 'Action', detail: 'Replay the first-run walkthrough', run: () => startTour() },
       { label: state.highlight.enabled ? 'Disable log highlighting' : 'Enable log highlighting', category: 'Action', detail: 'Toggle keyword highlighting (Ctrl+Shift+H)', run: () => toggleHighlighting() },
       { label: 'Duplicate session', category: 'Action', detail: 'Open another session with the active profile', run: () => duplicateActiveSession() },
       { label: 'Reconnect session', category: 'Action', detail: 'Close and reopen the active session from its profile', run: () => reconnectActiveSession() },
@@ -4120,6 +4231,11 @@
     elements.snippetsButton.addEventListener('click', openSnippetsModal);
     elements.tunnelsButton.addEventListener('click', openTunnelsModal);
     elements.tunnelStatusCluster.addEventListener('click', openTunnelsModal);
+    elements.welcomeTour.addEventListener('click', startTour);
+    elements.tourNext.addEventListener('click', tourNext);
+    elements.tourPrev.addEventListener('click', tourPrev);
+    elements.tourSkip.addEventListener('click', () => endTour(true));
+    elements.tourBackdrop.addEventListener('click', () => endTour(true));
     elements.updatesButton.addEventListener('click', openUpdatesModal);
     elements.diagnosticsButton.addEventListener('click', openDiagnosticsModal);
     elements.sshKeysButton.addEventListener('click', () => openSshKeyManager().catch((error) => toast('Could not open SSH Key Manager', errorMessage(error), 'error')));
@@ -4183,6 +4299,12 @@
     document.fonts?.ready?.then(() => fitVisibleTerminals()).catch(() => {});
 
     window.addEventListener('keydown', (event) => {
+      if (tourState) {
+        if (event.key === 'Escape') { event.preventDefault(); endTour(true); }
+        else if (event.key === 'ArrowRight' || event.key === 'Enter') { event.preventDefault(); tourNext(); }
+        else if (event.key === 'ArrowLeft') { event.preventDefault(); tourPrev(); }
+        return;
+      }
       const modalOpen = Boolean(elements.modalRoot.querySelector('.modal-backdrop'));
       if (modalOpen && event.key !== 'Escape') return;
       if (!isEditableShortcutTarget(event.target)) handleWorkspaceShortcut(event);
@@ -4270,6 +4392,7 @@
       state.initializing = false;
       elements.initializationError.hidden = true;
       setStatus('Ready');
+      maybeStartFirstRunTour(initial.settings);
     } catch (error) {
       state.initializing = false;
       const detail = errorMessage(error);

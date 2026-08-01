@@ -499,3 +499,14 @@ test('connection health probes reachability and renders sidebar dots', () => {
   assert.match(preload, /check: \(targets\) => invoke\('reachability:check', targets\)/u);
   assert.match(styles, /\.health-dot\.health-up/u);
 });
+
+test('first-run guided tour walks key surfaces and records completion', () => {
+  assert.match(indexHtml, /id="tour-root"/u);
+  assert.match(indexHtml, /id="welcome-tour"/u);
+  assert.match(renderer, /const TOUR_STEPS = \[/u);
+  assert.match(renderer, /function maybeStartFirstRunTour\(settings\)/u);
+  assert.match(renderer, /if \(settings\?\.onboarding\?\.tourCompleted\) return;/u);
+  assert.match(renderer, /api\.app\.saveOnboardingSettings\(\{ tourCompleted: true \}\)/u);
+  assert.match(preload, /saveOnboardingSettings: \(onboarding\) => invoke\('app:save-onboarding-settings', onboarding\)/u);
+  assert.match(styles, /\.tour-highlight/u);
+});
