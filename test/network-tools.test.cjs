@@ -6,7 +6,7 @@ const dgram = require('node:dgram');
 
 test('NetworkToolService ping works', async (t) => {
   const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
-  const svc = new NetworkToolService();
+  const svc = new NetworkToolService({ commandTimeout: 5000 });
 
   // Ping localhost (should succeed)
   const result = await svc.ping('127.0.0.1', 1);
@@ -21,7 +21,7 @@ test('NetworkToolService ping works', async (t) => {
 
 test('NetworkToolService DNS lookup works', async (t) => {
   const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
-  const svc = new NetworkToolService();
+  const svc = new NetworkToolService({ commandTimeout: 5000 });
 
   const result = await svc.dnsLookup('localhost', 'A');
   if (result.missing || result.exitCode === 127 || result.exitCode !== 0) {
@@ -46,7 +46,7 @@ test('NetworkToolService port scan works', async () => {
 
 test('NetworkToolService traceroute works', async (t) => {
   const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
-  const svc = new NetworkToolService();
+  const svc = new NetworkToolService({ commandTimeout: 5000 });
 
   const result = await svc.traceroute('127.0.0.1');
   if (result.missing || result.exitCode === 127 || result.exitCode !== 0) {
@@ -76,7 +76,7 @@ test('NetworkToolService reports missing host tools without throwing', async () 
 
 test('NetworkToolService whois rejects short input gracefully', async () => {
   const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
-  const svc = new NetworkToolService();
+  const svc = new NetworkToolService({ commandTimeout: 5000 });
 
   try {
     const result = await svc.whois('127.0.0.1');
@@ -90,7 +90,14 @@ test('NetworkToolService whois rejects short input gracefully', async () => {
 
 test('NetworkToolService cancel stops and rejects a running command', async (t) => {
   const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
-  const svc = new NetworkToolService();
+  const svc = new NetworkToolService({ commandTimeout: 5000 });
+  // A missing or non-functional ping resolves instantly, which races the
+  // active-process poll below — probe first and skip in such environments.
+  const probe = await svc.ping('127.0.0.1', 1).catch(() => null);
+  if (!probe || probe.missing || probe.exitCode !== 0) {
+    t.skip('ping is unavailable in this environment');
+    return;
+  }
   const running = svc.ping('127.0.0.1', 20);
   const deadline = Date.now() + 2000;
   while (svc.active.size === 0 && Date.now() < deadline) {
@@ -139,7 +146,16 @@ test('NetworkToolService sends a valid Wake-on-LAN magic packet', async (t) => {
     const packetPromise = new Promise((resolve) => server.once('message', resolve));
     const svc = new NetworkToolService({ wakeAddress: '127.0.0.1', wakePort: port });
     const result = await svc.wakeOnLan('00:11:22:33:44:55');
-    const packet = await packetPromise;
+    // Sandboxed CI environments can allow the bind yet silently drop loopback
+    // UDP; skip instead of waiting forever for a packet that cannot arrive.
+    const packet = await Promise.race([
+      packetPromise,
+      new Promise((resolve) => setTimeout(() => resolve(null), 3000).unref())
+    ]);
+    if (!packet) {
+      t.skip('loopback UDP delivery is not available in this environment');
+      return;
+    }
     assert.equal(result.sent, true);
     assert.equal(packet.length, 102);
     assert.deepEqual([...packet.subarray(0, 6)], [255, 255, 255, 255, 255, 255]);

@@ -33,15 +33,13 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Per-profile terminal theme, font, cursor and scrollback settings.
 - Serial quick connect for absolute Linux device paths such as `/dev/ttyUSB0`.
 
-## 0.2 - daily-driver terminal polish
+## 0.2 - daily-driver terminal polish (shipped in the 0.2.x line)
 
-- Global terminal appearance presets and import/exportable workspace-level defaults.
-- Persistent workspace layouts and per-profile pane defaults.
-- Resumable SFTP transfer queue.
-- SSH config Include parsing and stronger ProxyJump chain support.
-- Terminal output logging profiles/presets for operator-selected local directories with explicit privacy warnings.
-- Detached terminal windows and fullscreen terminal workspace mode.
-- Terminal keyword/syntax highlighting definitions for log triage.
+- Persistent workspace layouts (tiled/single view and pane sizes survive restart).
+- Resumable SFTP/FTP transfer queue with pause, resume, retry, cancel and clear-completed.
+- Per-session terminal logging with explicit operator opt-in, plus transcript export.
+- Session persistence and reconnect across app restarts.
+- Network tools panel (ping, traceroute, DNS, port scan, whois, Wake-on-LAN).
 
 ## 0.3 - integrated remote desktop
 
@@ -53,9 +51,15 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Deeper RDP/VNC settings for clipboard, geometry, console/admin mode, certificate/fingerprint handling, drive/device redirection policy, and multi-monitor behavior.
 - SSH-gateway assisted RDP/VNC/Telnet workflows where the protocol can be safely wrapped through OpenSSH forwarding.
 
-## 0.4 - protocol parity
+## 0.4 - workspace power and protocol parity
 
-- Deeper FTP/FTPS transfer management, including queue pause/resume/retry and additional TLS policy controls.
+- Global terminal appearance presets and import/exportable workspace-level defaults.
+- Per-profile tiled-pane defaults.
+- SSH config Include parsing and stronger ProxyJump chain support.
+- Terminal output logging presets for operator-selected local directories.
+- Detached terminal windows and fullscreen terminal workspace mode.
+- Terminal keyword/syntax highlighting definitions for log triage.
+- Additional FTP/FTPS TLS policy controls.
 - Deeper SCP workflow polish, including explicit remote-path download prompts and broader legacy-server qualification.
 - Optional XDMCP/remote Unix desktop workflows using a Linux-appropriate design rather than copying Windows-specific embedded X-server behavior.
 - Host X11/Xwayland/Xephyr/Xpra workflow management for remote graphical Unix applications.

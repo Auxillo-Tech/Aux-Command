@@ -50,7 +50,12 @@ function recoverRenderer(reason, details = {}) {
   const payload = JSON.stringify({ reason, details, at: new Date().toISOString() });
   process.stderr.write(`Aux Command renderer recovery: ${payload}\n`);
   services?.sftpService.disconnectAll();
+  services?.ftpService.disconnectAll();
   services?.promptBroker.cancelAll('Renderer was restarted');
+  // The reloaded renderer has no knowledge of embedded VNC sessions, and their
+  // claimed single-use WebSocket tokens cannot be reattached — stop them so
+  // the bridge servers do not listen orphaned until app quit.
+  services?.vncBridge.stopAll();
   mainWindow.webContents.once('did-finish-load', () => { rendererRecoveryInFlight = false; });
   mainWindow.webContents.once('did-fail-load', () => { rendererRecoveryInFlight = false; });
   mainWindow.webContents.reloadIgnoringCache();

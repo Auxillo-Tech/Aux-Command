@@ -25,7 +25,10 @@
     gatewayButton: $('#gateway-button'),
     syncButton: $('#sync-button'),
     websiteButton: $('#website-button'),
+    statusbarWebsite: $('#statusbar-website'),
+    paletteButton: $('#palette-button'),
     newProfileButton: $('#new-profile-button'),
+    newGroupButton: $('#new-group-button'),
     profileSearch: $('#profile-search'),
     importSshButton: $('#import-ssh-button'),
     profileMenuButton: $('#profile-menu-button'),
@@ -81,6 +84,8 @@
   const state = {
     profiles: [],
     snippets: [],
+    customGroups: [],
+    collapsedGroups: new Set(),
     tabs: new Map(),
     activeTabId: '',
     layout: 'single',
@@ -104,6 +109,7 @@
       open: false,
       profile: null,
       ownerTabId: '',
+      detached: false,
       syncToken: 0,
       path: '/',
       entries: [],
@@ -529,6 +535,9 @@
 
   function isEditableShortcutTarget(target) {
     if (!(target instanceof Element)) return false;
+    // xterm's hidden helper textarea carries terminal focus; workspace chords
+    // are still dispatched for it via the terminal's custom key handler.
+    if (target.classList.contains('xterm-helper-textarea')) return false;
     if (target.closest('[contenteditable=""], [contenteditable="true"]')) return true;
     return target.matches('input, textarea, select');
   }
@@ -714,6 +723,247 @@
     renderProfiles();
   }
 
+  function closeContextMenu() {
+    document.querySelector('.context-menu')?.remove();
+    document.removeEventListener('pointerdown', onContextMenuPointerDown, true);
+    document.removeEventListener('keydown', onContextMenuKeyDown, true);
+  }
+
+  function onContextMenuPointerDown(event) {
+    if (!event.target.closest('.context-menu')) closeContextMenu();
+  }
+
+  function onContextMenuKeyDown(event) {
+    const menu = document.querySelector('.context-menu');
+    if (!menu) return;
+    const items = [...menu.querySelectorAll('button:not(:disabled)')];
+    const index = items.indexOf(document.activeElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeContextMenu();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      items[(index + 1) % items.length]?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      items[(index - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === 'Tab') {
+      closeContextMenu();
+    }
+  }
+
+  function openContextMenu(anchor, items, { title = '' } = {}) {
+    closeContextMenu();
+    const menu = node('div', { className: 'context-menu', attrs: { role: 'menu', 'aria-label': title || 'Actions' } });
+    if (title) menu.append(node('div', { className: 'context-menu-title', text: title }));
+    for (const item of items) {
+      if (item === 'separator') {
+        menu.append(node('div', { className: 'context-menu-separator', attrs: { role: 'separator' } }));
+        continue;
+      }
+      const button = node('button', {
+        type: 'button',
+        className: `context-menu-item${item.danger ? ' danger' : ''}`,
+        attrs: { role: 'menuitem' }
+      }, [
+        node('span', { className: 'context-menu-icon', text: item.icon || '' }),
+        node('span', { className: 'context-menu-label', text: item.label }),
+        item.hint ? node('span', { className: 'context-menu-hint', text: item.hint }) : null
+      ]);
+      button.addEventListener('click', () => {
+        closeContextMenu();
+        Promise.resolve(item.run()).catch((error) => toast('Action failed', errorMessage(error), 'error'));
+      });
+      menu.append(button);
+    }
+    document.body.append(menu);
+    const anchorRect = anchor.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    let left = Math.min(anchorRect.left, window.innerWidth - menuRect.width - 8);
+    let top = anchorRect.bottom + 4;
+    if (top + menuRect.height > window.innerHeight - 8) top = Math.max(8, anchorRect.top - menuRect.height - 4);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${top}px`;
+    document.addEventListener('pointerdown', onContextMenuPointerDown, true);
+    document.addEventListener('keydown', onContextMenuKeyDown, true);
+    menu.querySelector('button')?.focus();
+    return menu;
+  }
+
+  async function deleteProfileWithConfirm(profile) {
+    const confirmed = await confirmAction({
+      title: 'Delete connection?',
+      description: `Delete “${profile.name}” from Aux Command? Stored credentials for this profile will also be removed.`,
+      confirmLabel: 'Delete',
+      danger: true
+    });
+    if (!confirmed) return false;
+    await api.sftp.disconnect(profile.id, profile.protocol).catch(() => {});
+    await api.profiles.delete(profile.id);
+    if (profile.credentialId) {
+      await api.vault.delete(profile.credentialId).catch((error) => {
+        toast('Credential cleanup required', errorMessage(error), 'error');
+      });
+    }
+    updateProfiles(await api.profiles.list());
+    toast('Connection deleted', profile.name, 'success');
+    return true;
+  }
+
+  async function duplicateProfile(profile) {
+    const copy = { ...profile };
+    delete copy.id;
+    delete copy.credentialId;
+    delete copy.updatedAt;
+    copy.name = `${profile.name} copy`;
+    copy.favorite = false;
+    const saved = await api.profiles.save(copy);
+    updateProfiles(await api.profiles.list());
+    state.selectedProfileId = saved.id;
+    renderProfiles();
+    toast('Connection duplicated', saved.name, 'success');
+  }
+
+  async function toggleProfileFavorite(profile) {
+    await api.profiles.save({ ...profile, favorite: !profile.favorite });
+    updateProfiles(await api.profiles.list());
+  }
+
+  function knownGroupNames() {
+    const names = new Set(state.customGroups);
+    for (const profile of state.profiles) names.add(profile.group || 'Connections');
+    return [...names].sort((a, b) => (a === 'Local' ? -1 : b === 'Local' ? 1 : a.localeCompare(b)));
+  }
+
+  function persistSidebarSettings() {
+    api.app.saveSidebarSettings({ groups: state.customGroups })
+      .catch((error) => setStatus(`Sidebar settings not saved: ${errorMessage(error)}`, 'error'));
+  }
+
+  async function moveProfileToGroup(profile) {
+    const groups = knownGroupNames().filter((name) => name !== 'Local');
+    return new Promise((resolve) => {
+      const select = selectInput('group', groups.map((name) => [name, name]), profile.group || 'Connections');
+      const newName = textInput('newGroup', '', { placeholder: 'Or type a new group name' });
+      const body = node('div', { className: 'form-grid' }, [
+        field('Existing group', select, '', 'full'),
+        field('New group', newName, 'Leave blank to use the selected group above.', 'full')
+      ]);
+      showModal({
+        title: `Move “${profile.name}”`,
+        description: 'Choose the sidebar group this connection is filed under.',
+        body,
+        className: 'narrow',
+        actions: [
+          { label: 'Cancel', busy: false, run: () => { resolve(false); return true; } },
+          {
+            label: 'Move',
+            className: 'primary',
+            run: async () => {
+              const target = newName.value.trim() || select.value || 'Connections';
+              await api.profiles.save({ ...profile, group: target });
+              if (newName.value.trim() && !state.customGroups.includes(target)) {
+                state.customGroups.push(target);
+                persistSidebarSettings();
+              }
+              updateProfiles(await api.profiles.list());
+              toast('Connection moved', `${profile.name} → ${target}`, 'success');
+              resolve(true);
+              return true;
+            }
+          }
+        ]
+      });
+    });
+  }
+
+  function openProfileContextMenu(profile, anchor) {
+    const items = [
+      { icon: '⏵', label: 'Connect', run: () => connectProfile(profile) },
+      { icon: '✎', label: 'Edit…', run: () => openProfileModal(profile) },
+      { icon: '⧉', label: 'Duplicate', run: () => duplicateProfile(profile) },
+      { icon: profile.favorite ? '☆' : '★', label: profile.favorite ? 'Remove from favorites' : 'Add to favorites', run: () => toggleProfileFavorite(profile) }
+    ];
+    if (profile.id !== 'local-shell') {
+      items.push({ icon: '⇢', label: 'Move to group…', run: () => moveProfileToGroup(profile) });
+      items.push('separator');
+      items.push({ icon: '🗑', label: 'Delete…', danger: true, run: () => deleteProfileWithConfirm(profile) });
+    }
+    openContextMenu(anchor, items, { title: profile.name });
+  }
+
+  async function createGroup() {
+    const name = await askText({
+      title: 'New group',
+      description: 'Groups organize the connections sidebar. Assign connections to a group from their context menu or editor.',
+      label: 'Group name',
+      placeholder: 'Production'
+    });
+    const trimmed = String(name || '').trim().slice(0, 60);
+    if (!trimmed) return;
+    if (knownGroupNames().some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
+      toast('Group already exists', trimmed, 'error');
+      return;
+    }
+    state.customGroups.push(trimmed);
+    persistSidebarSettings();
+    renderProfiles();
+    toast('Group created', trimmed, 'success');
+  }
+
+  async function renameGroup(groupName) {
+    const name = await askText({
+      title: `Rename “${groupName}”`,
+      label: 'Group name',
+      value: groupName
+    });
+    const trimmed = String(name || '').trim().slice(0, 60);
+    if (!trimmed || trimmed === groupName) return;
+    const members = state.profiles.filter((profile) => (profile.group || 'Connections') === groupName);
+    for (const member of members) {
+      await api.profiles.save({ ...member, group: trimmed });
+    }
+    state.customGroups = state.customGroups.filter((existing) => existing !== groupName);
+    if (!state.customGroups.includes(trimmed)) state.customGroups.push(trimmed);
+    persistSidebarSettings();
+    updateProfiles(await api.profiles.list());
+    toast('Group renamed', `${groupName} → ${trimmed}`, 'success');
+  }
+
+  async function deleteGroup(groupName) {
+    const members = state.profiles.filter((profile) => (profile.group || 'Connections') === groupName);
+    const confirmed = await confirmAction({
+      title: `Delete group “${groupName}”?`,
+      description: members.length
+        ? `${members.length} connection${members.length === 1 ? '' : 's'} will move to the “Connections” group. No connections are deleted.`
+        : 'The empty group is removed from the sidebar.',
+      confirmLabel: 'Delete group',
+      danger: true
+    });
+    if (!confirmed) return;
+    for (const member of members) {
+      await api.profiles.save({ ...member, group: 'Connections' });
+    }
+    state.customGroups = state.customGroups.filter((existing) => existing !== groupName);
+    state.collapsedGroups.delete(groupName);
+    persistSidebarSettings();
+    updateProfiles(await api.profiles.list());
+    toast('Group deleted', groupName, 'success');
+  }
+
+  function openGroupContextMenu(groupName, anchor) {
+    const items = [
+      { icon: '＋', label: 'New connection here…', run: () => openProfileModal(null, { group: groupName }) }
+    ];
+    if (groupName !== 'Local') {
+      items.push({ icon: '✎', label: 'Rename group…', run: () => renameGroup(groupName) });
+      items.push('separator');
+      items.push({ icon: '🗑', label: 'Delete group…', danger: true, run: () => deleteGroup(groupName) });
+    }
+    openContextMenu(anchor, items, { title: groupName });
+  }
+
   function renderProfiles() {
     elements.profileList.replaceChildren();
     const query = elements.profileSearch.value.trim().toLowerCase();
@@ -749,6 +999,13 @@
       if (!grouped.has(group)) grouped.set(group, []);
       grouped.get(group).push(profile);
     }
+    // Custom groups stay visible even while empty (outside of searches), so a
+    // freshly created group has somewhere to receive connections.
+    if (!query) {
+      for (const custom of state.customGroups) {
+        if (!grouped.has(custom)) grouped.set(custom, []);
+      }
+    }
 
     const sortedGroups = [...grouped.entries()].sort(([a], [b]) => {
       if (a === 'Local') return -1;
@@ -757,11 +1014,40 @@
     });
 
     for (const [group, profiles] of sortedGroups) {
-      const section = node('section', { className: 'profile-group' });
-      section.append(node('div', { className: 'profile-group-title' }, [
-        node('span', { text: group }),
-        node('span', { text: profiles.length })
-      ]));
+      const collapsed = state.collapsedGroups.has(group) && !query;
+      const section = node('section', { className: `profile-group${collapsed ? ' collapsed' : ''}` });
+      const caret = node('span', { className: 'group-caret', text: collapsed ? '▸' : '▾', attrs: { 'aria-hidden': 'true' } });
+      const collapseButton = node('button', {
+        type: 'button',
+        className: 'group-collapse',
+        attrs: { 'aria-expanded': String(!collapsed), 'aria-label': `${collapsed ? 'Expand' : 'Collapse'} group ${group}` }
+      }, [caret, node('span', { className: 'group-name', text: group }), node('span', { className: 'group-count', text: String(profiles.length) })]);
+      collapseButton.addEventListener('click', () => {
+        if (state.collapsedGroups.has(group)) state.collapsedGroups.delete(group);
+        else state.collapsedGroups.add(group);
+        renderProfiles();
+      });
+      const groupMenuButton = node('button', {
+        type: 'button',
+        className: 'group-menu',
+        text: '⋯',
+        title: `Group actions for ${group}`,
+        attrs: { 'aria-label': `Group actions for ${group}`, 'aria-haspopup': 'menu' }
+      });
+      groupMenuButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openGroupContextMenu(group, groupMenuButton);
+      });
+      section.append(node('div', { className: 'profile-group-title' }, [collapseButton, groupMenuButton]));
+      if (collapsed) {
+        elements.profileList.append(section);
+        continue;
+      }
+      if (!profiles.length) {
+        section.append(node('div', { className: 'group-empty', text: 'No connections yet' }));
+        elements.profileList.append(section);
+        continue;
+      }
       profiles.sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
       for (const profile of profiles) {
         const connectButton = node('button', {
@@ -776,18 +1062,31 @@
           ]),
           node('span', { className: 'profile-connect-label', text: 'Connect' })
         ]);
-        const editButton = node('button', { type: 'button', className: 'profile-edit', text: '•••', title: `Edit ${profile.name}`, attrs: { 'aria-label': `Edit ${profile.name}` } });
+        const editButton = node('button', {
+          type: 'button',
+          className: 'profile-edit',
+          text: '⋯',
+          title: `Actions for ${profile.name}`,
+          attrs: { 'aria-label': `Actions for ${profile.name}`, 'aria-haspopup': 'menu' }
+        });
         const item = node('div', {
           className: `profile-item${profile.id === state.selectedProfileId ? ' selected' : ''}`,
           attrs: { role: 'listitem' }
         }, [connectButton, editButton]);
+        item.addEventListener('contextmenu', (event) => {
+          event.preventDefault();
+          openProfileContextMenu(profile, editButton);
+        });
         connectButton.addEventListener('focus', () => {
           state.selectedProfileId = profile.id;
           elements.profileList.querySelectorAll('.profile-item.selected').forEach((candidate) => candidate.classList.remove('selected'));
           item.classList.add('selected');
         });
         connectButton.addEventListener('click', () => connectProfile(profile));
-        editButton.addEventListener('click', () => openProfileModal(profile));
+        editButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openProfileContextMenu(profile, editButton);
+        });
         section.append(item);
       }
       elements.profileList.append(section);
@@ -862,6 +1161,7 @@
 
           const vncTab = {
             id: vncSession.id,
+            protocol: 'vnc',
             profile, title: vncSession.title, view, tabElement, tabButton, closed: false
           };
           state.vncSessions = state.vncSessions || new Map();
@@ -902,6 +1202,9 @@
       state.sftp.open = true;
       state.sftp.profile = profile;
       state.sftp.ownerTabId = '';
+      // FTP/FTPS browsing has no owning terminal tab; a detached panel must
+      // survive tab activation instead of being resynced to the active tab.
+      state.sftp.detached = true;
       elements.appShell.classList.add('sftp-open');
       elements.sftpPanel.setAttribute('aria-hidden', 'false');
       elements.sftpTitle.textContent = `${profile.name} · ${profile.protocol.toUpperCase()}`;
@@ -1004,6 +1307,15 @@
         api.system.clipboardRead().then((text) => {
           if (text) terminal.paste(text);
         }).catch(() => {});
+        return false;
+      }
+      // Ctrl+Shift chords are workspace shortcuts even while the terminal has
+      // focus; plain Ctrl combinations (Ctrl+W, Ctrl+K, …) stay with the shell
+      // until the session has exited.
+      if (event.ctrlKey && event.shiftKey && handleWorkspaceShortcut(event)) return false;
+      if (tab.closed && event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        requestCloseTab(tab.id);
         return false;
       }
       return true;
@@ -1271,6 +1583,7 @@
 
   function applyPersistedWorkspaceSettings(settings) {
     const workspace = settings?.workspace || {};
+    state.customGroups = Array.isArray(settings?.sidebar?.groups) ? [...settings.sidebar.groups] : [];
     state.layout = workspace.layout === 'grid' ? 'grid' : 'single';
     const width = Number(workspace.paneMinWidth);
     const height = Number(workspace.paneMinHeight);
@@ -1318,6 +1631,9 @@
   function updateSessionActions() {
     const tab = activeTab();
     const tabCount = state.tabs.size;
+    // The tab bar and its toolbar only appear once a session exists; the
+    // welcome screen stays uncluttered.
+    elements.appShell.classList.toggle('no-sessions', tabCount === 0);
     const terminalTab = Boolean(tab?.terminal);
     const terminalCount = [...state.tabs.values()].filter((candidate) => candidate.terminal).length;
     const fileTransfer = isFileTransferProfile(tab?.profile);
@@ -1480,7 +1796,7 @@
   async function closeTab(id) {
     const tab = state.tabs.get(id);
     if (!tab) return;
-    if (tab.protocol === 'vnc') {
+    if (tab.protocol === 'vnc' || !tab.terminal) {
       await closeVncTab(id);
       return;
     }
@@ -1490,9 +1806,9 @@
       elements.sftpPanel.setAttribute('aria-hidden', 'true');
       await disconnectSftp(tab.profile, { reset: true, status: 'SFTP disconnected' });
     }
-    if (!tab.closed) {
-      try { await api.terminal.close(id); } catch { /* process may already have exited */ }
-    }
+    // Always tell the main process: for live sessions this ends the PTY, for
+    // exited sessions it releases the retained transcript.
+    try { await api.terminal.close(id); } catch { /* process may already have exited */ }
     tab.terminal.dispose();
     unobserveResizablePane(tab);
     tab.tabElement.remove();
@@ -1696,7 +2012,7 @@
     }
   }
 
-  async function openProfileModal(existing = null) {
+  async function openProfileModal(existing = null, defaults = {}) {
     const profile = existing || {
       name: '',
       protocol: 'ssh',
@@ -1726,7 +2042,8 @@
       terminalFontSize: 13,
       terminalCursorStyle: 'block',
       terminalCursorBlink: true,
-      terminalScrollback: 20_000
+      terminalScrollback: 20_000,
+      ...defaults
     };
     const hasCredential = profile.credentialId ? await api.vault.has(profile.credentialId).catch(() => false) : false;
     const protocol = selectInput('protocol', [
@@ -1735,10 +2052,14 @@
     if (existing?.id === 'local-shell') protocol.disabled = true;
     const name = textInput('name', profile.name, { required: true, placeholder: 'Production gateway' });
     const group = textInput('group', profile.group || 'Connections', { placeholder: 'Connections' });
+    group.setAttribute('list', 'group-options');
+    const groupOptions = node('datalist', { attrs: { id: 'group-options' } },
+      knownGroupNames().filter((groupName) => groupName !== 'Local').map((groupName) => node('option', { attrs: { value: groupName } })));
     const host = textInput('host', profile.host, { placeholder: 'server.example.com' });
     const port = textInput('port', profile.port || 22, { type: 'number', min: 1, max: 65535 });
     const username = textInput('username', profile.username, { placeholder: 'admin' });
     const identityFile = textInput('identityFile', profile.identityFile, { placeholder: '~/.ssh/id_ed25519' });
+    const knownHostsFile = textInput('knownHostsFile', profile.knownHostsFile, { placeholder: '~/.ssh/known_hosts' });
     const proxyJump = textInput('proxyJump', profile.proxyJump, { placeholder: 'bastion.example.com' });
     const keepAlive = textInput('keepAliveSeconds', profile.keepAliveSeconds ?? 30, { type: 'number', min: 0, max: 600 });
     const startupCommand = node('textarea', { name: 'startupCommand', value: profile.startupCommand || '', placeholder: 'tmux attach || tmux new' });
@@ -1789,10 +2110,12 @@
       field('Name', name),
       field('Protocol', protocol),
       field('Group', group),
+      groupOptions,
       field('Host', host, '', '',),
       field('Port', port),
       field('Username', username, '', '',),
       field('Identity file', identityFile, 'OpenSSH key path. Agent authentication is used automatically when available.'),
+      field('Known-hosts file', knownHostsFile, 'Optional OpenSSH known-hosts override for isolated lab or fixture hosts.'),
       field('ProxyJump', proxyJump, 'SSH terminal sessions and tunnels use the OpenSSH -J option.'),
       field('Keepalive seconds', keepAlive),
       field('SFTP start path', sftpRoot, '', '',),
@@ -1819,6 +2142,7 @@
       [port.closest('.field'), 'ssh,mosh,rdp,vnc,telnet,ftp,ftps'],
       [username.closest('.field'), 'ssh,mosh,rdp,ftp,ftps'],
       [identityFile.closest('.field'), 'ssh,mosh'],
+      [knownHostsFile.closest('.field'), 'ssh,mosh'],
       [proxyJump.closest('.field'), 'ssh'],
       [keepAlive.closest('.field'), 'ssh'],
       [sftpRoot.closest('.field'), 'ssh,ftp,ftps'],
@@ -1859,6 +2183,7 @@
         port: Number(values.get('port') || ({ rdp: 3389, vnc: 5900, telnet: 23 }[selectedProtocol] || 22)),
         username: String(values.get('username') || '').trim(),
         identityFile: String(values.get('identityFile') || '').trim(),
+        knownHostsFile: String(values.get('knownHostsFile') || '').trim(),
         proxyJump: String(values.get('proxyJump') || '').trim(),
         keepAliveSeconds: Number(values.get('keepAliveSeconds') || 0),
         startupCommand: String(values.get('startupCommand') || ''),
@@ -1925,7 +2250,7 @@
           throw error;
         }
       }
-      await api.sftp.disconnect(saved.id).catch(() => {});
+      await api.sftp.disconnect(saved.id, saved.protocol).catch(() => {});
       updateProfiles(await api.profiles.list());
       state.selectedProfileId = saved.id;
       renderProfiles();
@@ -1939,23 +2264,8 @@
         label: 'Delete',
         className: 'danger',
         run: async () => {
-          const confirmed = await confirmAction({
-            title: 'Delete connection?',
-            description: `Delete “${existing.name}” from Aux Command? Stored credentials for this profile will also be removed.`,
-            confirmLabel: 'Delete',
-            danger: true
-          });
-          if (!confirmed) return false;
-          await api.sftp.disconnect(existing.id).catch(() => {});
-          await api.profiles.delete(existing.id);
-          if (existing.credentialId) {
-            await api.vault.delete(existing.credentialId).catch((error) => {
-              toast('Credential cleanup required', errorMessage(error), 'error');
-            });
-          }
-          updateProfiles(await api.profiles.list());
-          toast('Connection deleted', existing.name, 'success');
-          controller.close();
+          const deleted = await deleteProfileWithConfirm(existing);
+          if (deleted) controller.close();
           return false;
         }
       });
@@ -2026,7 +2336,8 @@
 
   async function runSnippet(snippet) {
     const tab = activeTab();
-    if (!tab) throw new Error('Open a terminal tab before running a snippet');
+    if (!tab || !tab.terminal) throw new Error('Open a terminal tab before running a snippet');
+    if (tab.closed) throw new Error('The active session has exited; open a live terminal before running a snippet');
     await api.terminal.write(tab.id, `${snippet.command}\r`);
     toast('Snippet sent', snippet.name, 'success');
   }
@@ -2117,11 +2428,15 @@
           danger: true
         });
         if (!confirmed) return;
-        await api.snippets.delete(snippet.id);
-        await refreshSnippets();
-        toast('Snippet deleted', snippet.name, 'success');
-        controller.close();
-        openSnippetsModal();
+        try {
+          await api.snippets.delete(snippet.id);
+          await refreshSnippets();
+          toast('Snippet deleted', snippet.name, 'success');
+          controller.close();
+          openSnippetsModal();
+        } catch (error) {
+          toast('Snippet delete failed', errorMessage(error), 'error');
+        }
       });
     }
     let controller;
@@ -2256,6 +2571,7 @@
     state.sftp.requestToken += 1;
     state.sftp.profile = null;
     state.sftp.ownerTabId = '';
+    state.sftp.detached = false;
     state.sftp.path = '/';
     state.sftp.entries = [];
     state.sftp.selectedPath = '';
@@ -2297,6 +2613,7 @@
       return;
     }
     state.sftp.open = true;
+    state.sftp.detached = false;
     elements.appShell.classList.add('sftp-open');
     elements.sftpPanel.setAttribute('aria-hidden', 'false');
     window.setTimeout(() => tab.fitAddon.fit(), 200);
@@ -2305,6 +2622,9 @@
 
   async function syncSftpToActiveTab() {
     if (!state.sftp.open) return;
+    // A detached FTP/FTPS browser is not bound to any terminal tab and only
+    // closes through its own panel controls.
+    if (state.sftp.detached) return;
     const syncToken = ++state.sftp.syncToken;
     const tab = activeTab();
     const previousProfile = state.sftp.profile;
@@ -2400,6 +2720,13 @@
   }
 
   function activateSftpEntry(entry) {
+    // Keyboard activation can land on a row that was never clicked, so the
+    // activated entry must become the selection before the editor opens.
+    state.sftp.selectedPath = entry.path;
+    for (const candidate of elements.fileList.querySelectorAll('.file-row')) {
+      candidate.classList.toggle('selected', candidate.dataset.path === entry.path);
+    }
+    updateSftpButtons();
     if (entry.directory) loadSftp(entry.path);
     else openRemoteTextEditor();
   }
@@ -2423,6 +2750,12 @@
     const entries = state.transferQueue.entries;
     const container = document.getElementById('transfer-queue');
     if (!container) return;
+    const badge = document.getElementById('queue-count');
+    if (badge) {
+      const active = entries.filter((entry) => entry.status !== 'completed').length;
+      badge.textContent = String(active);
+      badge.classList.toggle('has-active', active > 0);
+    }
     if (!entries.length) {
       container.innerHTML = '<div class="queue-empty">No transfers</div>';
       return;
@@ -2432,7 +2765,7 @@
     container.replaceChildren();
     for (const entry of sorted) {
       const pct = entry.total > 0 ? Math.min(100, Math.round((entry.transferred / entry.total) * 100)) : 0;
-      const statusIcon = entry.status === 'transferring' ? '↻' : entry.status === 'queued' ? '⋯' : entry.status === 'paused' ? '⏸' : entry.status === 'failed' ? '✗' : entry.status === 'completed' ? '✓' : '?';
+      const statusIcon = entry.status === 'transferring' ? '↻' : entry.status === 'queued' ? '⋯' : entry.status === 'paused' || entry.status === 'pausing' ? '⏸' : entry.status === 'failed' ? '✗' : entry.status === 'completed' ? '✓' : '?';
       const actionButton = (entry.status === 'transferring' || entry.status === 'queued') && entry.pausable !== false
         ? node('button', { type: 'button', className: 'queue-action', text: '⏸', title: 'Pause' })
         : entry.status === 'paused'
@@ -2464,6 +2797,18 @@
       });
       if (cancelButton) cancelButton.addEventListener('click', () => api.transfer.cancel(entry.id).catch(() => {}));
       container.append(row);
+    }
+    if (sorted.some((entry) => entry.status === 'completed')) {
+      const clearButton = node('button', { type: 'button', className: 'queue-clear-completed', text: 'Clear completed' });
+      clearButton.addEventListener('click', async () => {
+        try {
+          state.transferQueue.entries = await api.transfer.clearCompleted() || [];
+          renderTransferQueue();
+        } catch (error) {
+          toast('Could not clear transfers', errorMessage(error), 'error');
+        }
+      });
+      container.append(clearButton);
     }
   }
 
@@ -2760,12 +3105,16 @@
         node('div', {}, [node('span', { text: 'Shell' }), node('strong', { text: info.shell || 'Unknown' })]),
         node('div', {}, [node('span', { text: 'SSH agent' }), node('strong', { text: info.sshAgent ? 'Available' : 'Not detected' })])
       ]),
-      updateReleaseSection(updateStatus, openDiagnosticsModal),
+      updateReleaseSection(updateStatus, () => {
+        // Refresh by replacing the open dialog instead of stacking a second one.
+        controller.close();
+        openDiagnosticsModal();
+      }),
       node('div', {}, [node('div', { className: 'section-title', text: 'Protocol capabilities' }), protocolList]),
       node('div', {}, [node('div', { className: 'section-title', text: 'Runtime tools' }), list]),
       node('div', { className: 'warning-box', text: 'Aux Command bundles local PTY, graphical SFTP, Telnet and serial bridges. RDP, VNC and Mosh still depend on host-installed clients/servers; X11 forwarding uses OpenSSH -X and the host display.' })
     ]);
-    showModal({ title: 'System diagnostics', description: 'Protocol support detected on this Linux host.', body, className: 'wide', actions: [{ label: 'Close', busy: false }] });
+    const controller = showModal({ title: 'System diagnostics', description: 'Protocol support detected on this Linux host.', body, className: 'wide', actions: [{ label: 'Close', busy: false }] });
   }
 
   function openLiveMonitor() {
@@ -2851,6 +3200,7 @@
     const portInput = textInput('targetPort', '3389', { type: 'number', min: '1', max: '65535' });
     const localPortInput = textInput('localPort', '', { type: 'number', min: '1024', max: '65535', placeholder: 'automatic' });
     const usernameInput = textInput('username', '', { autocomplete: 'username', placeholder: 'optional' });
+    const domainInput = textInput('rdpDomain', '', { placeholder: 'optional, e.g. CORP' });
     const connectButton = node('button', { type: 'button', className: 'button primary', text: 'Open remote desktop' });
     const sessionsHost = node('div', { className: 'modal-sections' });
     const renderSessions = async () => {
@@ -2862,7 +3212,14 @@
       }
       for (const session of sessions) {
         const stop = node('button', { type: 'button', className: 'button', text: 'Stop' });
-        stop.addEventListener('click', async () => { await api.gateway.disconnect(session.id); await renderSessions(); });
+        stop.addEventListener('click', async () => {
+          try {
+            await api.gateway.disconnect(session.id);
+            await renderSessions();
+          } catch (error) {
+            toast('Gateway stop failed', errorMessage(error), 'error');
+          }
+        });
         sessionsHost.append(node('div', { className: 'diagnostic-row' }, [
           node('span', { className: 'indicator' }),
           node('div', {}, [node('strong', { text: `${session.protocol.toUpperCase()} ${session.targetHost}:${session.targetPort}` }), node('small', { text: `${session.gatewayName} via localhost:${session.localPort}` })]),
@@ -2870,7 +3227,13 @@
         ]));
       }
     };
-    protocolSelect.addEventListener('change', () => { portInput.value = protocolSelect.value === 'rdp' ? '3389' : '5900'; });
+    const domainField = () => domainInput.closest('.field');
+    protocolSelect.addEventListener('change', () => {
+      portInput.value = protocolSelect.value === 'rdp' ? '3389' : '5900';
+      const rdp = protocolSelect.value === 'rdp';
+      if (domainField()) domainField().hidden = !rdp;
+      domainInput.disabled = !rdp;
+    });
     connectButton.addEventListener('click', async () => {
       connectButton.disabled = true;
       connectButton.textContent = 'Opening gateway...';
@@ -2882,7 +3245,8 @@
           targetHost: hostInput.value.trim(),
           targetPort: Number(portInput.value),
           localPort: localPortInput.value ? Number(localPortInput.value) : undefined,
-          username: usernameInput.value.trim()
+          username: usernameInput.value.trim(),
+          rdpDomain: protocolSelect.value === 'rdp' ? domainInput.value.trim() : ''
         });
         setStatus(`${result.protocol.toUpperCase()} gateway connected on localhost:${result.localPort}`);
         await renderSessions();
@@ -2900,7 +3264,8 @@
         field('Target host', hostInput),
         field('Target port', portInput),
         field('Local forwarding port', localPortInput, 'Leave empty to choose a free local port.'),
-        field('Remote desktop username', usernameInput, 'The native client handles any password prompt.')
+        field('Remote desktop username', usernameInput, 'The native client handles any password prompt.'),
+        field('RDP domain', domainInput, 'Windows logon domain passed to FreeRDP as /d:.')
       ]),
       node('div', { className: 'button-row' }, connectButton),
       node('div', { className: 'warning-box', text: 'The SSH tunnel must confirm forwarding readiness before Aux Command starts the native RDP or VNC client.' }),
@@ -2953,7 +3318,17 @@
       statusBox,
       node('div', { className: 'warning-box', text: 'Credentials and private-key material are never imported from a sync source. Existing local credentials stay local.' })
     ]);
-    showModal({
+    // showModal restores every footer button's pre-click disabled state after
+    // an action resolves, so availability is re-derived one tick later.
+    const refreshAvailability = () => window.setTimeout(() => {
+      const configured = Boolean(currentStatus.configured);
+      for (const footerButton of controller.footer.querySelectorAll('button')) {
+        if (footerButton.textContent === 'Disable' || footerButton.textContent === 'Sync now') {
+          footerButton.disabled = !configured;
+        }
+      }
+    }, 0);
+    const controller = showModal({
       title: 'Profile synchronization',
       description: 'Keep non-secret connection profiles aligned from a local, web or SSH-hosted JSON file.',
       body,
@@ -2962,12 +3337,11 @@
         { label: 'Close', busy: false },
         {
           label: 'Disable',
-          busy: false,
           disabled: !currentStatus.configured,
-          run: async ({ button }) => {
+          run: async () => {
             currentStatus = await api.sync.disable();
-            button.disabled = true;
             renderStatus();
+            refreshAvailability();
             setStatus('Profile synchronization disabled');
             return false;
           }
@@ -2982,6 +3356,7 @@
             state.profiles = await api.profiles.list();
             renderProfiles();
             renderStatus();
+            refreshAvailability();
             setStatus(`Profile sync complete: ${result.added} added, ${result.updated} updated`);
             return false;
           }
@@ -2996,6 +3371,7 @@
             await api.sync.configure(next);
             currentStatus = await api.sync.status();
             renderStatus();
+            refreshAvailability();
             setStatus('Profile synchronization configured');
             return false;
           }
@@ -3048,9 +3424,13 @@
           controls
         ]);
         copy.addEventListener('click', async () => {
-          const publicKey = await api.sshKeys.getPublicKey(key.name);
-          await api.system.clipboardWrite(publicKey);
-          toast('Public key copied', key.name, 'success');
+          try {
+            const publicKey = await api.sshKeys.getPublicKey(key.name);
+            await api.system.clipboardWrite(publicKey);
+            toast('Public key copied', key.name, 'success');
+          } catch (error) {
+            toast('Public key copy failed', errorMessage(error), 'error');
+          }
         });
         remove.addEventListener('click', async () => {
           const confirmed = await confirmAction({
@@ -3060,9 +3440,13 @@
             danger: true
           });
           if (!confirmed) return;
-          await api.sshKeys.delete(key.name);
-          toast('SSH key deleted', key.name, 'success');
-          await refresh();
+          try {
+            await api.sshKeys.delete(key.name);
+            toast('SSH key deleted', key.name, 'success');
+            await refresh();
+          } catch (error) {
+            toast('SSH key delete failed', errorMessage(error), 'error');
+          }
         });
         list.append(row);
       }
@@ -3288,6 +3672,19 @@
       if (tunnel.status === 'running') toast('Tunnel ready', tunnel.name, 'success');
       if (tunnel.status === 'failed') toast('Tunnel failed', tunnel.lastError || tunnel.name, 'error');
     });
+    api.sync.onStatus((status) => {
+      // Background timer syncs mutate the profile store in the main process;
+      // the sidebar must follow without requiring a manual refresh.
+      if (!status?.configured) return;
+      if (status.lastError) {
+        toast('Profile sync failed', status.lastError, 'error');
+        return;
+      }
+      api.profiles.list().then((profiles) => {
+        updateProfiles(profiles);
+        renderProfiles();
+      }).catch(() => { /* next successful sync will refresh the sidebar */ });
+    });
     api.sftp.onProgress(({ profileId, direction, path, transferred, total }) => {
       if (state.sftp.profile?.id !== profileId) return;
       const percentage = total ? Math.min(100, Math.round((transferred / total) * 100)) : 0;
@@ -3298,6 +3695,11 @@
     });
     api.transfer.onUpdate((entry) => {
       const idx = state.transferQueue.entries.findIndex((e) => e.id === entry.id);
+      if (entry.status === 'cancelled') {
+        if (idx >= 0) state.transferQueue.entries.splice(idx, 1);
+        renderTransferQueue();
+        return;
+      }
       if (idx >= 0) state.transferQueue.entries[idx] = entry;
       else state.transferQueue.entries.push(entry);
       if (entry.status === 'completed' && !state.transferQueue.expanded) {
@@ -3342,6 +3744,9 @@
     elements.syncButton.addEventListener('click', () => openProfileSync().catch((error) => toast('Could not open profile sync', errorMessage(error), 'error')));
     elements.websiteButton.addEventListener('click', () => api.system.openWebsite().catch((error) => toast('Could not open website', errorMessage(error), 'error')));
     elements.newProfileButton.addEventListener('click', () => openProfileModal());
+    elements.newGroupButton.addEventListener('click', () => createGroup().catch((error) => toast('Could not create group', errorMessage(error), 'error')));
+    elements.paletteButton.addEventListener('click', () => openCommandPalette());
+    elements.statusbarWebsite.addEventListener('click', () => api.system.openWebsite().catch((error) => toast('Could not open website', errorMessage(error), 'error')));
     elements.profileSearch.addEventListener('input', renderProfiles);
     elements.importSshButton.addEventListener('click', () => importSshConfig().catch(() => {}));
     elements.profileMenuButton.addEventListener('click', openProfileDataMenu);
@@ -3386,64 +3791,14 @@
       fitVisibleTerminals();
     });
 
+    // Bundled fonts can finish loading after a terminal has measured its cell
+    // size; refit so glyph metrics match the final typeface.
+    document.fonts?.ready?.then(() => fitVisibleTerminals()).catch(() => {});
+
     window.addEventListener('keydown', (event) => {
       const modalOpen = Boolean(elements.modalRoot.querySelector('.modal-backdrop'));
       if (modalOpen && event.key !== 'Escape') return;
-      if (isEditableShortcutTarget(event.target)) return;
-      const modifier = event.ctrlKey || event.metaKey;
-      if (modifier && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        elements.quickInput.focus();
-        elements.quickInput.select();
-      }
-      if (modifier && !event.shiftKey && event.code === 'KeyF') {
-        event.preventDefault();
-        openTerminalSearch();
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 't') {
-        event.preventDefault();
-        connectProfile(localProfile());
-      }
-      if (modifier && event.shiftKey && event.code === 'KeyP') {
-        event.preventDefault();
-        openCommandPalette();
-      }
-      if (modifier && event.shiftKey && event.code === 'KeyD') {
-        event.preventDefault();
-        duplicateActiveSession().catch((error) => toast('Duplicate failed', errorMessage(error), 'error'));
-      }
-      if (modifier && event.shiftKey && event.code === 'KeyR') {
-        event.preventDefault();
-        reconnectActiveSession().catch((error) => toast('Reconnect failed', errorMessage(error), 'error'));
-      }
-      if (modifier && event.shiftKey && event.code === 'Minus') {
-        event.preventDefault();
-        adjustPaneSize(-40);
-      }
-      if (modifier && event.shiftKey && event.code === 'Equal') {
-        event.preventDefault();
-        adjustPaneSize(40);
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        toggleSftp();
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 'l') {
-        event.preventDefault();
-        toggleTerminalLayout();
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 'b') {
-        event.preventDefault();
-        toggleBroadcastInput();
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        openSnippetsModal();
-      }
-      if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && state.activeTabId) {
-        event.preventDefault();
-        requestCloseTab(state.activeTabId);
-      }
+      if (!isEditableShortcutTarget(event.target)) handleWorkspaceShortcut(event);
       if (event.key === 'Escape') {
         const backdrops = elements.modalRoot.querySelectorAll('.modal-backdrop');
         const top = backdrops[backdrops.length - 1];
@@ -3451,6 +3806,43 @@
         closeButton?.click();
       }
     });
+  }
+
+  function handleWorkspaceShortcut(event) {
+    if (event.auxShortcutHandled) return true;
+    let handled = false;
+    const run = (action) => {
+      event.preventDefault();
+      handled = true;
+      action();
+    };
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && !event.shiftKey && event.key.toLowerCase() === 'k') {
+      run(() => {
+        elements.quickInput.focus();
+        elements.quickInput.select();
+      });
+    }
+    if (modifier && !event.shiftKey && event.code === 'KeyF') run(() => openTerminalSearch());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 't') run(() => connectProfile(localProfile()));
+    if (modifier && event.shiftKey && event.code === 'KeyP') run(() => openCommandPalette());
+    if (modifier && event.shiftKey && event.code === 'KeyD') {
+      run(() => duplicateActiveSession().catch((error) => toast('Duplicate failed', errorMessage(error), 'error')));
+    }
+    if (modifier && event.shiftKey && event.code === 'KeyR') {
+      run(() => reconnectActiveSession().catch((error) => toast('Reconnect failed', errorMessage(error), 'error')));
+    }
+    if (modifier && event.shiftKey && event.code === 'Minus') run(() => adjustPaneSize(-40));
+    if (modifier && event.shiftKey && event.code === 'Equal') run(() => adjustPaneSize(40));
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'f') run(() => toggleSftp());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'l') run(() => toggleTerminalLayout());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'b') run(() => toggleBroadcastInput());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 's') run(() => openSnippetsModal());
+    if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && state.activeTabId) {
+      run(() => requestCloseTab(state.activeTabId));
+    }
+    if (handled) event.auxShortcutHandled = true;
+    return handled;
   }
 
   async function initialize() {
@@ -3471,6 +3863,10 @@
       updateProfiles(initial.profiles || []);
       state.initialProfiles = initial.profiles || [];
       restoreInitialSessions(initial.sessions || []);
+      api.transfer.list().then((entries) => {
+        state.transferQueue.entries = Array.isArray(entries) ? entries : [];
+        renderTransferQueue();
+      }).catch(() => { /* queue hydration is best-effort */ });
 
       // Restore persisted sessions only after reattaching still-live backend sessions.
       await restoreSavedSessions();

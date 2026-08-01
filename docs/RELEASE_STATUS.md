@@ -36,8 +36,8 @@ See `docs/GITHUB_RELEASES.md` for the release/update runbook.
 
 ### Source and dependency gates
 
-- `npm run check`: **127/127 tests passed**
-- JavaScript syntax: 52 files passed
+- `npm run check`: **178/178 tests passed** (environment-dependent live-network tests skip cleanly where host tools are unavailable)
+- JavaScript syntax: 71 files passed
 - Python syntax: 5 files passed
 - Shell syntax: 5 files passed
 - `npm audit --omit=dev --audit-level=moderate`: zero vulnerabilities

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   app: Object.freeze({
     getState: () => invoke('app:get-state'),
     saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace),
+    saveSidebarSettings: (sidebar) => invoke('app:save-sidebar-settings', sidebar),
     saveSessions: (sessions) => invoke('app:save-sessions', sessions),
     getSessions: () => invoke('app:get-sessions')
   }),
@@ -68,7 +69,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     upload: (profile, remoteDirectory) => invoke('sftp:upload', profile, remoteDirectory),
     uploadPaths: (profile, remoteDirectory, localPaths) => invoke('sftp:upload-paths', profile, remoteDirectory, localPaths),
     download: (profile, remotePath) => invoke('sftp:download', profile, remotePath),
-    disconnect: (profileId) => invoke('sftp:disconnect', profileId),
+    disconnect: (profileId, protocol) => invoke('sftp:disconnect', profileId, protocol),
     onProgress: (callback) => subscribe('sftp:progress', callback),
     onError: (callback) => subscribe('sftp:error', callback)
   }),

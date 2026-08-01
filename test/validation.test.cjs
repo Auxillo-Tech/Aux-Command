@@ -161,3 +161,18 @@ test('normalizes explicit SSH transfer modes for legacy servers', () => {
     /unsupported transfer mode/u
   );
 });
+
+test('accepts every terminal theme offered by the profile editor', () => {
+  const themes = [
+    'aux-dark', 'light', 'high-contrast', 'nord', 'dracula', 'solarized-dark', 'solarized-light',
+    'one-dark', 'catppuccin-mocha', 'tokyo-night', 'gruvbox-dark', 'monokai', 'oceanic-next', 'material'
+  ];
+  for (const theme of themes) {
+    const profile = normalizeProfile({ name: `Theme ${theme}`, protocol: 'ssh', host: 'host', terminalTheme: theme });
+    assert.equal(profile.terminalTheme, theme);
+  }
+  assert.throws(
+    () => normalizeProfile({ name: 'Bad theme', protocol: 'ssh', host: 'host', terminalTheme: 'hotdog-stand' }),
+    /unsupported terminal theme/u
+  );
+});

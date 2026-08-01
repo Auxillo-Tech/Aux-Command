@@ -15,6 +15,7 @@ import os
 import pty
 import selectors
 import signal
+import stat
 import struct
 import sys
 import termios
@@ -22,6 +23,9 @@ from typing import Any
 
 MAX_CONTROL_BUFFER = 1_048_576
 MAX_IO_CHUNK = 65_536
+# Stop reading terminal input when this much is queued for a stalled PTY, so
+# large pastes are buffered with backpressure instead of crashing the session.
+MAX_PENDING_INPUT = 8_388_608
 
 
 def read_spec(fd: int = 4) -> dict[str, Any]:
@@ -151,6 +155,9 @@ def main() -> int:
     child_pid, master_fd = pty.fork()
     if child_pid == 0:
         try:
+            # The bridge's IPC descriptors (control=3, spec=4, input=5, ready=6)
+            # must not leak into the user's session or its descendants.
+            os.closerange(3, 16)
             os.chdir(cwd)
             os.execvpe(command, [command, *args], child_env)
         except BaseException as exc:  # The child can only report through its PTY.
@@ -171,6 +178,12 @@ def main() -> int:
 
     input_fd = 5
     try:
+        # Only trust fd 5 as the dedicated input channel when it really is the
+        # pipe/socketpair the parent passed; otherwise it may alias an
+        # unrelated fd (such as the PTY master) in non-standard harnesses.
+        input_mode = os.fstat(input_fd).st_mode
+        if not stat.S_ISFIFO(input_mode) and not stat.S_ISSOCK(input_mode):
+            raise OSError(errno.EBADF, "fd 5 is not a pipe")
         set_nonblocking(input_fd)
     except OSError:
         input_fd = sys.stdin.fileno()
@@ -182,8 +195,37 @@ def main() -> int:
         selector.register(control_fd, selectors.EVENT_READ, "control")
 
     control_buffer = bytearray()
+    pending_input = bytearray()
+    input_paused = False
+    input_open = True
     pty_open = True
     child_status: int | None = None
+
+    def update_pty_interest() -> None:
+        if not pty_open:
+            return
+        events = selectors.EVENT_READ | (selectors.EVENT_WRITE if pending_input else 0)
+        selector.modify(master_fd, events, "pty")
+
+    def flush_pending_input() -> None:
+        nonlocal input_paused
+        while pending_input:
+            try:
+                written = os.write(master_fd, pending_input[:MAX_IO_CHUNK])
+            except BlockingIOError:
+                break
+            except InterruptedError:
+                continue
+            except OSError as exc:
+                if exc.errno in (errno.EIO, errno.EBADF):
+                    pending_input.clear()
+                    break
+                raise
+            del pending_input[:written]
+        update_pty_interest()
+        if input_paused and input_open and len(pending_input) < MAX_PENDING_INPUT // 2:
+            selector.register(input_fd, selectors.EVENT_READ, "stdin")
+            input_paused = False
 
     def forward_signal(signum: int, _frame: Any) -> None:
         signal_child(child_pid, signum)
@@ -197,8 +239,12 @@ def main() -> int:
         except InterruptedError:
             events = []
 
-        for key, _mask in events:
+        for key, mask in events:
             if key.data == "pty":
+                if mask & selectors.EVENT_WRITE:
+                    flush_pending_input()
+                if not (mask & selectors.EVENT_READ):
+                    continue
                 try:
                     data = os.read(master_fd, MAX_IO_CHUNK)
                 except BlockingIOError:
@@ -212,6 +258,7 @@ def main() -> int:
                     write_all(sys.stdout.fileno(), data)
                 else:
                     pty_open = False
+                    pending_input.clear()
                     try:
                         selector.unregister(master_fd)
                     except Exception:
@@ -222,12 +269,17 @@ def main() -> int:
                 except BlockingIOError:
                     continue
                 if data:
-                    try:
-                        write_all(master_fd, data)
-                    except OSError as exc:
-                        if exc.errno not in (errno.EIO, errno.EBADF):
-                            raise
+                    if pty_open:
+                        pending_input.extend(data)
+                        flush_pending_input()
+                        if len(pending_input) >= MAX_PENDING_INPUT and not input_paused:
+                            try:
+                                selector.unregister(input_fd)
+                                input_paused = True
+                            except Exception:
+                                pass
                 else:
+                    input_open = False
                     try:
                         selector.unregister(input_fd)
                     except Exception:

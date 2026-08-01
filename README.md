@@ -68,21 +68,21 @@ Full instructions are in [`INSTALL.md`](INSTALL.md).
 Use this when you want the least invasive installation path.
 
 ```bash
-chmod +x Aux-Command-0.1.0-x86_64.AppImage
-./Aux-Command-0.1.0-x86_64.AppImage
+chmod +x Aux-Command-0.2.3-x86_64.AppImage
+./Aux-Command-0.2.3-x86_64.AppImage
 ```
 
 If the host does not support AppImage FUSE mounting, extract and run it:
 
 ```bash
-./Aux-Command-0.1.0-x86_64.AppImage --appimage-extract
+./Aux-Command-0.2.3-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 ### Debian / Ubuntu
 
 ```bash
-sudo apt install ./Aux-Command-0.1.0-amd64.deb
+sudo apt install ./Aux-Command-0.2.3-amd64.deb
 aux-command
 ```
 
@@ -96,14 +96,14 @@ The Debian package declares the core runtime dependencies:
 Fedora / RHEL-style systems:
 
 ```bash
-sudo dnf install ./Aux-Command-0.1.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.2.3-x86_64.rpm
 aux-command
 ```
 
 openSUSE-style systems:
 
 ```bash
-sudo zypper install ./Aux-Command-0.1.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.2.3-x86_64.rpm
 aux-command
 ```
 
@@ -291,10 +291,10 @@ The Fedora build wrapper handles common local packaging gaps by downloading buil
 Current source validation passes:
 
 ```text
-Syntax validated for 50 JavaScript files.
+Syntax validated for 71 JavaScript files.
 Syntax validated for 5 Python files.
 Syntax validated for 5 shell scripts.
-119 tests passed.
+178 tests passed, 0 failed. A handful of live-network tests skip cleanly on hosts without ping/dig/traceroute/whois or loopback UDP.
 ```
 
 Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.

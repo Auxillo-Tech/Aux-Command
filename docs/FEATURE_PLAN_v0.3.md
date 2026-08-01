@@ -3,7 +3,7 @@
 ## Priority Order (recommended)
 
 ### 1. SFTP Transfer Queue with Pause/Resume
-**Effort: Medium** | **Impact: High** | **Target: This session**
+**Effort: Medium** | **Impact: High** | **Status: Shipped in 0.2.x**
 
 **What it does:** 
 - Queue multiple file uploads/downloads in the SFTP panel
@@ -38,7 +38,7 @@ Renderer:
 ---
 
 ### 2. Session Persistence Across Restarts
-**Effort: Medium** | **Impact: High** | **Target: This session**
+**Effort: Medium** | **Impact: High** | **Status: Shipped in 0.2.x**
 
 **What it does:**
 - Remember open tabs and their active profiles when app restarts

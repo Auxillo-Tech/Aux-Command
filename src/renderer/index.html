@@ -9,12 +9,15 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div id="app-shell">
+  <div id="app-shell" class="no-sessions">
     <header class="topbar">
       <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle connections sidebar" aria-expanded="false">☰</button>
       <button id="brand-button" class="brand" type="button" title="Aux Command home">
-        <img class="brand-wordmark" src="./assets/auxillo-wordmark.png" alt="Auxillo">
-        <span class="product-name">Command</span>
+        <img class="brand-mark" src="./assets/aux-command-logo.png" alt="">
+        <span class="brand-copy">
+          <span class="product-name">Aux Command</span>
+          <span class="product-tagline">Remote operations workstation</span>
+        </span>
       </button>
       <div class="quick-connect workspace-commandbar">
         <span class="quick-prefix">›_</span>
@@ -31,25 +34,70 @@
         </select>
         <button id="quick-button" class="button primary" type="button">Connect</button>
       </div>
-      <nav class="top-actions" aria-label="Application actions">
-        <button id="local-button" class="top-action" type="button" title="New local shell (Ctrl+Shift+T)"><span class="action-icon">›_</span><span class="action-label">Local shell</span></button>
-        <button id="snippets-button" class="top-action" type="button" title="Command snippets (Ctrl+Shift+S)"><span class="action-icon">⌘</span><span class="action-label">Snippets</span></button>
-        <button id="tunnels-button" class="top-action" type="button" title="SSH tunnels"><span class="action-icon">⇄</span><span class="action-label">Tunnels</span></button>
-        <button id="updates-button" class="top-action" type="button" title="GitHub release updates"><span class="action-icon">⇧</span><span class="action-label">Updates</span></button>
-        <button id="diagnostics-button" class="top-action" type="button" title="System diagnostics"><span class="action-icon">◉</span><span class="action-label">Diagnostics</span></button>
-        <button id="network-tools-button" class="top-action" type="button" title="Network tools (ping, DNS, scan)"><span class="action-icon">NET</span><span class="action-label">Network</span></button>
-        <button id="monitor-button" class="top-action" type="button" title="Live server monitor"><span class="action-icon">MON</span><span class="action-label">Monitor</span></button>
-        <button id="gateway-button" class="top-action" type="button" title="Remote desktop gateway"><span class="action-icon">GW</span><span class="action-label">Gateway</span></button>
-        <button id="sync-button" class="top-action" type="button" title="Profile synchronization"><span class="action-icon">SYNC</span><span class="action-label">Sync</span></button>
-        <button id="sshkeys-button" class="top-action" type="button" title="SSH key manager"><span class="action-icon">KEY</span><span class="action-label">Keys</span></button>
-        <button id="website-button" class="avatar-button" type="button" title="auxillo.tech">AUX</button>
-      </nav>
+      <div class="topbar-right">
+        <button id="palette-button" class="ghost-button" type="button" title="Command palette (Ctrl+Shift+P)">
+          <span aria-hidden="true">⌘</span><span class="ghost-label">Palette</span>
+        </button>
+        <button id="website-button" class="brand-link" type="button" title="Visit auxillo.tech">
+          <img src="./assets/auxillo-wordmark.png" alt="Auxillo">
+          <span aria-hidden="true" class="external-arrow">↗</span>
+        </button>
+      </div>
     </header>
+
+    <nav class="tool-rail top-actions" aria-label="Application actions">
+      <button id="local-button" class="top-action" type="button" title="New local shell (Ctrl+Shift+T)">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="16" height="13" rx="2.4"/><path d="m5.5 8 2.6 2.2L5.5 12.4"/><path d="M10.5 13h4"/></svg></span>
+        <span class="action-label">Local shell</span>
+      </button>
+      <button id="snippets-button" class="top-action" type="button" title="Command snippets (Ctrl+Shift+S)">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5H5.8A2.3 2.3 0 0 0 3.5 6.8v2.1L2.4 10l1.1 1.1v2.1a2.3 2.3 0 0 0 2.3 2.3H7"/><path d="M13 4.5h1.2a2.3 2.3 0 0 1 2.3 2.3v2.1L17.6 10l-1.1 1.1v2.1a2.3 2.3 0 0 1-2.3 2.3H13"/><path d="M8.2 12.2 11.8 7.8"/></svg></span>
+        <span class="action-label">Snippets</span>
+      </button>
+      <span class="rail-separator" aria-hidden="true"></span>
+      <button id="tunnels-button" class="top-action" type="button" title="SSH tunnels">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10.5M12 4.2 15 7l-3 2.8"/><path d="M16 13H5.5M8 10.2 5 13l3 2.8"/></svg></span>
+        <span class="action-label">Tunnels</span>
+      </button>
+      <button id="network-tools-button" class="top-action" type="button" title="Network tools (ping, DNS, scan)">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><path d="M2.8 10h14.4M10 2.6c2.4 2 3.6 4.5 3.6 7.4S12.4 15.4 10 17.4c-2.4-2-3.6-4.5-3.6-7.4S7.6 4.6 10 2.6Z"/></svg></span>
+        <span class="action-label">Network</span>
+      </button>
+      <button id="monitor-button" class="top-action" type="button" title="Live server monitor">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 10.5h3l2-5 3.4 9 2.1-4h4.5"/></svg></span>
+        <span class="action-label">Monitor</span>
+      </button>
+      <button id="gateway-button" class="top-action" type="button" title="Remote desktop gateway">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="15" height="10" rx="1.8"/><path d="M7.5 16.5h5M10 13.5v3"/><path d="m8 7 2 1.7L8 10.4"/></svg></span>
+        <span class="action-label">Gateway</span>
+      </button>
+      <button id="sshkeys-button" class="top-action" type="button" title="SSH key manager">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.6" cy="10" r="3.6"/><path d="M10.2 10h7.3M14.5 10v2.8M17.5 10v2"/></svg></span>
+        <span class="action-label">Keys</span>
+      </button>
+      <span class="rail-separator" aria-hidden="true"></span>
+      <button id="sync-button" class="top-action" type="button" title="Profile synchronization">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.8 8.4A6 6 0 0 0 5.1 6.2M4.2 11.6a6 6 0 0 0 10.7 2.2"/><path d="M15.9 4.4v4h-4M4.1 15.6v-4h4"/></svg></span>
+        <span class="action-label">Sync</span>
+      </button>
+      <span class="rail-spacer" aria-hidden="true"></span>
+      <button id="diagnostics-button" class="top-action" type="button" title="System diagnostics">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2.2M10 15.2v2.2M2.6 10h2.2M15.2 10h2.2"/></svg></span>
+        <span class="action-label">Diagnostics</span>
+      </button>
+      <button id="updates-button" class="top-action" type="button" title="GitHub release updates">
+        <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><path d="M10 13.6V6.8M7.2 9.4 10 6.6l2.8 2.8"/></svg></span>
+        <span class="action-label">Updates</span>
+      </button>
+    </nav>
 
     <aside class="sidebar">
       <div class="sidebar-heading">
         <div><span class="eyebrow">Workspace</span><h2>Connections</h2></div>
-        <button id="new-profile-button" class="icon-button small" type="button" title="New connection" aria-label="New connection">＋</button>
+        <div class="sidebar-heading-actions">
+          <button id="new-group-button" class="icon-button small" type="button" title="New group" aria-label="New group"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 4.6a1.6 1.6 0 0 1 1.6-1.6h3l1.4 1.6h4.8a1.6 1.6 0 0 1 1.6 1.6v6.2a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M8 7.4v3.6M6.2 9.2h3.6"/></svg></button>
+          <button id="new-profile-button" class="icon-button small" type="button" title="New connection" aria-label="New connection">＋</button>
+        </div>
       </div>
       <label class="search-box">
         <span>⌕</span>
@@ -97,7 +145,7 @@
         <span>Keyboard input is being sent to every open terminal.</span>
       </div>
       <section id="welcome" class="welcome">
-        <div class="welcome-mark"><img src="./assets/logo.png" alt=""></div>
+        <div class="welcome-mark"><img src="./assets/aux-command-logo.png" alt=""></div>
         <img class="eyebrow-logo" src="./assets/eyebrow-logo.png" alt="Auxillo">
         <h1>Control every remote system from one Linux workspace.</h1>
         <p>Native OpenSSH sessions, file transfer, tunnels and remote desktop launchers without hiding the Linux tools you already trust.</p>
@@ -170,7 +218,11 @@
 
     <footer class="statusbar">
       <div><span id="global-status-dot" class="status-dot"></span><span id="global-status" role="status" aria-live="polite">Ready</span></div>
-      <div class="statusbar-right"><span id="active-session-label">No active session</span><span id="app-version"></span></div>
+      <div class="statusbar-right">
+        <span id="active-session-label">No active session</span>
+        <span id="app-version"></span>
+        <button id="statusbar-website" class="statusbar-link" type="button" title="Visit auxillo.tech">auxillo.tech</button>
+      </div>
     </footer>
   </div>
 
