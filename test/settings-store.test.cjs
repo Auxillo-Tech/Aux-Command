@@ -32,3 +32,29 @@ test('persists workspace settings through the JSON store', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('normalizes highlight settings with bounds and defaults', () => {
+  const { normalizeHighlightSettings } = require('../src/main/lib/settings-store.cjs');
+  const result = normalizeHighlightSettings({
+    enabled: true,
+    rules: [
+      { id: 'a', label: 'Errors', pattern: '/error/', color: 'red', caseSensitive: true, enabled: true },
+      { pattern: 'warn', color: 'not-a-color' },
+      { pattern: '' },
+      { label: 'no pattern is dropped' }
+    ]
+  });
+  assert.equal(result.enabled, true);
+  assert.equal(result.rules.length, 2);
+  assert.equal(result.rules[0].id, 'a');
+  assert.equal(result.rules[0].color, 'red');
+  assert.equal(result.rules[0].caseSensitive, true);
+  assert.equal(result.rules[1].color, 'amber', 'unknown colors fall back to amber');
+  assert.equal(result.rules[1].enabled, true, 'rules default to enabled');
+
+  const empty = normalizeHighlightSettings(undefined);
+  assert.deepEqual(empty, { enabled: false, rules: [] });
+
+  const capped = normalizeHighlightSettings({ rules: Array.from({ length: 80 }, (_, i) => ({ pattern: `p${i}` })) });
+  assert.equal(capped.rules.length, 50, 'rule count is capped');
+});

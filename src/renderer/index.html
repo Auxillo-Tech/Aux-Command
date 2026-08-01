@@ -127,6 +127,7 @@
           </div>
           <div class="toolbar-group" aria-label="Session">
             <button id="terminal-search-toggle" class="tab-action" type="button" title="Find in active terminal (Ctrl+F)" disabled>Find</button>
+            <button id="highlight-toggle" class="tab-action" type="button" title="Log keyword highlighting (Ctrl+Shift+H)">Highlight</button>
             <button id="export-transcript-button" class="tab-action" type="button" title="Export active terminal transcript" disabled>Export</button>
             <button id="terminal-log-button" class="tab-action" type="button" title="Start or stop logging active terminal output" disabled>Log</button>
             <button id="macro-record-button" class="tab-action" type="button" title="Record terminal input as a replayable snippet" disabled>Macro</button>
@@ -170,6 +171,7 @@
           <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>±</kbd> Pane size</span>
           <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd> Tile sessions</span>
           <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd> Broadcast input</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd> Log highlighting</span>
           <span><kbd>Ctrl</kbd><kbd>F</kbd> Find terminal</span>
           <span><kbd>Ctrl</kbd><kbd>W</kbd> Close tab</span>
         </div>
@@ -218,6 +220,11 @@
 
     <footer class="statusbar">
       <div><span id="global-status-dot" class="status-dot"></span><span id="global-status" role="status" aria-live="polite">Ready</span></div>
+      <button id="tunnel-status-cluster" class="statusbar-cluster" type="button" title="SSH tunnels" hidden aria-label="Active SSH tunnels">
+        <span class="cluster-icon" aria-hidden="true">⇄</span>
+        <span id="tunnel-status-summary" class="cluster-summary">0 tunnels</span>
+        <span id="tunnel-status-dots" class="cluster-dots"></span>
+      </button>
       <div class="statusbar-right">
         <span id="active-session-label">No active session</span>
         <span id="app-version"></span>

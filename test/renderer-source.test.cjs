@@ -228,7 +228,7 @@ test('renderer CSP permits xterm runtime style updates without allowing inline s
 
 test('renderer forces xterm refresh after PTY data writes', () => {
   assert.match(renderer, /function writeTerminalData\(tab, data\)/u);
-  assert.match(renderer, /tab\.terminal\.write\(data, \(\) => \{/u);
+  assert.match(renderer, /tab\.terminal\.write\(payload, \(\) => \{/u);
   assert.match(renderer, /tab\.terminal\.refresh\(0, tab\.terminal\.rows - 1\)/u);
 });
 
@@ -468,4 +468,17 @@ test('embedded RDP reuses the shared remote-desktop tab with external fallback',
   assert.match(renderer, /Embedded \$\{kind\} unavailable, launching external client/u);
   assert.match(renderer, /if \(tab\.desktopKind === 'rdp'\) await api\.rdp\.stopEmbedded\(id\)/u);
   assert.match(preload, /startEmbedded: \(profile\) => invoke\('rdp:start-embedded', profile\)/u);
+});
+
+test('log keyword highlighting is escape-aware, display-only, and persisted', () => {
+  assert.match(renderer, /function applyHighlighting\(text\)/u);
+  assert.match(renderer, /function escapeSequenceLength\(str, i\)/u);
+  assert.match(renderer, /function highlightPlainRun\(text\)/u);
+  // Highlighting runs at display time inside writeTerminalData …
+  assert.match(renderer, /const payload = state\.highlight\.enabled \? applyHighlighting\(data\) : data;/u);
+  // … toggling and rules persist through the settings store …
+  assert.match(renderer, /api\.app\.saveHighlightSettings\(\{ enabled: state\.highlight\.enabled, rules: state\.highlight\.rules \}\)/u);
+  assert.match(preload, /saveHighlightSettings: \(highlight\) => invoke\('app:save-highlight-settings', highlight\)/u);
+  assert.match(indexHtml, /id="highlight-toggle"/u);
+  assert.match(styles, /\.highlight-row/u);
 });

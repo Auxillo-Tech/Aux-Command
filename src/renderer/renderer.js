@@ -41,6 +41,7 @@
     broadcastToggle: $('#broadcast-toggle'),
     broadcastWarning: $('#broadcast-warning'),
     terminalSearchToggle: $('#terminal-search-toggle'),
+    highlightToggle: $('#highlight-toggle'),
     exportTranscriptButton: $('#export-transcript-button'),
     terminalLogButton: $('#terminal-log-button'),
     macroRecordButton: $('#macro-record-button'),
@@ -86,6 +87,7 @@
     snippets: [],
     customGroups: [],
     collapsedGroups: new Set(),
+    highlight: { enabled: false, rules: [], version: 0 },
     tabs: new Map(),
     activeTabId: '',
     layout: 'single',
@@ -1182,6 +1184,254 @@
     return createTerminalTab(session, profile);
   }
 
+  // Keyword highlighting for log triage. Matches in plain-text terminal output
+  // are wrapped in ANSI SGR colors at display time — the same technique as
+  // `grep --color`. It is display-only: the main-process transcript, session
+  // logs, and exports keep the unmodified stream.
+  const HIGHLIGHT_COLORS = {
+    red: { rgb: [255, 92, 119], label: 'Red' },
+    amber: { rgb: [255, 199, 92], label: 'Amber' },
+    green: { rgb: [73, 222, 140], label: 'Green' },
+    blue: { rgb: [94, 168, 255], label: 'Blue' },
+    magenta: { rgb: [180, 139, 234], label: 'Magenta' },
+    cyan: { rgb: [69, 210, 255], label: 'Cyan' }
+  };
+  const HIGHLIGHT_RESET = '[39;49m';
+  const MAX_HIGHLIGHT_MATCHES = 400;
+  let compiledHighlightCache = { version: -1, rules: [] };
+
+  function compileHighlightRules() {
+    const compiled = [];
+    for (const rule of state.highlight.rules) {
+      if (!rule.enabled || !rule.pattern) continue;
+      let source = rule.pattern;
+      // Interpret the pattern literally unless the operator wraps it in /…/ to
+      // opt into a regular expression, matching the mental model of a "find" box.
+      const asRegex = source.length > 2 && source.startsWith('/') && source.endsWith('/');
+      if (asRegex) source = source.slice(1, -1);
+      else source = source.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      if (rule.wholeWord) source = `\\b(?:${source})\\b`;
+      const color = HIGHLIGHT_COLORS[rule.color] || HIGHLIGHT_COLORS.amber;
+      const [r, g, b] = color.rgb;
+      // Dark text on a solid brand-colored background reads cleanly over logs.
+      const sgr = `[38;2;10;14;22;48;2;${r};${g};${b}m`;
+      try {
+        compiled.push({ regex: new RegExp(source, `g${rule.caseSensitive ? '' : 'i'}`), sgr });
+      } catch { /* an invalid regex rule is skipped rather than breaking the terminal */ }
+    }
+    return compiled;
+  }
+
+  function currentHighlightRules() {
+    if (compiledHighlightCache.version !== state.highlight.version) {
+      compiledHighlightCache = { version: state.highlight.version, rules: compileHighlightRules() };
+    }
+    return compiledHighlightCache.rules;
+  }
+
+  // Length of the ANSI/VT escape sequence beginning at index i (str[i] is ESC),
+  // so escape sequences can be copied through verbatim while surrounding plain
+  // text is highlighted.
+  function escapeSequenceLength(str, i) {
+    if (i + 1 >= str.length) return 1;
+    const c = str[i + 1];
+    if (c === '[') {
+      let j = i + 2;
+      while (j < str.length) {
+        const code = str.charCodeAt(j);
+        if (code >= 0x40 && code <= 0x7e) return j + 1 - i;
+        j += 1;
+      }
+      return str.length - i;
+    }
+    if (c === ']' || c === 'P' || c === 'X' || c === '^' || c === '_') {
+      // OSC/DCS/SOS/PM/APC: terminated by BEL or the ST sequence (ESC \).
+      let j = i + 2;
+      while (j < str.length) {
+        if (c === ']' && str[j] === '\x07') return j + 1 - i;
+        if (str[j] === '\x1b' && str[j + 1] === '\\') return j + 2 - i;
+        j += 1;
+      }
+      return str.length - i;
+    }
+    return 2;
+  }
+
+  // Wrap keyword matches in a single, non-overlapping pass so output containing
+  // no matches is returned unchanged.
+  function highlightPlainRun(text) {
+    const rules = currentHighlightRules();
+    const spans = [];
+    for (const { regex, sgr } of rules) {
+      regex.lastIndex = 0;
+      let match;
+      while ((match = regex.exec(text))) {
+        if (match[0].length === 0) { regex.lastIndex += 1; continue; }
+        spans.push({ start: match.index, end: match.index + match[0].length, sgr });
+        if (spans.length > MAX_HIGHLIGHT_MATCHES * rules.length) break;
+      }
+    }
+    if (!spans.length) return text;
+    // Earliest start wins; on a tie the longer match wins. Overlaps are dropped.
+    spans.sort((a, b) => a.start - b.start || b.end - a.end);
+
+    let result = '';
+    let cursor = 0;
+    let painted = 0;
+    for (const span of spans) {
+      if (span.start < cursor || painted >= MAX_HIGHLIGHT_MATCHES) continue;
+      result += text.slice(cursor, span.start) + span.sgr + text.slice(span.start, span.end) + HIGHLIGHT_RESET;
+      cursor = span.end;
+      painted += 1;
+    }
+    result += text.slice(cursor);
+    return result;
+  }
+
+  // Split the stream into escape sequences (copied verbatim) and plain-text runs
+  // (highlighted), so injected color never corrupts cursor moves, existing
+  // colors, or full-screen application output.
+  function applyHighlighting(text) {
+    if (!state.highlight.enabled) return text;
+    if (!currentHighlightRules().length) return text;
+    if (!text.includes('\x1b')) return highlightPlainRun(text);
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === '\x1b') {
+        const len = escapeSequenceLength(text, i);
+        out += text.slice(i, i + len);
+        i += len;
+        continue;
+      }
+      let j = i;
+      while (j < text.length && text[j] !== '\x1b') j += 1;
+      out += highlightPlainRun(text.slice(i, j));
+      i = j;
+    }
+    return out;
+  }
+
+  async function persistHighlightSettings() {
+    try {
+      await api.app.saveHighlightSettings({ enabled: state.highlight.enabled, rules: state.highlight.rules });
+    } catch (error) {
+      setStatus(`Highlight settings not saved: ${errorMessage(error)}`, 'error');
+    }
+  }
+
+  function applyHighlightChange() {
+    // Bumping the version invalidates the compiled-rule cache; new output picks
+    // the change up immediately.
+    state.highlight.version += 1;
+    updateSessionActions();
+    persistHighlightSettings();
+  }
+
+  function toggleHighlighting(force) {
+    state.highlight.enabled = force === undefined ? !state.highlight.enabled : Boolean(force);
+    if (state.highlight.enabled && !state.highlight.rules.length) {
+      state.highlight.rules = defaultHighlightRules();
+    }
+    applyHighlightChange();
+    toast('Log highlighting', state.highlight.enabled ? 'Enabled for terminal output' : 'Disabled', state.highlight.enabled ? 'success' : 'info');
+  }
+
+  function defaultHighlightRules() {
+    return [
+      { id: `rule-${Date.now()}-1`, label: 'Errors', pattern: '/(error|fatal|failed|panic|denied)/', color: 'red', caseSensitive: false, wholeWord: false, enabled: true },
+      { id: `rule-${Date.now()}-2`, label: 'Warnings', pattern: '/(warn|warning|deprecated)/', color: 'amber', caseSensitive: false, wholeWord: false, enabled: true },
+      { id: `rule-${Date.now()}-3`, label: 'Success', pattern: '/(success|succeeded|ok|ready|listening|started)/', color: 'green', caseSensitive: false, wholeWord: false, enabled: true },
+      { id: `rule-${Date.now()}-4`, label: 'IP addresses', pattern: '/\\b\\d{1,3}(\\.\\d{1,3}){3}\\b/', color: 'cyan', caseSensitive: false, wholeWord: false, enabled: true }
+    ];
+  }
+
+  function openHighlightManager() {
+    const list = node('div', { className: 'highlight-list' });
+    const renderList = () => {
+      list.replaceChildren();
+      if (!state.highlight.rules.length) {
+        list.append(node('div', { className: 'empty-state', text: 'No highlight rules yet. Add one below, or load the log-triage starter set.' }));
+        return;
+      }
+      state.highlight.rules.forEach((rule, index) => {
+        const enabledBox = node('input', { type: 'checkbox' });
+        enabledBox.checked = rule.enabled !== false;
+        enabledBox.addEventListener('change', () => { rule.enabled = enabledBox.checked; applyHighlightChange(); });
+
+        const patternInput = textInput('pattern', rule.pattern, { placeholder: 'text or /regex/' });
+        patternInput.addEventListener('input', () => { rule.pattern = patternInput.value; applyHighlightChange(); });
+
+        const labelInput = textInput('label', rule.label || '', { placeholder: 'Label (optional)' });
+        labelInput.addEventListener('input', () => { rule.label = labelInput.value; });
+
+        const colorSelect = selectInput('color', Object.entries(HIGHLIGHT_COLORS).map(([value, def]) => [value, def.label]), rule.color || 'amber');
+        colorSelect.addEventListener('change', () => { rule.color = colorSelect.value; applyHighlightChange(); });
+        colorSelect.style.borderLeft = `4px solid ${HIGHLIGHT_COLORS[rule.color]?.fg || '#ffe9b8'}`;
+
+        const caseBox = checkbox('caseSensitive', 'Aa', rule.caseSensitive);
+        caseBox.title = 'Case sensitive';
+        caseBox.querySelector('input').addEventListener('change', (event) => { rule.caseSensitive = event.target.checked; applyHighlightChange(); });
+        const wordBox = checkbox('wholeWord', 'W', rule.wholeWord);
+        wordBox.title = 'Whole word';
+        wordBox.querySelector('input').addEventListener('change', (event) => { rule.wholeWord = event.target.checked; applyHighlightChange(); });
+
+        const removeButton = node('button', { type: 'button', className: 'mini-button destructive', text: '✕', title: 'Delete rule' });
+        removeButton.addEventListener('click', () => {
+          state.highlight.rules.splice(index, 1);
+          applyHighlightChange();
+          renderList();
+        });
+
+        list.append(node('div', { className: 'highlight-row' }, [
+          node('label', { className: 'highlight-enable', title: 'Enabled' }, [enabledBox]),
+          node('div', { className: 'highlight-fields' }, [patternInput, labelInput]),
+          colorSelect,
+          node('div', { className: 'highlight-flags' }, [caseBox, wordBox]),
+          removeButton
+        ]));
+      });
+    };
+
+    const enableToggle = checkbox('enabled', 'Highlight terminal output', state.highlight.enabled);
+    enableToggle.querySelector('input').addEventListener('change', (event) => {
+      state.highlight.enabled = event.target.checked;
+      if (state.highlight.enabled && !state.highlight.rules.length) state.highlight.rules = defaultHighlightRules();
+      applyHighlightChange();
+      renderList();
+    });
+
+    const addButton = node('button', { type: 'button', className: 'mini-button', text: '+ Add rule' });
+    addButton.addEventListener('click', () => {
+      state.highlight.rules.push({ id: `rule-${Date.now()}`, label: '', pattern: '', color: 'amber', caseSensitive: false, wholeWord: false, enabled: true });
+      renderList();
+    });
+    const starterButton = node('button', { type: 'button', className: 'mini-button', text: 'Load starter set' });
+    starterButton.addEventListener('click', () => {
+      state.highlight.rules = defaultHighlightRules();
+      applyHighlightChange();
+      renderList();
+    });
+
+    renderList();
+    const body = node('div', { className: 'modal-sections' }, [
+      node('div', { className: 'checkbox-row' }, [enableToggle]),
+      node('div', {}, [
+        node('div', { className: 'section-title', text: 'Rules' }),
+        list,
+        node('div', { className: 'button-row', attrs: { style: 'margin-top:10px' } }, [addButton, starterButton])
+      ]),
+      node('div', { className: 'warning-box', text: 'Plain text matches literally; wrap a pattern in /slashes/ for a regular expression. Highlighting applies to normal terminal output, not full-screen apps like vim or htop.' })
+    ]);
+    showModal({
+      title: 'Log highlighting',
+      description: 'Color keywords in terminal output to speed up log triage. Rules apply to every terminal and persist across restarts.',
+      body,
+      className: 'wide',
+      actions: [{ label: 'Done', busy: false }]
+    });
+  }
+
   function createTerminalTab(session, profile) {
     const terminal = new window.Terminal(terminalOptionsForProfile(profile));
     const fitAddon = new window.FitAddon.FitAddon();
@@ -1537,6 +1787,10 @@
   function applyPersistedWorkspaceSettings(settings) {
     const workspace = settings?.workspace || {};
     state.customGroups = Array.isArray(settings?.sidebar?.groups) ? [...settings.sidebar.groups] : [];
+    const highlight = settings?.highlight || {};
+    state.highlight.enabled = Boolean(highlight.enabled);
+    state.highlight.rules = Array.isArray(highlight.rules) ? highlight.rules.map((rule) => ({ ...rule })) : [];
+    state.highlight.version += 1;
     state.layout = workspace.layout === 'grid' ? 'grid' : 'single';
     const width = Number(workspace.paneMinWidth);
     const height = Number(workspace.paneMinHeight);
@@ -1593,6 +1847,8 @@
     elements.layoutToggle.disabled = tabCount < 2 && state.layout !== 'grid';
     elements.broadcastToggle.disabled = terminalCount < 2;
     elements.terminalSearchToggle.disabled = !terminalTab;
+    elements.highlightToggle.classList.toggle('active', state.highlight.enabled);
+    elements.highlightToggle.setAttribute('aria-pressed', state.highlight.enabled ? 'true' : 'false');
     elements.exportTranscriptButton.disabled = !terminalTab;
     elements.terminalLogButton.disabled = !terminalTab || tab.closed;
     elements.terminalLogButton.textContent = tab?.logging?.active ? 'Stop log' : 'Log';
@@ -1672,7 +1928,10 @@
   }
 
   function writeTerminalData(tab, data) {
-    tab.terminal.write(data, () => {
+    // applyHighlighting is escape-aware: it colors only plain-text runs and
+    // copies escape sequences through verbatim.
+    const payload = state.highlight.enabled ? applyHighlighting(data) : data;
+    tab.terminal.write(payload, () => {
       try { tab.terminal.refresh(0, tab.terminal.rows - 1); } catch { /* terminal may be closing */ }
     });
   }
@@ -2478,6 +2737,8 @@
       { label: 'New connection profile', category: 'Action', detail: 'Create SSH, Mosh, Telnet, RDP, VNC or serial profile', run: () => openProfileModal() },
       { label: 'SSH tunnels', category: 'Action', detail: 'Open tunnel manager', run: () => openTunnelsModal() },
       { label: 'System diagnostics', category: 'Action', detail: 'Show runtime tool status', run: () => openDiagnosticsModal() },
+      { label: 'Log highlighting rules', category: 'Action', detail: 'Configure keyword highlighting for terminal output', run: () => openHighlightManager() },
+      { label: state.highlight.enabled ? 'Disable log highlighting' : 'Enable log highlighting', category: 'Action', detail: 'Toggle keyword highlighting (Ctrl+Shift+H)', run: () => toggleHighlighting() },
       { label: 'Duplicate session', category: 'Action', detail: 'Open another session with the active profile', run: () => duplicateActiveSession() },
       { label: 'Reconnect session', category: 'Action', detail: 'Close and reopen the active session from its profile', run: () => reconnectActiveSession() },
       { label: 'Toggle tiled layout', category: 'Action', detail: 'Switch single/tiled terminal workspace', run: () => toggleTerminalLayout() },
@@ -3774,6 +4035,7 @@
     elements.layoutToggle.addEventListener('click', toggleTerminalLayout);
     elements.broadcastToggle.addEventListener('click', toggleBroadcastInput);
     elements.terminalSearchToggle.addEventListener('click', openTerminalSearch);
+    elements.highlightToggle.addEventListener('click', () => openHighlightManager());
     elements.exportTranscriptButton.addEventListener('click', () => exportActiveTranscript().catch((error) => toast('Transcript export failed', errorMessage(error), 'error')));
     elements.terminalLogButton.addEventListener('click', () => toggleTerminalLogging().catch((error) => toast('Terminal logging failed', errorMessage(error), 'error')));
     elements.macroRecordButton.addEventListener('click', () => toggleMacroRecording().catch((error) => toast('Macro recording failed', errorMessage(error), 'error')));
@@ -3856,6 +4118,7 @@
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'l') run(() => toggleTerminalLayout());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'b') run(() => toggleBroadcastInput());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 's') run(() => openSnippetsModal());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'h') run(() => toggleHighlighting());
     if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && state.activeTabId) {
       run(() => requestCloseTab(state.activeTabId));
     }

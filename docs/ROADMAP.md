@@ -59,7 +59,6 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
 - Per-profile tiled-pane defaults.
 - Terminal output logging presets for operator-selected local directories.
 - Detached terminal windows and fullscreen terminal workspace mode.
-- Terminal keyword/syntax highlighting definitions for log triage.
 - Additional FTP/FTPS TLS policy controls.
 - Deeper SCP workflow polish, including explicit remote-path download prompts and broader legacy-server qualification.
 - Optional XDMCP/remote Unix desktop workflows using a Linux-appropriate design rather than copying Windows-specific embedded X-server behavior.

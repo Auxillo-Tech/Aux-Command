@@ -13,8 +13,35 @@ const DEFAULT_SETTINGS = Object.freeze({
   sidebar: Object.freeze({
     groups: Object.freeze([])
   }),
+  highlight: Object.freeze({
+    enabled: false,
+    rules: Object.freeze([])
+  }),
   sessions: []
 });
+
+const HIGHLIGHT_COLORS = new Set(['red', 'amber', 'green', 'blue', 'magenta', 'cyan']);
+
+function normalizeHighlightSettings(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const rules = [];
+  for (const entry of Array.isArray(source.rules) ? source.rules : []) {
+    const record = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
+    const pattern = String(record.pattern || '').slice(0, 200);
+    if (!pattern) continue;
+    rules.push({
+      id: String(record.id || '').slice(0, 64) || `rule-${rules.length + 1}`,
+      label: String(record.label || '').slice(0, 60),
+      pattern,
+      color: HIGHLIGHT_COLORS.has(record.color) ? record.color : 'amber',
+      caseSensitive: Boolean(record.caseSensitive),
+      wholeWord: Boolean(record.wholeWord),
+      enabled: record.enabled !== false
+    });
+    if (rules.length >= 50) break;
+  }
+  return { enabled: Boolean(source.enabled), rules };
+}
 
 function normalizeWorkspaceSettings(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
@@ -59,6 +86,7 @@ function normalizeSettings(input = {}) {
     version: 1,
     workspace: normalizeWorkspaceSettings(source.workspace),
     sidebar: normalizeSidebarSettings(source.sidebar),
+    highlight: normalizeHighlightSettings(source.highlight),
     sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
   };
 }
@@ -84,6 +112,12 @@ class SettingsStore {
     return this.get();
   }
 
+  saveHighlight(input) {
+    const highlight = normalizeHighlightSettings(input);
+    this.store.update((data) => ({ ...normalizeSettings(data), highlight }));
+    return this.get();
+  }
+
   saveSessions(sessions) {
     const normalized = Array.isArray(sessions) ? sessions.map(normalizeSession).filter(Boolean) : [];
     this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 32) }));
@@ -95,4 +129,4 @@ class SettingsStore {
   }
 }
 
-module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings };
+module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings, normalizeHighlightSettings };

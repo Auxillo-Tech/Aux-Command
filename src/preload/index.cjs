@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     getState: () => invoke('app:get-state'),
     saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace),
     saveSidebarSettings: (sidebar) => invoke('app:save-sidebar-settings', sidebar),
+    saveHighlightSettings: (highlight) => invoke('app:save-highlight-settings', highlight),
     saveSessions: (sessions) => invoke('app:save-sessions', sessions),
     getSessions: () => invoke('app:get-sessions')
   }),
