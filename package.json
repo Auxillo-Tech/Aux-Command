@@ -124,6 +124,12 @@
         "traceroute",
         "dnsutils",
         "whois"
+      ],
+      "recommends": [
+        "freerdp2-x11 | freerdp3-x11",
+        "xvfb",
+        "x11vnc",
+        "mosh"
       ]
     },
     "rpm": {

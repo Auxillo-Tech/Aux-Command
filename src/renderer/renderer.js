@@ -1124,78 +1124,21 @@
     renderProfiles();
 
     if (profile.protocol === 'rdp' || profile.protocol === 'vnc') {
-      if (profile.protocol === 'vnc') {
-        // Try embedded VNC
-        try {
-          const result = await runTask(`Connecting VNC to ${profile.name}…`, () => api.vnc.start(profile), `VNC connected`);
-          // Create a terminal-like tab but for VNC
-          const vncSession = {
-            id: result.id,
-            title: `VNC · ${profile.name}`,
-            protocol: 'vnc',
-            profileId: profile.id,
-            startedAt: new Date().toISOString(),
-            vncUrl: result.vncUrl
-          };
-          const panelId = `terminal-panel-${vncSession.id}`;
-          const tabId = `terminal-tab-${vncSession.id}`;
-          const view = node('div', {
-            id: panelId,
-            className: 'terminal-view vnc-view',
-            attrs: { role: 'tabpanel', 'aria-labelledby': tabId, 'data-session-id': vncSession.id }
-          });
-          const iframe = node('iframe', {
-            className: 'vnc-iframe',
-            attrs: {
-              src: result.vncUrl,
-              allow: 'clipboard-read; clipboard-write',
-              sandbox: 'allow-scripts allow-same-origin',
-              title: `VNC: ${profile.name}`
-            }
-          });
-          view.append(iframe);
-
-          const closeButton = node('button', { type: 'button', className: 'tab-close', text: '×', title: `Close VNC ${profile.name}` });
-          const tabButton = node('button', {
-            id: tabId,
-            type: 'button',
-            className: 'tab-select',
-            attrs: { role: 'tab', tabindex: '-1', 'aria-selected': 'false', 'aria-controls': panelId }
-          }, [
-            node('span', { className: 'tab-dot' }),
-            node('span', { className: 'tab-title', text: `VNC: ${profile.name}` })
-          ]);
-          const tabElement = node('div', { className: 'session-tab', attrs: { 'data-session-id': vncSession.id } }, [tabButton, closeButton]);
-          elements.tabbar.insertBefore(tabElement, elements.tabbarSpacer);
-          elements.terminalStack.append(view);
-
-          const vncTab = {
-            id: vncSession.id,
-            protocol: 'vnc',
-            profile, title: vncSession.title, view, tabElement, tabButton, closed: false
-          };
-          state.vncSessions = state.vncSessions || new Map();
-          state.vncSessions.set(vncSession.id, vncTab);
-          state.tabs.set(vncSession.id, vncTab);
-
-          tabButton.addEventListener('click', () => activateTab(vncSession.id));
-          closeButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            requestCloseVncTab(vncSession.id);
-          });
-          activateTab(vncSession.id);
-          persistSessions();
-          toast('VNC session started', profile.name, 'success');
-          return;
-        } catch (error) {
-          // Fall back to external client
-          toast('Embedded VNC unavailable, launching external client', errorMessage(error), 'info');
-        }
-      }
-      // Fall through to external launch for RDP or VNC fallback
+      const kind = profile.protocol.toUpperCase();
       try {
-        const result = await runTask(`Launching ${profile.protocol.toUpperCase()}…`, () => api.external.launch(profile), `${profile.protocol.toUpperCase()} launched`);
-        toast(`${profile.protocol.toUpperCase()} client launched`, result.executable, 'success');
+        const result = profile.protocol === 'vnc'
+          ? await runTask(`Connecting VNC to ${profile.name}…`, () => api.vnc.start(profile), 'VNC connected')
+          : await runTask(`Starting embedded RDP to ${profile.name}…`, () => api.rdp.startEmbedded(profile), 'RDP connected');
+        createRemoteDesktopTab(result, profile, profile.protocol);
+        toast(`${kind} session started`, profile.name, 'success');
+        return;
+      } catch (error) {
+        toast(`Embedded ${kind} unavailable, launching external client`, errorMessage(error), 'info');
+      }
+      // Fall through to the external native client.
+      try {
+        const result = await runTask(`Launching ${kind}…`, () => api.external.launch(profile), `${kind} launched`);
+        toast(`${kind} client launched`, result.executable, 'success');
       } catch { /* runTask already surfaced the error */ }
       return;
     }
@@ -1783,10 +1726,75 @@
     await closeTab(id);
   }
 
+  // Shared surface for embedded VNC and embedded RDP: both stream a remote
+  // desktop into a noVNC iframe tab and differ only in the backend that owns
+  // the session.
+  function createRemoteDesktopTab(result, profile, protocol) {
+    const kind = protocol.toUpperCase();
+    const sessionId = result.id;
+    const panelId = `terminal-panel-${sessionId}`;
+    const tabId = `terminal-tab-${sessionId}`;
+    const view = node('div', {
+      id: panelId,
+      className: 'terminal-view vnc-view',
+      attrs: { role: 'tabpanel', 'aria-labelledby': tabId, 'data-session-id': sessionId }
+    });
+    view.append(node('iframe', {
+      className: 'vnc-iframe',
+      attrs: {
+        src: result.vncUrl,
+        allow: 'clipboard-read; clipboard-write',
+        sandbox: 'allow-scripts allow-same-origin',
+        title: `${kind}: ${profile.name}`
+      }
+    }));
+
+    const closeButton = node('button', { type: 'button', className: 'tab-close', text: '×', title: `Close ${kind} ${profile.name}` });
+    const tabButton = node('button', {
+      id: tabId,
+      type: 'button',
+      className: 'tab-select',
+      attrs: { role: 'tab', tabindex: '-1', 'aria-selected': 'false', 'aria-controls': panelId }
+    }, [
+      node('span', { className: 'tab-dot' }),
+      node('span', { className: 'tab-title', text: `${kind}: ${profile.name}` })
+    ]);
+    const tabElement = node('div', { className: 'session-tab', attrs: { 'data-session-id': sessionId } }, [tabButton, closeButton]);
+    elements.tabbar.insertBefore(tabElement, elements.tabbarSpacer);
+    elements.terminalStack.append(view);
+
+    const desktopTab = {
+      id: sessionId,
+      protocol,
+      desktopKind: protocol,
+      profile,
+      title: `${kind} · ${profile.name}`,
+      view,
+      tabElement,
+      tabButton,
+      closed: false
+    };
+    state.vncSessions = state.vncSessions || new Map();
+    state.vncSessions.set(sessionId, desktopTab);
+    state.tabs.set(sessionId, desktopTab);
+
+    tabButton.addEventListener('click', () => activateTab(sessionId));
+    closeButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      requestCloseVncTab(sessionId);
+    });
+    activateTab(sessionId);
+    persistSessions();
+    return desktopTab;
+  }
+
   async function closeVncTab(id) {
     const tab = state.tabs.get(id);
     if (!tab) return;
-    try { await api.vnc.stop(id); } catch { /* bridge already closed */ }
+    try {
+      if (tab.desktopKind === 'rdp') await api.rdp.stopEmbedded(id);
+      else await api.vnc.stop(id);
+    } catch { /* bridge already closed */ }
     state.tabs.delete(id);
     tab.tabElement?.remove();
     tab.view?.remove();

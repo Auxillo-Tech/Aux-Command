@@ -13,6 +13,8 @@ const TOOLS = [
   ['Mosh', ['mosh']],
   ['RDP', ['xfreerdp3', 'xfreerdp']],
   ['VNC', ['vncviewer', 'tigervncviewer']],
+  ['Xvfb', ['Xvfb']],
+  ['x11vnc', ['x11vnc']],
   ['Serial bridge', ['python3']],
   ['Telnet bridge', ['python3']]
 ];
@@ -76,15 +78,17 @@ function protocolCapabilities(tools) {
     },
     {
       protocol: 'rdp',
-      mode: 'external-client',
+      mode: has('RDP') && has('Xvfb') && has('x11vnc') ? 'embedded-freerdp-x11vnc' : 'external-client',
       available: has('RDP'),
-      detail: 'RDP launches the installed FreeRDP client; embedded rendering is not bundled.'
+      detail: has('RDP') && has('Xvfb') && has('x11vnc')
+        ? 'RDP renders in an embedded tab via FreeRDP on a headless Xvfb display exported through x11vnc.'
+        : 'RDP launches the installed FreeRDP client. Install Xvfb and x11vnc to render RDP in an embedded tab.'
     },
     {
       protocol: 'vnc',
-      mode: 'external-client',
-      available: has('VNC'),
-      detail: 'VNC launches an installed VNC viewer; embedded rendering is not bundled.'
+      mode: 'embedded-novnc-bridge',
+      available: true,
+      detail: 'VNC renders in an embedded tab through the bundled noVNC WebSocket bridge; an installed VNC viewer is used only as a fallback.'
     },
     {
       protocol: 'x11-forwarding',

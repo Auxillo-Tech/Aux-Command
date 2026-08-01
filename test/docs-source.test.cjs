@@ -27,7 +27,8 @@ test('documentation captures RDP VNC X11 integration decision', () => {
   const roadmap = read('docs/ROADMAP.md');
 
   assert.match(architecture, /Remote desktop integration decision/u);
-  assert.match(architecture, /external-client boundary/u);
+  assert.match(architecture, /external-client boundary kept as an automatic fallback/u);
   assert.match(architecture, /X11 forwarding uses OpenSSH -X/u);
-  assert.match(roadmap, /embedded RDP and VNC surfaces remain a 0\.3 architecture item/u);
+  assert.match(architecture, /single-use 32-byte token/u);
+  assert.match(roadmap, /Embedded VNC .* and embedded RDP/u);
 });

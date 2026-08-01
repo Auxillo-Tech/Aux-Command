@@ -108,9 +108,9 @@ def main() -> int:
           }))()
         """, timeout=20)
         expected_namespaces = [
-            'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'sftp',
-            'snippets', 'sshKeys', 'sync', 'system', 'terminal', 'transfer', 'tunnels', 'updates',
-            'vault', 'vnc',
+            'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'rdp',
+            'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal', 'transfer', 'tunnels',
+            'updates', 'vault', 'vnc',
         ]
         require(baseline['title'] == 'Aux Command', 'wrong document title', baseline)
         require(baseline['apiKeys'] == expected_namespaces, 'unexpected preload API namespaces', baseline['apiKeys'])

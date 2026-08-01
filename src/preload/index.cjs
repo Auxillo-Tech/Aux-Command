@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     onExit: (callback) => subscribe('terminal:exit', callback)
   }),
   external: Object.freeze({ launch: (profile) => invoke('external:launch', profile) }),
+  rdp: Object.freeze({
+    capabilities: () => invoke('rdp:capabilities'),
+    startEmbedded: (profile) => invoke('rdp:start-embedded', profile),
+    stopEmbedded: (id) => invoke('rdp:stop-embedded', id),
+    listEmbedded: () => invoke('rdp:list-embedded')
+  }),
   vnc: Object.freeze({
     start: (profile) => invoke('vnc:start', profile),
     stop: (id) => invoke('vnc:stop', id),

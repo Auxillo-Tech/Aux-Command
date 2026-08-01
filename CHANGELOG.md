@@ -11,6 +11,7 @@
 
 ### Added
 
+- Added an embedded RDP tab: FreeRDP renders into a headless Xvfb display exported through x11vnc and streamed into the app via the bundled noVNC bridge, with automatic fallback to the native FreeRDP client when Xvfb/x11vnc/FreeRDP are not installed. Diagnostics reports which mode is active.
 - Added `~/.ssh/config` `Include` directive parsing (globs, nesting, and cycle protection) so hosts split across included files are imported.
 - Added multi-hop ProxyJump chains (`bastion,user@inner:2222`) across SSH terminals, tunnels, and graphical SFTP, replacing the previous single-hop limit.
 - Added a per-connection context menu (also on right-click) with Connect, Edit, Duplicate, Add/Remove favorite, Move to group, and a discoverable Delete with confirmation.
