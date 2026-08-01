@@ -23,7 +23,7 @@ conflicts=('aux-command')
 options=('!strip')
 source=("https://github.com/Auxillo-Tech/Aux-Command/releases/download/v${pkgver}/Aux-Command-${pkgver}-x86_64.AppImage")
 # Replace with the release AppImage SHA-256 (scripts/release-manifest.cjs prints it).
-sha256sums=('4e1691d4b641719d21b10183ae76ca5573a4b7e2b5d2a8f15ffb92ee6008246b')
+sha256sums=('937c40d427584217d4ebc208e273b7969fd9e31b1d5b380551a01a6c43767fd2')
 
 prepare() {
   chmod +x "Aux-Command-${pkgver}-x86_64.AppImage"
