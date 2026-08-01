@@ -91,6 +91,9 @@
     customGroups: [],
     collapsedGroups: new Set(),
     highlight: { enabled: false, rules: [], version: 0 },
+    health: new Map(),
+    healthTimer: null,
+    healthChecking: false,
     tabs: new Map(),
     activeTabId: '',
     layout: 'single',
@@ -728,6 +731,70 @@
     renderProfiles();
   }
 
+  // Connection health: a best-effort TCP reachability probe per network profile,
+  // surfaced as a colored dot in the sidebar. Local and serial profiles have no
+  // network endpoint and are skipped.
+  function healthTargets() {
+    return state.profiles
+      .filter((profile) => !['local', 'serial'].includes(profile.protocol) && profile.host && profile.port)
+      .map((profile) => ({ id: profile.id, host: profile.host, port: profile.port }));
+  }
+
+  async function probeConnectionHealth() {
+    const targets = healthTargets();
+    if (!targets.length || state.healthChecking) return;
+    state.healthChecking = true;
+    for (const target of targets) {
+      const current = state.health.get(target.id) || {};
+      state.health.set(target.id, { ...current, status: 'checking' });
+    }
+    updateHealthDots();
+    try {
+      const results = await api.reachability.check(targets);
+      for (const result of results || []) {
+        state.health.set(result.id, {
+          status: result.reachable ? 'up' : 'down',
+          latencyMs: result.latencyMs,
+          error: result.error,
+          checkedAt: result.checkedAt
+        });
+      }
+    } catch (error) {
+      setStatus(`Reachability check failed: ${errorMessage(error)}`, 'error');
+      for (const target of targets) state.health.delete(target.id);
+    } finally {
+      state.healthChecking = false;
+      updateHealthDots();
+    }
+  }
+
+  function healthTitle(profile) {
+    const record = state.health.get(profile.id);
+    if (!record || record.status === 'unknown') return `${profile.name} · reachability unknown`;
+    if (record.status === 'checking') return `${profile.name} · checking…`;
+    if (record.status === 'up') return `${profile.name} · reachable${record.latencyMs != null ? ` (${record.latencyMs} ms)` : ''}`;
+    return `${profile.name} · unreachable${record.error ? ` (${record.error})` : ''}`;
+  }
+
+  function updateHealthDots() {
+    for (const dot of elements.profileList.querySelectorAll('.health-dot')) {
+      const profileId = dot.dataset.profileId;
+      const record = state.health.get(profileId);
+      const status = record?.status || 'unknown';
+      dot.className = `health-dot health-${status}`;
+      dot.dataset.profileId = profileId;
+      const profile = profileById(profileId);
+      if (profile) dot.title = healthTitle(profile);
+    }
+  }
+
+  function startHealthMonitoring() {
+    if (state.healthTimer) return;
+    probeConnectionHealth();
+    // Re-probe periodically so the sidebar reflects endpoints going up or down.
+    state.healthTimer = window.setInterval(probeConnectionHealth, 60_000);
+  }
+
   function closeContextMenu() {
     document.querySelector('.context-menu')?.remove();
     document.removeEventListener('pointerdown', onContextMenuPointerDown, true);
@@ -1065,12 +1132,20 @@
       }
       profiles.sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
       for (const profile of profiles) {
+        const badge = node('span', { className: 'protocol-badge', text: profile.protocol === 'local' ? 'TERM' : profile.protocol });
+        const networked = !['local', 'serial'].includes(profile.protocol) && profile.host && profile.port;
+        if (networked) {
+          const status = state.health.get(profile.id)?.status || 'unknown';
+          const dot = node('span', { className: `health-dot health-${status}`, attrs: { 'data-profile-id': profile.id } });
+          dot.title = healthTitle(profile);
+          badge.append(dot);
+        }
         const connectButton = node('button', {
           type: 'button',
           className: 'profile-connect',
           attrs: { 'aria-label': `Connect to ${profile.name}, ${formatTarget(profile)}` }
         }, [
-          node('span', { className: 'protocol-badge', text: profile.protocol === 'local' ? 'TERM' : profile.protocol }),
+          badge,
           node('span', { className: 'profile-copy' }, [
             node('strong', { text: `${profile.favorite ? '★ ' : ''}${profile.name}` }),
             node('small', { text: formatTarget(profile) })
@@ -2741,6 +2816,7 @@
       { label: 'SSH tunnels', category: 'Action', detail: 'Open tunnel manager', run: () => openTunnelsModal() },
       { label: 'System diagnostics', category: 'Action', detail: 'Show runtime tool status', run: () => openDiagnosticsModal() },
       { label: 'Log highlighting rules', category: 'Action', detail: 'Configure keyword highlighting for terminal output', run: () => openHighlightManager() },
+      { label: 'Check connection reachability', category: 'Action', detail: 'Probe every saved connection now', run: () => probeConnectionHealth() },
       { label: state.highlight.enabled ? 'Disable log highlighting' : 'Enable log highlighting', category: 'Action', detail: 'Toggle keyword highlighting (Ctrl+Shift+H)', run: () => toggleHighlighting() },
       { label: 'Duplicate session', category: 'Action', detail: 'Open another session with the active profile', run: () => duplicateActiveSession() },
       { label: 'Reconnect session', category: 'Action', detail: 'Close and reopen the active session from its profile', run: () => reconnectActiveSession() },
@@ -4175,6 +4251,8 @@
       renderTunnelStatusCluster();
       updateProfiles(initial.profiles || []);
       state.initialProfiles = initial.profiles || [];
+      // Probe reachability only after the profile list is populated.
+      startHealthMonitoring();
       restoreInitialSessions(initial.sessions || []);
       api.transfer.list().then((entries) => {
         state.transferQueue.entries = Array.isArray(entries) ? entries : [];

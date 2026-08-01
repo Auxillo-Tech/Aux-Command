@@ -490,3 +490,12 @@ test('pinned tunnel status cluster reflects live tunnel state', () => {
   assert.match(renderer, /elements\.tunnelStatusCluster\.addEventListener\('click', openTunnelsModal\)/u);
   assert.match(styles, /\.statusbar-cluster/u);
 });
+
+test('connection health probes reachability and renders sidebar dots', () => {
+  assert.match(renderer, /async function probeConnectionHealth\(\)/u);
+  assert.match(renderer, /function startHealthMonitoring\(\)/u);
+  assert.match(renderer, /api\.reachability\.check\(targets\)/u);
+  assert.match(renderer, /className: `health-dot health-\$\{status\}`/u);
+  assert.match(preload, /check: \(targets\) => invoke\('reachability:check', targets\)/u);
+  assert.match(styles, /\.health-dot\.health-up/u);
+});

@@ -11,6 +11,8 @@
 
 ### Added
 
+- Added connection health indicators: a background service TCP-probes every saved network connection and shows a reachable/unreachable/checking dot on each sidebar row, refreshed on launch, every 60 seconds, and on demand from the command palette.
+- Added a pinned live tunnel status cluster in the status bar that summarizes active SSH tunnels and opens the tunnel manager on click.
 - Added terminal keyword highlighting for log triage: user-defined rules color matches in terminal output (plain text or /regex/, case and whole-word options, six colors), with a rules manager, a toolbar toggle, the Ctrl+Shift+H shortcut, a starter rule set, and persistence across restarts. Highlighting is display-only — transcripts, session logs, and exports keep the raw stream — and escape sequences pass through untouched so colored output and full-screen apps are never corrupted.
 - Added an embedded RDP tab: FreeRDP renders into a headless Xvfb display exported through x11vnc and streamed into the app via the bundled noVNC bridge, with automatic fallback to the native FreeRDP client when Xvfb/x11vnc/FreeRDP are not installed. Diagnostics reports which mode is active.
 - Added `~/.ssh/config` `Include` directive parsing (globs, nesting, and cycle protection) so hosts split across included files are imported.
