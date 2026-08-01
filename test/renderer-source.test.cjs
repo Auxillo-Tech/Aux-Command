@@ -70,9 +70,20 @@ test('renderer prevents modal-global shortcut collisions and disables impossible
   assert.match(renderer, /const modalOpen = Boolean\(elements\.modalRoot\.querySelector\('\.modal-backdrop'\)\);/u);
   assert.match(renderer, /if \(modalOpen && event\.key !== 'Escape'\) return;/u);
   assert.match(renderer, /function isEditableShortcutTarget\(target\)/u);
-  assert.match(renderer, /if \(isEditableShortcutTarget\(event\.target\)\) return;/u);
+  assert.match(renderer, /if \(!isEditableShortcutTarget\(event\.target\)\) handleWorkspaceShortcut\(event\);/u);
   assert.match(renderer, /Create an SSH profile before starting a tunnel/u);
   assert.match(renderer, /disabled: !sshProfiles\.length/u);
+});
+
+test('workspace shortcuts stay reachable while a terminal owns keyboard focus', () => {
+  // xterm's helper textarea must not be treated as an editable shortcut target …
+  assert.match(renderer, /target\.classList\.contains\('xterm-helper-textarea'\)/u);
+  // … Ctrl+Shift chords are dispatched from the terminal's own key handler …
+  assert.match(renderer, /if \(event\.ctrlKey && event\.shiftKey && handleWorkspaceShortcut\(event\)\) return false;/u);
+  // … the advertised Ctrl+W close works once the session has exited …
+  assert.match(renderer, /if \(tab\.closed && event\.ctrlKey && !event\.shiftKey && event\.key\.toLowerCase\(\) === 'w'\)/u);
+  // … and double dispatch is prevented when the same event also bubbles to window.
+  assert.match(renderer, /if \(event\.auxShortcutHandled\) return true;/u);
 });
 
 test('modals trap keyboard focus and restore the invoking control', () => {
@@ -140,22 +151,41 @@ test('renderer exposes a command snippets manager that can run snippets in the a
   assert.match(renderer, /api\.snippets\.delete/u);
 });
 
-test('renderer uses the supplied Auxillo logo raster asset', () => {
-  assert.match(indexHtml, /src="\.\/assets\/logo\.png"/u);
+test('renderer uses the supplied Aux Command product logo raster asset', () => {
+  assert.match(indexHtml, /class="brand-mark"[^>]*src="\.\/assets\/aux-command-logo\.png"/u);
+  assert.match(indexHtml, /class="welcome-mark"><img src="\.\/assets\/aux-command-logo\.png"/u);
   assert.doesNotMatch(indexHtml, /logo\.svg/u);
-  assert.ok(logoPng.size > 1024, 'logo asset should be a real PNG, not a placeholder');
+  const productLogo = fs.statSync(path.join(root, 'src/renderer/assets/aux-command-logo.png'));
+  assert.ok(productLogo.size > 10_000, 'product logo should be a real PNG, not a placeholder');
 });
 
-test('renderer uses the complete Auxillo wordmark and branded workstation hierarchy', () => {
+test('renderer keeps Auxillo company branding linked to the main website', () => {
   assert.ok(fs.existsSync(wordmarkPngPath), 'complete Auxillo wordmark asset should be bundled');
   assert.ok(fs.statSync(wordmarkPngPath).size > 10_000, 'wordmark should be the real high-resolution brand asset');
-  assert.match(indexHtml, /class="brand-wordmark"[^>]*src="\.\/assets\/auxillo-wordmark\.png"/u);
-  assert.match(indexHtml, /class="product-name">Command<\/span>/u);
+  assert.match(indexHtml, /id="website-button"[^>]*title="Visit auxillo\.tech"/u);
+  assert.match(indexHtml, /class="brand-link"[\s\S]{0,200}?auxillo-wordmark\.png/u);
+  assert.match(indexHtml, /id="statusbar-website"[^>]*>auxillo\.tech</u);
+  assert.match(indexHtml, /class="product-name">Aux Command<\/span>/u);
   assert.match(indexHtml, /class="[^"]*workspace-commandbar[^"]*"/u);
   assert.match(indexHtml, /class="welcome-capabilities"/u);
-  assert.match(styles, /\.brand-wordmark/u);
+  assert.match(renderer, /statusbarWebsite: \$\('#statusbar-website'\)/u);
+  assert.match(styles, /\.brand-link/u);
   assert.match(styles, /\.workspace-commandbar/u);
   assert.match(styles, /\.welcome-capabilities/u);
+});
+
+test('connections expose discoverable delete, duplicate, and group management', () => {
+  assert.match(renderer, /async function deleteProfileWithConfirm\(profile\)/u);
+  assert.match(renderer, /function openProfileContextMenu\(profile, anchor\)/u);
+  assert.match(renderer, /async function duplicateProfile\(profile\)/u);
+  assert.match(renderer, /async function createGroup\(\)/u);
+  assert.match(renderer, /async function renameGroup\(groupName\)/u);
+  assert.match(renderer, /async function deleteGroup\(groupName\)/u);
+  assert.match(renderer, /async function moveProfileToGroup\(profile\)/u);
+  assert.match(renderer, /api\.app\.saveSidebarSettings\(\{ groups: state\.customGroups \}\)/u);
+  assert.match(indexHtml, /id="new-group-button"[^>]*aria-label="New group"/u);
+  assert.match(styles, /\.context-menu-item/u);
+  assert.match(styles, /\.group-collapse/u);
 });
 
 test('renderer exposes a tiled multi-session layout for split-pane operations', () => {
@@ -411,4 +441,23 @@ test('renderer exposes and applies per-profile terminal appearance settings', ()
   assert.match(renderer, /field\('Terminal theme'/u);
   assert.match(renderer, /field\('Terminal font'/u);
   assert.match(renderer, /field\('Scrollback lines'/u);
+});
+
+test('FTP/FTPS disconnects carry the protocol through preload to the main router', () => {
+  assert.match(preload, /disconnect: \(profileId, protocol\) => invoke\('sftp:disconnect', profileId, protocol\)/u);
+  assert.match(renderer, /api\.sftp\.disconnect\(profileId, profile\?\.protocol\)/u);
+  assert.match(renderer, /api\.sftp\.disconnect\(saved\.id, saved\.protocol\)/u);
+  assert.match(renderer, /api\.sftp\.disconnect\(profile\.id, profile\.protocol\)/u);
+});
+
+test('detached FTP/FTPS browser survives terminal tab activation', () => {
+  assert.match(renderer, /state\.sftp\.detached = true;/u);
+  assert.match(renderer, /if \(state\.sftp\.detached\) return;/u);
+});
+
+test('transfer queue UI hydrates, counts, clears, and drops cancelled entries', () => {
+  assert.match(renderer, /api\.transfer\.list\(\)\.then\(\(entries\) => \{/u);
+  assert.match(renderer, /if \(entry\.status === 'cancelled'\)/u);
+  assert.match(renderer, /queue-clear-completed/u);
+  assert.match(renderer, /badge\.textContent = String\(active\);/u);
 });

@@ -38,21 +38,43 @@ function scpTarget(profile, remotePath) {
   return `${login}:${quoteRemotePath(remotePath)}`;
 }
 
-function scpArgs(profile, source, destination) {
+function scpCommonOptions(profile, portFlag) {
   if (profile.credentialId) throw new Error('SCP fallback supports SSH agent or identity-file authentication only; stored account passwords require SFTP.');
-  const args = ['-O', '-T', '-B', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'StrictHostKeyChecking=accept-new'];
-  if (!profile.useSshConfig || profile.port !== 22) args.push('-P', String(profile.port));
+  // StrictHostKeyChecking=yes: the headless scp fallback must never trust an
+  // unverified host key on its own; the interactive SSH terminal path is where
+  // keys get verified and recorded.
+  const args = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'StrictHostKeyChecking=yes'];
+  if (!profile.useSshConfig || profile.port !== 22) args.push(portFlag, String(profile.port));
   if (profile.identityFile) args.push('-i', expandHome(profile.identityFile));
   if (profile.knownHostsFile) args.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
   if (profile.proxyJump) args.push('-J', profile.proxyJump);
   if (profile.compression) args.push('-C');
+  return args;
+}
+
+function scpArgs(profile, source, destination) {
+  const args = ['-O', '-T', '-B', ...scpCommonOptions(profile, '-P')];
   args.push(source, destination);
   return args;
 }
 
-function runScp(profile, args, options = {}) {
+function sshCommandArgs(profile, remoteCommand) {
+  const destination = profile.useSshConfig && profile.sshAlias ? profile.sshAlias : profile.host;
+  const login = profile.username ? `${profile.username}@${destination}` : destination;
+  return [...scpCommonOptions(profile, '-p'), '--', login, remoteCommand];
+}
+
+function describeScpError(stderr) {
+  const detail = String(stderr || '').trim();
+  if (/host key verification failed|no matching host key|remote host identification has changed/iu.test(detail)) {
+    return `${detail}\nThe SCP fallback only connects to hosts whose keys are already trusted. Open an SSH terminal session to this host first to verify and record its key, or set a per-profile known-hosts file.`;
+  }
+  return detail;
+}
+
+function runScp(profile, args, options = {}, command = 'scp') {
   return new Promise((resolve, reject) => {
-    const child = spawnGuarded('scp', args, ['ignore', 'ignore', 'pipe']);
+    const child = spawnGuarded(command, args, ['ignore', 'ignore', 'pipe']);
     let stderr = '';
     let settled = false;
     const abortError = () => {
@@ -78,7 +100,7 @@ function runScp(profile, args, options = {}) {
     child.once('exit', (code, signal) => {
       if (options.signal?.aborted) finish(abortError());
       else if (code === 0) finish();
-      else finish(new Error((stderr.trim() || `scp exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
+      else finish(new Error((describeScpError(stderr) || `${command} exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
     });
   });
 }
@@ -353,14 +375,17 @@ class SftpService {
     if (isDirectory(stat)) throw new Error('Remote text editor can only open files');
     const size = Number(stat?.size || 0);
     if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
-    const localPath = path.join(os.tmpdir(), `aux-command-remote-edit-${randomUUID()}`);
+    // A private 0700 staging directory keeps remote file contents away from
+    // other local users while the download lands in the shared temp root.
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-remote-edit-'));
+    const localPath = path.join(tempDir, 'remote-edit');
     try {
       await new Promise((resolve, reject) => {
         connection.sftp.fastGet(source, localPath, (error) => error ? reject(error) : resolve());
       });
       return fs.readFileSync(localPath, 'utf8');
     } finally {
-      try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
     }
   }
 
@@ -483,7 +508,23 @@ class SftpService {
     const target = normalizeRemotePath(remotePath);
     const stat = fs.statSync(localPath);
     if (!stat.isFile()) throw new Error('SCP fallback uploads regular files only');
-    await runScp(profile, scpArgs(profile, localPath, scpTarget(profile, target)), options);
+    // Upload to a remote .part path and move into place so a cancelled or
+    // failed transfer never leaves a truncated file at the destination.
+    const partialPath = `${target}.aux-command-${randomUUID()}.part`;
+    await runScp(profile, scpArgs(profile, localPath, scpTarget(profile, partialPath)), options);
+    try {
+      await runScp(
+        profile,
+        sshCommandArgs(profile, `mv -f -- ${quoteRemotePath(partialPath)} ${quoteRemotePath(target)}`),
+        options,
+        'ssh'
+      );
+    } catch (error) {
+      try {
+        await runScp(profile, sshCommandArgs(profile, `rm -f -- ${quoteRemotePath(partialPath)}`), {}, 'ssh');
+      } catch { /* best effort cleanup */ }
+      throw error;
+    }
     this.#emit('sftp:progress', {
       profileId: profile.id,
       direction: 'upload',
@@ -498,7 +539,9 @@ class SftpService {
     if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
     const source = normalizeRemotePath(remotePath);
     const partialPath = `${localPath}.aux-command-${randomUUID()}.part`;
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-scp-download-'));
+    // Stage next to the destination: os.tmpdir() is routinely a different
+    // filesystem (tmpfs), where the final rename would fail with EXDEV.
+    const tempDir = fs.mkdtempSync(path.join(path.dirname(localPath), '.aux-command-scp-download-'));
     const fetchedPath = path.join(tempDir, path.posix.basename(source));
     try {
       await runScp(profile, scpArgs(profile, scpTarget(profile, source), tempDir), options);

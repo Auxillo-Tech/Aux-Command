@@ -14,7 +14,7 @@ class JsonStore {
   #read() {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.filename, 'utf8'));
-      if (!parsed || typeof parsed !== 'object') throw new SyntaxError('JSON store root must be an object');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new SyntaxError('JSON store root must be an object');
       return parsed;
     } catch (error) {
       if (error.code === 'ENOENT') return structuredClone(this.defaults);

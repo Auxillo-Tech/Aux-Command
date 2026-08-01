@@ -3,7 +3,7 @@
 ## Tier 1: High Impact, Fast to Build
 
 ### 1. Built-in Network Tools Panel
-MobaXterm's most-used feature after terminals. A sidebar panel with:
+The most-used remote-operations capability after terminals. A sidebar panel with:
 - **Ping** — visual ping with latency graph
 - **Traceroute** — show hop-by-hop with IP + latency  
 - **DNS lookup** — A/AAAA/MX/TXT/NS lookup with one click
@@ -96,12 +96,8 @@ Make remote GUI apps first-class:
 | **v0.5** | Embedded RDP + Team sync server | 8-12 hours |
 | **v1.0** | X11 launcher, polish, signing | 4-6 hours |
 
-## Quick Wins (Do Next)
+## Delivery status
 
-The **Network Tools Panel** is the single highest-impact feature I'd add next:
-- 80% of MobaXterm's daily use is SSH + network tools
-- Standard Linux tools (ping, dig, nc) are already installed
-- Simple UI: sidebar panel with command output
-- ~150 lines of code for the main process, ~200 for the renderer
-
-Want me to start with the Network Tools Panel?
+The Network Tools panel, Remote Desktop Gateway, SSH Key Manager, and Live
+system monitor from Tier 1 are shipped in the current 0.2.x line. The
+remaining items above stay on the roadmap in priority order.

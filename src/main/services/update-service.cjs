@@ -120,8 +120,25 @@ class UpdateService {
       this.verifiedRelease = await this.#authenticateLatestRelease();
       this.#merge({ authenticated: true, latestVersion: this.verifiedRelease.version });
       const result = await this.updater.checkForUpdates();
+      if (!result) {
+        // electron-updater is inactive on deb/rpm installs (no APPIMAGE): it
+        // resolves null without firing any state events, so the checking flag
+        // must be cleared here or the Updates UI spins forever.
+        const currentVersion = this.app.getVersion();
+        const newer = this.verifiedRelease.version !== currentVersion;
+        this.#merge({
+          checking: false,
+          updateAvailable: false,
+          downloaded: false,
+          error: newer
+            ? `Aux Command ${this.verifiedRelease.version} is published; this install format updates through your package manager.`
+            : null
+        });
+        return this.getStatus();
+      }
       const discovered = result?.updateInfo?.version;
       if (discovered && discovered !== this.verifiedRelease.version) throw new Error('electron-updater discovered a version different from the authenticated release');
+      if (this.status.checking) this.#merge({ checking: false });
       return this.getStatus();
     } catch (error) {
       this.verifiedRelease = null;

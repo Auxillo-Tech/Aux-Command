@@ -25,7 +25,7 @@ function sshBaseArgs(profileInput, options = {}) {
     args.push('-o', `ServerAliveInterval=${profile.keepAliveSeconds}`);
     args.push('-o', 'ServerAliveCountMax=3');
   }
-  args.push('-o', 'ConnectTimeout=15');
+  args.push('-o', `ConnectTimeout=${Number(options.connectTimeout) > 0 ? Number(options.connectTimeout) : 15}`);
   if (profile.compression) args.push('-C');
   if (profile.agentForwarding) args.push('-A');
   if (profile.x11Forwarding) args.push('-X');
@@ -71,6 +71,7 @@ function buildTerminalCommand(profileInput) {
       const sshParts = ['ssh'];
       if (!profile.useSshConfig || profile.port !== 22) sshParts.push('-p', String(profile.port));
       if (profile.identityFile) sshParts.push('-i', expandHome(profile.identityFile));
+      if (profile.knownHostsFile) sshParts.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
       if (profile.proxyJump) sshParts.push('-J', profile.proxyJump);
       if (profile.compression) sshParts.push('-C');
       if (profile.agentForwarding) sshParts.push('-A');

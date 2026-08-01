@@ -26,11 +26,24 @@ function safeLogPath(filePath) {
   return filePath;
 }
 
+const MAX_RETAINED_TRANSCRIPTS = 20;
+
 class TerminalService {
   constructor(getWindow) {
     this.getWindow = getWindow;
     this.sessions = new Map();
     this.closedTranscripts = new Map();
+  }
+
+  #retainTranscript(id, record) {
+    this.closedTranscripts.set(id, record);
+    // Transcripts exist so an exited session can still be exported while its
+    // tab is open; retention is bounded so they cannot accumulate for the
+    // whole app lifetime.
+    while (this.closedTranscripts.size > MAX_RETAINED_TRANSCRIPTS) {
+      const oldest = this.closedTranscripts.keys().next().value;
+      this.closedTranscripts.delete(oldest);
+    }
   }
 
   create(input) {
@@ -64,16 +77,20 @@ class TerminalService {
       this.#send('terminal:data', { id, data });
     });
     terminal.onExit(({ exitCode, signal }) => {
-      this.closedTranscripts.set(id, {
-        id: session.id,
-        title: session.title,
-        protocol: session.protocol,
-        profileId: session.profileId,
-        startedAt: session.startedAt,
-        transcript: session.transcript,
-        transcriptTruncated: session.transcriptTruncated,
-        logging: session.logging ? { filePath: session.logging.filePath, active: false } : null
-      });
+      // A user-initiated close already discarded this session; re-adding the
+      // transcript here would leak it until app quit.
+      if (!session.userClosed) {
+        this.#retainTranscript(id, {
+          id: session.id,
+          title: session.title,
+          protocol: session.protocol,
+          profileId: session.profileId,
+          startedAt: session.startedAt,
+          transcript: session.transcript,
+          transcriptTruncated: session.transcriptTruncated,
+          logging: session.logging ? { filePath: session.logging.filePath, active: false } : null
+        });
+      }
       this.#closeLogStream(session);
       this.sessions.delete(id);
       this.#send('terminal:exit', { id, exitCode, signal });
@@ -145,6 +162,7 @@ class TerminalService {
     if (!session) {
       return this.closedTranscripts.delete(id);
     }
+    session.userClosed = true;
     this.sessions.delete(id);
     this.closedTranscripts.delete(id);
     this.#closeLogStream(session);

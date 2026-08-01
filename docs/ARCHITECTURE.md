@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-Aux Command is an original Linux remote-operations workstation. It does not include, copy, or depend on MobaXterm code, assets, protocols, or branding.
+Aux Command is an original Linux remote-operations workstation built from free and open components. It does not include, copy, or depend on any third-party proprietary code, assets, protocols, or branding.
 
 The application intentionally delegates mature network behavior to native Linux clients where that produces better interoperability:
 

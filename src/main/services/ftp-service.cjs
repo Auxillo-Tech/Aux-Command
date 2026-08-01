@@ -13,6 +13,16 @@ function safeDateToIso(value) {
   return value.toISOString();
 }
 
+// basic-ftp reports permissions as a {user, group, world} bitmask object (or
+// leaves them undefined); collapse that into a numeric POSIX mode.
+function ftpEntryMode(entry) {
+  const permissions = entry?.permissions;
+  const bits = permissions && typeof permissions === 'object'
+    ? (((Number(permissions.user) || 0) << 6) | ((Number(permissions.group) || 0) << 3) | (Number(permissions.world) || 0))
+    : Number(permissions || 0);
+  return bits | (entry?.isDirectory ? 0o040000 : 0);
+}
+
 class FtpService {
   constructor(vaultService, getWindow) {
     this.vaultService = vaultService;
@@ -23,16 +33,20 @@ class FtpService {
   async connect(profileInput) {
     const profile = normalizeProfile(profileInput);
     if (profile.protocol !== 'ftp' && profile.protocol !== 'ftps') throw new Error('FTP service requires an FTP or FTPS profile');
+    const signature = this.#signature(profile);
     const existing = this.connections.get(profile.id);
-    if (existing?.ready && existing.signature === this.#signature(profile)) return existing;
-    if (existing?.promise) return existing.promise;
+    // A cached holder is only reusable while its control connection is still
+    // open and was built with the profile's current settings.
+    if (existing?.ready && existing.signature === signature && !existing.client.closed) return existing;
+    if (existing?.promise && existing.signature === signature) return existing.promise;
     this.disconnect(profile.id);
     const holder = {
       profile,
-      signature: this.#signature(profile),
+      signature,
       client: new ftp.Client(30_000),
       ready: false,
-      promise: null
+      promise: null,
+      queue: Promise.resolve()
     };
     holder.client.ftp.verbose = false;
     holder.promise = this.#open(holder).then(() => holder).catch((error) => {
@@ -42,6 +56,20 @@ class FtpService {
     });
     this.connections.set(profile.id, holder);
     return holder.promise;
+  }
+
+  // basic-ftp clients cannot run concurrent commands on one control
+  // connection; every operation for a profile is serialized through the
+  // holder's queue so browsing during a transfer cannot kill either task.
+  #enqueue(holder, task) {
+    const run = holder.queue.catch(() => {}).then(() => task());
+    holder.queue = run.catch(() => {});
+    return run;
+  }
+
+  async #withConnection(profileInput, task) {
+    const connection = await this.connect(profileInput);
+    return this.#enqueue(connection, () => task(connection));
   }
 
   async #open(holder) {
@@ -74,73 +102,98 @@ class FtpService {
   }
 
   async list(profileInput, remotePath = '/') {
-    const connection = await this.connect(profileInput);
-    const target = normalizeRemotePath(remotePath);
-    const entries = await connection.client.list(target);
-    return entries.map((entry) => ({
-      name: entry.name,
-      path: path.posix.join(target, entry.name),
-      longname: entry.rawModifiedAt || entry.name,
-      size: Number(entry.size || 0),
-      modifiedAt: safeDateToIso(entry.modifiedAt),
-      permissions: modeToString(entry.permissions || 0),
-      directory: entry.isDirectory,
-      mode: Number(entry.permissions || 0)
-    })).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+    return this.#withConnection(profileInput, async (connection) => {
+      const target = normalizeRemotePath(remotePath);
+      const entries = await connection.client.list(target);
+      return entries.map((entry) => {
+        const mode = ftpEntryMode(entry);
+        return {
+          name: entry.name,
+          path: path.posix.join(target, entry.name),
+          longname: entry.rawModifiedAt || entry.name,
+          size: Number(entry.size || 0),
+          modifiedAt: safeDateToIso(entry.modifiedAt),
+          permissions: modeToString(mode),
+          directory: entry.isDirectory,
+          mode
+        };
+      }).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+    });
   }
 
   async mkdir(profile, remotePath) {
-    const connection = await this.connect(profile);
-    await connection.client.ensureDir(normalizeRemotePath(remotePath));
-    return true;
+    return this.#withConnection(profile, async (connection) => {
+      await connection.client.ensureDir(normalizeRemotePath(remotePath));
+      return true;
+    });
   }
 
   async rename(profile, oldPath, newPath) {
-    const connection = await this.connect(profile);
-    await connection.client.rename(normalizeRemotePath(oldPath), normalizeRemotePath(newPath));
-    return true;
+    return this.#withConnection(profile, async (connection) => {
+      await connection.client.rename(normalizeRemotePath(oldPath), normalizeRemotePath(newPath));
+      return true;
+    });
   }
 
   async remove(profile, remotePath, directory = false) {
-    const connection = await this.connect(profile);
-    const target = normalizeRemotePath(remotePath);
-    if (directory) await connection.client.removeDir(target);
-    else await connection.client.remove(target);
-    return true;
+    return this.#withConnection(profile, async (connection) => {
+      const target = normalizeRemotePath(remotePath);
+      if (directory) await connection.client.removeDir(target);
+      else await connection.client.remove(target);
+      return true;
+    });
   }
 
   async readText(profileInput, remotePath, limit = 1_000_000) {
-    const connection = await this.connect(profileInput);
-    const source = normalizeRemotePath(remotePath);
-    const localPath = path.join(os.tmpdir(), `aux-command-ftp-edit-${randomUUID()}`);
-    try {
-      await connection.client.downloadTo(localPath, source);
-      const size = fs.statSync(localPath).size;
-      if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
-      return fs.readFileSync(localPath, 'utf8');
-    } finally {
-      try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
-    }
+    return this.#withConnection(profileInput, async (connection) => {
+      const source = normalizeRemotePath(remotePath);
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-ftp-edit-'));
+      const localPath = path.join(tempDir, 'remote-edit');
+      try {
+        await connection.client.downloadTo(localPath, source);
+        const size = fs.statSync(localPath).size;
+        if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
+        return fs.readFileSync(localPath, 'utf8');
+      } finally {
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
+      }
+    });
   }
 
   async writeText(profileInput, remotePath, content) {
-    const connection = await this.connect(profileInput);
-    const target = normalizeRemotePath(remotePath);
-    const text = String(content ?? '');
-    if (Buffer.byteLength(text, 'utf8') > 1_000_000) throw new Error('Remote text editor refuses to save files larger than 1 MB');
-    const localPath = path.join(os.tmpdir(), `aux-command-ftp-edit-${randomUUID()}`);
-    try {
-      fs.writeFileSync(localPath, text, { mode: 0o600 });
-      await connection.client.uploadFrom(localPath, target);
-    } finally {
-      try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
-    }
-    return true;
+    return this.#withConnection(profileInput, async (connection) => {
+      const target = normalizeRemotePath(remotePath);
+      const text = String(content ?? '');
+      if (Buffer.byteLength(text, 'utf8') > 1_000_000) throw new Error('Remote text editor refuses to save files larger than 1 MB');
+      // STOR truncates before writing, so saves stage to a .part path and move
+      // into place; a connection drop mid-save must not corrupt the target.
+      const partialPath = `${target}.aux-command-${randomUUID()}.part`;
+      const localPath = path.join(os.tmpdir(), `aux-command-ftp-edit-${randomUUID()}`);
+      try {
+        fs.writeFileSync(localPath, text, { mode: 0o600 });
+        await connection.client.uploadFrom(localPath, partialPath);
+        try {
+          await connection.client.rename(partialPath, target);
+        } catch {
+          try { await connection.client.remove(target); } catch { /* target may not exist */ }
+          await connection.client.rename(partialPath, target);
+        }
+      } catch (error) {
+        try { await connection.client.remove(partialPath); } catch { /* best effort cleanup */ }
+        throw error;
+      } finally {
+        try { fs.rmSync(localPath, { force: true }); } catch { /* best effort cleanup */ }
+      }
+      return true;
+    });
   }
 
   async upload(profileInput, localPath, remotePath, options = {}) {
     const profile = normalizeProfile(profileInput);
-    const connection = await this.connect(profile);
+    return this.#withConnection(profile, (connection) => this.#uploadOnConnection(profile, connection, localPath, remotePath, options));
+  }
+
+  async #uploadOnConnection(profile, connection, localPath, remotePath, options = {}) {
     if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
     const target = normalizeRemotePath(remotePath);
     const stat = fs.statSync(localPath);
@@ -178,7 +231,10 @@ class FtpService {
 
   async download(profileInput, remotePath, localPath, options = {}) {
     const profile = normalizeProfile(profileInput);
-    const connection = await this.connect(profile);
+    return this.#withConnection(profile, (connection) => this.#downloadOnConnection(profile, connection, remotePath, localPath, options));
+  }
+
+  async #downloadOnConnection(profile, connection, remotePath, localPath, options = {}) {
     if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
     const source = normalizeRemotePath(remotePath);
     const partialPath = `${localPath}.aux-command-${options.transferId || randomUUID()}.part`;
@@ -219,8 +275,9 @@ class FtpService {
       return true;
     }
     const profile = normalizeProfile(profileInput);
-    const connection = await this.connect(profile);
-    try { await connection.client.remove(`${normalizeRemotePath(remotePath)}.aux-command-${transferId}.part`); } catch { /* best effort */ }
+    await this.#withConnection(profile, async (connection) => {
+      try { await connection.client.remove(`${normalizeRemotePath(remotePath)}.aux-command-${transferId}.part`); } catch { /* best effort */ }
+    });
     return true;
   }
 

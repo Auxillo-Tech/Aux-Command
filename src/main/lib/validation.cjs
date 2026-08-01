@@ -8,7 +8,10 @@ const PROTOCOLS = new Set(['local', 'ssh', 'mosh', 'telnet', 'serial', 'ftp', 'f
 const TRANSFER_MODES = new Set(['sftp', 'scp']);
 const TUNNEL_TYPES = new Set(['local', 'remote', 'dynamic']);
 const CREDENTIAL_KINDS = new Set(['password', 'passphrase']);
-const TERMINAL_THEMES = new Set(['aux-dark', 'light', 'high-contrast']);
+const TERMINAL_THEMES = new Set([
+  'aux-dark', 'light', 'high-contrast', 'nord', 'dracula', 'solarized-dark', 'solarized-light',
+  'one-dark', 'catppuccin-mocha', 'tokyo-night', 'gruvbox-dark', 'monokai', 'oceanic-next', 'material'
+]);
 const TERMINAL_CURSOR_STYLES = new Set(['block', 'underline', 'bar']);
 
 function fail(message) {

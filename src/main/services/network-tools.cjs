@@ -21,6 +21,7 @@ class NetworkToolService {
     this.active = new Map();
     this.wakeAddress = options.wakeAddress || '255.255.255.255';
     this.wakePort = Number(options.wakePort || 9);
+    this.commandTimeout = Number(options.commandTimeout) > 0 ? Number(options.commandTimeout) : 30_000;
   }
 
   async ping(hostInput, count = 4) {
@@ -130,7 +131,7 @@ class NetworkToolService {
     });
   }
 
-  #spawnCapture(command, args, timeout = 30_000) {
+  #spawnCapture(command, args, timeout = this.commandTimeout) {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false });
       const id = `${command}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -186,8 +187,21 @@ class NetworkToolService {
       });
       child.once('exit', (code, signal) => {
         if (entry.cancelled) finish(new Error(`${command} was cancelled`));
-        else if (entry.timedOut) finish(new Error(`${command} timed out`));
-        else finish(null, { id, command, args, exitCode: code, signal: signal || null, stdout, stderr });
+        else if (entry.timedOut) {
+          // Long traceroutes and whois lookups routinely hit the timeout after
+          // producing useful output; return what was captured instead of
+          // discarding it.
+          finish(null, {
+            id,
+            command,
+            args,
+            exitCode: code ?? 124,
+            signal: signal || null,
+            stdout,
+            stderr: `${stderr}${stderr && !stderr.endsWith('\n') ? '\n' : ''}${command} timed out after ${Math.round(timeout / 1000)}s; partial output shown.`,
+            timedOut: true
+          });
+        } else finish(null, { id, command, args, exitCode: code, signal: signal || null, stdout, stderr });
       });
     });
   }

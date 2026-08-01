@@ -85,7 +85,18 @@ class TransferQueue {
     entry.status = 'cancelled';
     this.#emit(entry);
     entry.abortController?.abort();
-    if (!active) this.entries.delete(id);
+    if (!active) {
+      // Paused/failed entries never reach #runEntry's finally block, so their
+      // partial files are cleaned up here instead.
+      this.entries.delete(id);
+      void Promise.resolve(this.transferService?.cleanup?.(
+        entry.profile,
+        entry.direction,
+        entry.localPath,
+        entry.remotePath,
+        { transferId: entry.id }
+      )).catch(() => { /* best effort partial-transfer cleanup */ });
+    }
     void this.#processQueue();
     return true;
   }

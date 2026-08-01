@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+### Changed
+
+- Redesigned the entire workspace around a professional layout: application tools moved from the crowded top strip into a dedicated left icon rail with crisp vector icons and tooltips, so no control is ever cut off at any window width.
+- Rebuilt the visual design system — typography scale, spacing, focus rings, refined dark glass surfaces, modal/palette/menu treatments, and consistent hover/active states across every panel.
+- Adopted the Aux Command product logo across the in-app brand mark, welcome screen, and all packaged Linux application icons; the Auxillo company wordmark now links to auxillo.tech from the header, and the status bar carries a persistent auxillo.tech link.
+- The session tab bar and toolbar now appear only once a session exists, keeping the welcome screen clean.
+
+### Added
+
+- Added a per-connection context menu (also on right-click) with Connect, Edit, Duplicate, Add/Remove favorite, Move to group, and a discoverable Delete with confirmation.
+- Added sidebar group management: create groups from the sidebar, rename or delete groups from their own menu, collapse/expand groups, per-group "new connection here", and a group picker with suggestions in the connection editor. Custom groups persist across restarts.
+
+- Added a per-profile OpenSSH known-hosts override field to the connection editor for isolated lab and fixture hosts.
+- Added an RDP domain field to the remote desktop gateway dialog, passed to FreeRDP as `/d:`.
+- Added transfer queue quality-of-life: a live active-transfer count badge, queue hydration from the main process on startup and reload, and a clear-completed control.
+- Added support for arbitrary Linux serial baud rates (for example 250000 or 1000000) through the `termios2`/`BOTHER` interface, with clear errors when the driver rejects a rate.
+
+### Fixed
+
+- Serial and Telnet sessions now switch their PTY to raw mode: keystrokes including Ctrl+C reach the device or server as bytes, input is no longer line-buffered, and passwords are no longer locally echoed.
+- Large pastes no longer crash terminal, serial, or telnet sessions: bridge writes are buffered with backpressure instead of dying on non-blocking write errors.
+- Telnet option negotiation now survives commands split across TCP segment boundaries via a stateful IAC parser, and socket sends are queued under backpressure.
+- Serial and Telnet bridge helper files are packaged world-readable so root-owned deb/rpm installs can start those sessions.
+- Workspace Ctrl+Shift shortcuts (palette, snippets, layout, broadcast, duplicate, reconnect, pane sizing, file browser) now work while a terminal has keyboard focus, the advertised Ctrl+W closes a tab after its session exits, and Escape closes modals even when a field has focus.
+- FTP/FTPS disconnects now reach the FTP service: the preload bridge no longer drops the protocol argument, and profile save/delete pass it through.
+- The FTP/FTPS file browser is no longer disconnected or replaced when terminal tabs are opened or activated; it now closes only through its own panel controls.
+- FTP operations for a profile are serialized on the control connection so browsing during a queued transfer no longer kills either operation; dead cached FTP connections are re-established instead of failing until manual disconnect, and connects racing a profile edit no longer resolve with stale settings.
+- FTP directory listings show real permissions instead of dashes, and inline FTP text saves are atomic (upload to `.part`, then rename).
+- All 14 terminal themes offered by the profile editor are accepted by validation; previously saving with 11 of them rejected the whole profile.
+- SCP fallback downloads no longer fail on distributions where `/tmp` is a separate filesystem; uploads write to a remote `.part` path and move into place; the fallback now requires an already-trusted host key and explains how to trust one instead of silently accepting unknown keys.
+- Stopping a tunnel now reports `stopped` instead of `failed` with SSH debug output.
+- Closed-session transcripts are bounded and released when their tab closes instead of accumulating until app quit.
+- Update checks no longer hang at “Checking…” on deb/rpm installs where the embedded updater is inactive.
+- Profile synchronization no longer duplicates profiles on every cycle when remote entries have unnamed or whitespace-padded names, validates the whole payload before applying anything, and refreshes the sidebar after background syncs.
+- An inactive embedded VNC tab no longer covers terminal panes in single view; VNC bridge sessions are stopped during renderer crash recovery; running a snippet on a VNC tab reports an error instead of a false success.
+- Cancelled transfers disappear from the queue UI, and cancelling a paused or failed transfer cleans up partial files.
+- One invalid profile or snippet entry in `profiles.json` no longer breaks startup — it is skipped with a warning; array-rooted store files are quarantined like other corruption.
+- Network diagnostics return partial output when a command times out, the live monitor honors its shorter connect timeout, and Mosh sessions honor the per-profile known-hosts override.
+- SFTP keyboard activation opens the focused row instead of the previous selection; profile-sync modal buttons enable after the first save; diagnostics refresh replaces the dialog instead of stacking; snippet delete, SSH-key copy/delete, and gateway stop surface errors instead of failing silently.
+- Remote text editing stages downloads in private 0700 temp directories, and the PTY bridge no longer leaks its IPC descriptors into user sessions.
+
+### Documentation
+
+- Removed third-party product comparisons; the project now documents its own scope on its own terms.
+- Realigned roadmap documents with what the 0.2.x line actually shipped.
+
+## 0.2.3 - 2026-07-29
+
+This section consolidates the 0.2.x release line.
+
 ### Documentation
 
 - Declared Aux Command as a free/open-source AGPL-3.0-or-later public product with no enterprise-only features, paid editions, or payment walls.

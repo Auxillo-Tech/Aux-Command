@@ -47,12 +47,31 @@ class ProfileStore {
   }
 
   list() {
+    // One hand-edited or legacy-invalid entry must not take every profile
+    // (and app startup) down with it; invalid entries are skipped with a
+    // warning and stay untouched in profiles.json for manual repair.
     const data = this.store.get();
-    return data.profiles.map((profile) => normalizeProfile(profile, profile.id));
+    const profiles = [];
+    for (const profile of data.profiles) {
+      try {
+        profiles.push(normalizeProfile(profile, profile.id));
+      } catch (error) {
+        process.stderr.write(`Aux Command skipped invalid profile ${profile?.id || '(no id)'} in profiles.json: ${error?.message || error}\n`);
+      }
+    }
+    return profiles;
   }
 
   snippets() {
-    return (this.store.get().snippets || []).map((snippet) => normalizeSnippet(snippet, snippet.id));
+    const snippets = [];
+    for (const snippet of this.store.get().snippets || []) {
+      try {
+        snippets.push(normalizeSnippet(snippet, snippet.id));
+      } catch (error) {
+        process.stderr.write(`Aux Command skipped invalid snippet ${snippet?.id || '(no id)'} in profiles.json: ${error?.message || error}\n`);
+      }
+    }
+    return snippets;
   }
 
   saveSnippet(input) {

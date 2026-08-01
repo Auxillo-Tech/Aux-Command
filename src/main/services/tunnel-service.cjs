@@ -37,7 +37,7 @@ class TunnelService {
       startedAt: new Date().toISOString(),
       lastError: ''
     };
-    const entry = { state, child, settled: false };
+    const entry = { state, child, settled: false, stopRequested: false };
     this.tunnels.set(tunnel.id, entry);
     this.#emit(state);
 
@@ -63,8 +63,11 @@ class TunnelService {
     child.once('exit', (code, signal) => {
       if (entry.settled) return;
       entry.settled = true;
-      state.status = code === 0 || signal ? 'stopped' : 'failed';
-      state.lastError = code && errorBuffer.trim() ? errorBuffer.trim() : state.lastError;
+      // The process guard exits with a plain 128+signum code after forwarding
+      // SIGTERM, so an operator-requested stop must not be reported as failed.
+      const stopped = entry.stopRequested || code === 0 || Boolean(signal);
+      state.status = stopped ? 'stopped' : 'failed';
+      state.lastError = !stopped && code && errorBuffer.trim() ? errorBuffer.trim() : state.lastError;
       if (this.tunnels.get(tunnel.id) === entry) this.tunnels.delete(tunnel.id);
       this.#emit(state);
     });
@@ -74,6 +77,7 @@ class TunnelService {
   stop(id) {
     const entry = this.tunnels.get(id);
     if (!entry) return false;
+    entry.stopRequested = true;
     entry.state.status = 'stopping';
     this.#emit(entry.state);
     entry.child.kill('SIGTERM');

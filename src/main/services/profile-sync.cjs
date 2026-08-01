@@ -6,7 +6,7 @@ const http = require('node:http');
 const https = require('node:https');
 const { randomUUID } = require('node:crypto');
 const { JsonStore } = require('../lib/json-store.cjs');
-const { expandHome } = require('../lib/validation.cjs');
+const { expandHome, normalizeProfile } = require('../lib/validation.cjs');
 
 const MAX_SYNC_BYTES = 5_000_000;
 const MAX_SYNC_PROFILES = 1000;
@@ -98,10 +98,11 @@ class ProfileSync {
       }
 
       const localProfiles = [...this.profileStore.list()];
-      let added = 0;
-      let updated = 0;
-      for (const remote of remoteProfiles) {
-        if (!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new Error('Sync profile entries must be objects');
+      // Stage every entry first so one invalid profile aborts the sync before
+      // anything is written, instead of leaving a half-applied import.
+      const staged = [];
+      for (const [index, remote] of remoteProfiles.entries()) {
+        if (!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new Error(`Sync profile entry ${index + 1} must be an object`);
         const {
           credentialId: _credentialId,
           credentialKind: _credentialKind,
@@ -111,18 +112,35 @@ class ProfileSync {
           privateKey: _privateKey,
           ...cleanRemote
         } = remote;
+        // Stored profiles hold normalized (trimmed) values; the remote entry
+        // must be matched the same way or every cycle re-imports it as new.
+        const remoteName = String(cleanRemote.name || '').trim();
+        const remoteHost = String(cleanRemote.host || '').trim();
+        const remoteProtocol = String(cleanRemote.protocol || '').trim();
         const existing = localProfiles.find((profile) =>
-          profile.name === cleanRemote.name
-          && profile.host === cleanRemote.host
-          && profile.protocol === cleanRemote.protocol
+          profile.name === remoteName
+          && profile.host === remoteHost
+          && profile.protocol === remoteProtocol
         );
-        const saved = this.profileStore.save({
+        const candidate = {
           ...(existing || {}),
           ...cleanRemote,
           id: existing?.id || randomUUID(),
           credentialId: existing?.credentialId || '',
           credentialKind: existing?.credentialKind || 'password'
-        });
+        };
+        try {
+          normalizeProfile(candidate, candidate.id);
+        } catch (error) {
+          throw new Error(`Sync profile entry ${index + 1} (${remoteName || 'unnamed'}) is invalid: ${error?.message || error}`);
+        }
+        staged.push({ candidate, existing });
+      }
+
+      let added = 0;
+      let updated = 0;
+      for (const { candidate, existing } of staged) {
+        const saved = this.profileStore.save(candidate);
         if (existing) {
           Object.assign(existing, saved);
           updated += 1;

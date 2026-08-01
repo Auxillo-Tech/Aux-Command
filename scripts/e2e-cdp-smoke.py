@@ -133,8 +133,8 @@ def main() -> int:
             and ui_foundation['profileEdit'] and ui_foundation['durableStartupError']
             and ui_foundation['updateButton'] and ui_foundation['sftpEditButton']
             and ui_foundation['labeledTopActions'] == [
-                'Local shell', 'Snippets', 'Tunnels', 'Updates', 'Diagnostics', 'Network',
-                'Monitor', 'Gateway', 'Sync', 'Keys'
+                'Local shell', 'Snippets', 'Tunnels', 'Network', 'Monitor', 'Gateway',
+                'Keys', 'Sync', 'Diagnostics', 'Updates'
             ],
             'remediated UI foundation missing from packaged app',
             ui_foundation,
