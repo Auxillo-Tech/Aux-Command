@@ -151,6 +151,21 @@ async function replaceRemoteFile(sftp, partialPath, targetPath) {
   }
 }
 
+function createGuardedHostVerifier(verify, isConnectionDead) {
+  return (fingerprint, callback) => {
+    let answered = false;
+    const respond = (accepted) => {
+      if (answered) return;
+      answered = true;
+      // A trust prompt answered after the handshake timed out must not reach
+      // ssh2: its rejection path faults on the already-destructed protocol.
+      if (isConnectionDead()) return;
+      try { callback(accepted); } catch { /* connection died between the check and the callback */ }
+    };
+    verify(fingerprint).then(respond, () => respond(false));
+  };
+}
+
 function createOpenSshProxy(profile) {
   // OpenSSH performs the hop-to-hop chaining itself: earlier hops ride the -J
   // option while the final hop carries the -W stream to the destination.
@@ -243,6 +258,9 @@ class SftpService {
     const profile = holder.profile;
     const client = new Client();
     holder.client = client;
+    let connectionDead = false;
+    client.once('close', () => { connectionDead = true; });
+    client.once('error', () => { connectionDead = true; });
     const config = {
       host: profile.host,
       port: profile.port,
@@ -256,11 +274,10 @@ class SftpService {
         compress: profile.compression ? ['zlib@openssh.com', 'zlib', 'none'] : ['none', 'zlib@openssh.com', 'zlib']
       },
       hostHash: 'sha256',
-      hostVerifier: (fingerprint, callback) => {
-        this.knownHostService.verify(profile, fingerprint)
-          .then((accepted) => callback(accepted))
-          .catch(() => callback(false));
-      }
+      hostVerifier: createGuardedHostVerifier(
+        (fingerprint) => this.knownHostService.verify(profile, fingerprint),
+        () => connectionDead
+      )
     };
 
     if (profile.proxyJump) {
@@ -606,4 +623,4 @@ class SftpService {
   }
 }
 
-module.exports = { SftpService, createOpenSshProxy, isDirectory, modeToString, replaceRemoteFile };
+module.exports = { SftpService, createGuardedHostVerifier, createOpenSshProxy, isDirectory, modeToString, replaceRemoteFile };

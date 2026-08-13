@@ -63,6 +63,55 @@ test('rejects an unaccepted host key without persisting it', async () => {
 });
 
 
+test('coalesces concurrent verifications for the same host into one prompt', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-known-host-'));
+  let promptCount = 0;
+  let releasePrompt;
+  const promptBroker = {
+    request: () => {
+      promptCount += 1;
+      return new Promise((resolve) => { releasePrompt = () => resolve({ accept: true, remember: true }); });
+    }
+  };
+  try {
+    const service = new KnownHostService(directory, promptBroker);
+    const first = service.verify(profile, '44'.repeat(32));
+    const second = service.verify(profile, '44'.repeat(32));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(promptCount, 1);
+    releasePrompt();
+    assert.deepEqual(await Promise.all([first, second]), [true, true]);
+
+    // Once settled, a later mismatching fingerprint prompts again.
+    const third = service.verify(profile, '55'.repeat(32));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(promptCount, 2);
+    releasePrompt();
+    assert.equal(await third, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a rejected prompt releases the coalesced slot for future attempts', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-known-host-'));
+  let promptCount = 0;
+  const promptBroker = {
+    request: async () => {
+      promptCount += 1;
+      throw new Error('host-key prompt timed out');
+    }
+  };
+  try {
+    const service = new KnownHostService(directory, promptBroker);
+    await assert.rejects(service.verify(profile, '66'.repeat(32)), /timed out/u);
+    await assert.rejects(service.verify(profile, '66'.repeat(32)), /timed out/u);
+    assert.equal(promptCount, 2);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('rejects malformed fingerprints and safely stores prototype-like host names', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-known-host-'));
   const promptBroker = { request: async () => ({ accept: true, remember: true }) };

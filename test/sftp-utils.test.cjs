@@ -10,7 +10,7 @@ const {
   parseProxyJump,
   safeTimestampToIso
 } = require('../src/main/lib/sftp-utils.cjs');
-const { replaceRemoteFile } = require('../src/main/services/sftp-service.cjs');
+const { replaceRemoteFile, createGuardedHostVerifier } = require('../src/main/services/sftp-service.cjs');
 
 test('formats SFTP modes and safely handles timestamps', () => {
   assert.equal(modeToString(0o040750), 'drwxr-x---');
@@ -100,4 +100,41 @@ test('parses multi-hop ProxyJump chains and formats hops back for -J', () => {
   assert.deepEqual(parseProxyJumpChain(''), []);
   assert.throws(() => parseProxyJumpChain('a,,b'), /Invalid ProxyJump chain/u);
   assert.throws(() => parseProxyJumpChain(Array.from({ length: 9 }, (_, i) => `hop${i}`).join(',')), /at most 8 hops/u);
+});
+
+test('guarded host verifier answers once and only while the connection is alive', async () => {
+  let dead = false;
+  const calls = [];
+  const verifier = createGuardedHostVerifier(async () => true, () => dead);
+  verifier('fp', (accepted) => calls.push(accepted));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, [true]);
+
+  // A verdict arriving after the connection died must never reach ssh2.
+  dead = true;
+  let lateRelease;
+  const lateCalls = [];
+  const lateVerifier = createGuardedHostVerifier(
+    () => new Promise((resolve) => { lateRelease = resolve; }),
+    () => dead
+  );
+  lateVerifier('fp', (accepted) => lateCalls.push(accepted));
+  lateRelease(true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(lateCalls, []);
+});
+
+test('guarded host verifier absorbs callback faults and maps failures to denial', async () => {
+  // ssh2's denial path can throw on a destructed protocol; the guard must not let it escape.
+  const throwingVerifier = createGuardedHostVerifier(async () => false, () => false);
+  assert.doesNotThrow(() => {
+    throwingVerifier('fp', () => { throw new TypeError('protocol._destruct is not a function'); });
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const denials = [];
+  const failingVerifier = createGuardedHostVerifier(async () => { throw new Error('prompt timed out'); }, () => false);
+  failingVerifier('fp', (accepted) => denials.push(accepted));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(denials, [false]);
 });
