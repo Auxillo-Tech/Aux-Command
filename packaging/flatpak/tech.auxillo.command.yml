@@ -48,7 +48,7 @@ modules:
       - type: file
         # Replace with the pinned release AppImage URL and its SHA-256.
         url: https://github.com/Auxillo-Tech/Aux-Command/releases/download/v0.4.0/Aux-Command-0.4.0-x86_64.AppImage
-        sha256: 937c40d427584217d4ebc208e273b7969fd9e31b1d5b380551a01a6c43767fd2
+        sha256: 8cde5ab68c9186ffe52d86eedb6525b1f1a1cb3bad15f3f0c886ceda9ddd044a
         dest-filename: Aux-Command.AppImage
         only-arches: [x86_64]
       - type: script
