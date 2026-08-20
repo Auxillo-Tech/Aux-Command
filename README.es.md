@@ -17,6 +17,10 @@ Diseñado para operadores técnicos, equipos de infraestructura e ingenieros de 
 - **Lanzadores de protocolo y puentes** - Puentes Mosh, RDP (FreeRDP), VNC (TigerVNC), Telnet y serie, además de un ayudante PTY.
 - **FTP / FTPS** - Perfiles de explorador de archivos con transporte TLS cifrado (FTPS) y advertencia para conexiones FTP no cifradas.
 - **Publicación y diagnóstico** - Ruta de actualización de GitHub Releases, paquetes AppImage, .deb y .rpm, generación de SBOM y verificación de suma de comprobación SHA-256.
+- **Asistente de terminal** - Detección pasiva del sistema operativo por sesión, sugerencias en línea (Ctrl+Espacio), correcciones «quiso decir» y un diálogo de protección ante comandos destructivos; todo desactivable por separado.
+- **Productividad** - Búsqueda de historial entre sesiones, un comando en varias sesiones con salida recopilada, repetición de sesiones con cronología real y estadísticas del sistema en la barra de estado.
+- **IA opcional** - Desactivada por defecto; usa tu propio endpoint compatible con OpenAI (llama.cpp, Ollama…). Las respuestas solo se insertan, nunca se ejecutan.
+- **Interfaz en español** - La interfaz cambia entre 9 idiomas desde la barra de estado.
 
 ## Instalación rápida
 

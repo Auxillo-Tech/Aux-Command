@@ -386,7 +386,8 @@ Typical data includes profiles, command snippets, SFTP known-host fingerprints, 
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | Local validation and packaging commands. |
 | [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) | Current engineering release evidence and remaining gates. |
 | [`docs/LIVE_QUALIFICATION.md`](docs/LIVE_QUALIFICATION.md) | Live protocol qualification checklist. |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Forward plan for closing remaining product gaps. |
+| [`ROADMAP.md`](ROADMAP.md) | Live product roadmap with per-feature statuses. |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Versioned release plan (0.1 → 1.0). |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Pull request workflow and code standards. |
 
 ---

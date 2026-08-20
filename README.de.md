@@ -17,6 +17,10 @@ Entwickelt für technische Betreiber, Infrastrukturteams und Sicherheitsingenieu
 - **Protokoll-Starter und Brücken** - Mosh-, RDP- (FreeRDP), VNC- (TigerVNC), Telnet- und serielle Brücken sowie ein PTY-Helfer.
 - **FTP / FTPS** - Datei-Browser-Profile mit verschlüsseltem TLS-Transport (FTPS) und Warnung bei unverschlüsselten FTP-Verbindungen.
 - **Veröffentlichung und Diagnose** - GitHub-Releases-Update-Pfad, AppImage-, .deb- und .rpm-Pakete, SBOM-Generierung und SHA-256-Prüfsummenverifikation.
+- **Terminal-Assistent** - Passive Betriebssystem-Erkennung je Sitzung, Inline-Befehlsvorschläge (Ctrl+Leertaste), „Meinten Sie“-Korrekturen und ein Schutzdialog vor destruktiven Befehlen — alles einzeln abschaltbar.
+- **Produktivität** - Sitzungsübergreifende Verlaufssuche, ein Befehl auf mehreren Sitzungen mit gesammelter Ausgabe, Sitzungswiedergabe mit echter Zeitachse und Live-Systemwerte in der Statusleiste.
+- **Optionale KI-Hilfe** - Standardmäßig aus; eigener OpenAI-kompatibler Endpunkt (z. B. llama.cpp oder Ollama). Antworten werden nur eingefügt, nie ausgeführt.
+- **Oberfläche auf Deutsch** - Die Arbeitsoberfläche ist in 9 Sprachen direkt über die Statusleiste umschaltbar.
 
 ## Schnellinstallation
 
