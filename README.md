@@ -148,6 +148,18 @@ Install optional runtime tools with:
 - Guarded macro recording that saves reviewed terminal input as replayable snippets.
 - Guarded broadcast input across terminal sessions.
 - Keyboard-first navigation and accessible tab/panel relationships.
+- Terminal assist (each part individually toggleable, on by default):
+  - Passive OS/distro detection per session (os-release, MOTD, and banner
+    heuristics — no probe commands are ever sent) with a tab badge.
+  - Inline command suggestions from in-memory session history plus a
+    per-OS dictionary (`apt`/`dnf`/`zypper`/`pacman`/`apk`/`brew`/`winget`
+    aware); accept with `Ctrl+Space`. Suggestion history is never written
+    to disk.
+  - "Did you mean" fixes after `command not found` errors, offered as an
+    insert-only chip that never auto-runs.
+  - Dangerous-command guard that asks for confirmation before transmitting
+    Enter on destructive commands (`rm -rf /`, `dd of=/dev/…`, `mkfs`,
+    firewall flushes, shutdown/reboot, fork bombs).
 
 ### SSH operations
 

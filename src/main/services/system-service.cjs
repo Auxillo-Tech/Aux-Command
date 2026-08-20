@@ -114,6 +114,14 @@ class SystemService {
     };
   }
 
+  osInfo() {
+    let releaseText = '';
+    if (process.platform === 'linux') {
+      try { releaseText = fs.readFileSync('/etc/os-release', 'utf8'); } catch { /* minimal distros may lack os-release */ }
+    }
+    return { platform: process.platform, releaseText };
+  }
+
   readTextFile(filename, limit = 5_000_000) {
     const stat = fs.statSync(filename);
     if (!stat.isFile() || stat.size > limit) throw new Error('File is not a supported profile export');

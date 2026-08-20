@@ -150,7 +150,7 @@ def main() -> int:
             and ui_foundation['updateButton'] and ui_foundation['sftpEditButton']
             and ui_foundation['labeledTopActions'] == [
                 'Local shell', 'Snippets', 'Tunnels', 'Network', 'Monitor', 'Gateway',
-                'Keys', 'Sync', 'Diagnostics', 'Updates'
+                'Keys', 'Sync', 'Assist', 'Diagnostics', 'Updates'
             ],
             'remediated UI foundation missing from packaged app',
             ui_foundation,
@@ -370,6 +370,7 @@ def main() -> int:
             checks.monitor = (await openAndRead('monitor-button')).includes('Live server monitor');
             checks.gateway = (await openAndRead('gateway-button')).includes('Remote desktop gateway');
             checks.sync = (await openAndRead('sync-button')).includes('Profile synchronization');
+            checks.assist = (await openAndRead('assist-button')).includes('Terminal assist');
             const state = await window.auxCommand.app.getState();
             const privateDefaults = state.profiles.some(p => String(p.id).startsWith('infra-'));
             const defaultsOk = state.profiles.length === 1
