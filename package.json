@@ -29,7 +29,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "6.0.0",
-    "basic-ftp": "6.0.2",
+    "basic-ftp": "6.2.0",
     "electron-updater": "6.8.9",
     "openpgp": "6.3.1",
     "ssh2": "1.17.0",
