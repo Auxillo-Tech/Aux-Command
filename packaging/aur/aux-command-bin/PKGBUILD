@@ -2,7 +2,7 @@
 # Binary AUR package: repackages the released x86_64 AppImage.
 pkgname=aux-command-bin
 _appname='Aux Command'
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial"
 arch=('x86_64')

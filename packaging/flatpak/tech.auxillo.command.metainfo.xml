@@ -45,6 +45,11 @@
     <keyword>serial</keyword>
   </keywords>
   <releases>
+    <release version="0.4.0" date="2026-08-20">
+      <description>
+        <p>Terminal assist (OS detection, inline suggestions, autocorrect, dangerous-command guard), cross-session history search, multi-session command runner, session replay, live host stats, optional bring-your-own-endpoint AI assist, and a UI localized in nine languages.</p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-08-01">
       <description>
         <p>Embedded RDP, SSH config Include parsing, multi-hop ProxyJump, log highlighting, connection health, and a redesigned interface.</p>
