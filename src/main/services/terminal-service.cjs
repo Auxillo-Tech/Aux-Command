@@ -9,6 +9,24 @@ const { buildTerminalCommand } = require('../lib/command-builder.cjs');
 const { normalizeTerminalRequest } = require('../lib/validation.cjs');
 
 const MAX_TRANSCRIPT_BYTES = 1_048_576;
+const MAX_RECORDING_CHUNKS = 5000;
+const MAX_RECORDING_BYTES = 2_000_000;
+
+// Timing-aware output recording for replay. Bounded from the front so a
+// long-lived session keeps its most recent activity.
+function appendRecordingChunk(recording, data, offsetMs) {
+  const text = typeof data === 'string' ? data : String(data || '');
+  if (!text) return recording;
+  recording.chunks.push({ t: Math.max(0, Math.round(offsetMs)), data: text });
+  recording.bytes += Buffer.byteLength(text, 'utf8');
+  while (recording.chunks.length > MAX_RECORDING_CHUNKS || recording.bytes > MAX_RECORDING_BYTES) {
+    const dropped = recording.chunks.shift();
+    if (!dropped) break;
+    recording.bytes -= Buffer.byteLength(dropped.data, 'utf8');
+    recording.truncated = true;
+  }
+  return recording;
+}
 
 function appendTranscript(session, data) {
   const text = typeof data === 'string' ? data : String(data || '');
@@ -68,12 +86,14 @@ class TerminalService {
       startedAt: new Date().toISOString(),
       transcript: '',
       transcriptTruncated: false,
-      logging: null
+      logging: null,
+      recording: { startedAtMs: Date.now(), chunks: [], bytes: 0, truncated: false }
     };
     this.sessions.set(id, session);
 
     terminal.onData((data) => {
       appendTranscript(session, data);
+      appendRecordingChunk(session.recording, data, Date.now() - session.recording.startedAtMs);
       this.#send('terminal:data', { id, data });
     });
     terminal.onExit(({ exitCode, signal }) => {
@@ -88,7 +108,8 @@ class TerminalService {
           startedAt: session.startedAt,
           transcript: session.transcript,
           transcriptTruncated: session.transcriptTruncated,
-          logging: session.logging ? { filePath: session.logging.filePath, active: false } : null
+          logging: session.logging ? { filePath: session.logging.filePath, active: false } : null,
+          recording: session.recording
         });
       }
       this.#closeLogStream(session);
@@ -128,6 +149,20 @@ class TerminalService {
       exportedAt: new Date().toISOString(),
       truncated: Boolean(session.transcriptTruncated),
       text: session.transcript
+    };
+  }
+
+  exportRecording(id) {
+    const session = this.sessions.get(id) || this.closedTranscripts.get(id);
+    if (!session) throw new Error('Terminal session not found');
+    const recording = session.recording || { chunks: [], truncated: false };
+    return {
+      id: session.id,
+      title: session.title,
+      protocol: session.protocol,
+      startedAt: session.startedAt,
+      truncated: Boolean(recording.truncated),
+      chunks: recording.chunks
     };
   }
 
@@ -175,7 +210,7 @@ class TerminalService {
   }
 
   list() {
-    return [...this.sessions.values()].map(({ terminal, transcript, logging, ...metadata }) => ({
+    return [...this.sessions.values()].map(({ terminal, transcript, logging, recording, ...metadata }) => ({
       ...metadata,
       logging: logging ? { filePath: logging.filePath, active: true } : null
     }));
@@ -194,4 +229,4 @@ class TerminalService {
   }
 }
 
-module.exports = { TerminalService };
+module.exports = { TerminalService, appendRecordingChunk };

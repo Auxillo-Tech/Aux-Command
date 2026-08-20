@@ -142,6 +142,11 @@ Install optional runtime tools with:
 - Split/tiled multi-session layouts.
 - Terminal search.
 - Active-session transcript export with local review/copy/save/print controls.
+- Session replay: every session records output with timing (bounded to recent
+  activity, memory only) and can be replayed in a read-only terminal at
+  1×–8× or instant speed from the transcript menu.
+- Live local-host stats (load, memory, root disk) in the status bar;
+  remote SSH stats stay on-demand through the Live Monitor.
 - Explicit per-session terminal logging to a local operator-selected file.
 - Command palette.
 - Command snippets.

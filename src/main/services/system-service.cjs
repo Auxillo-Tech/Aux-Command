@@ -114,6 +114,30 @@ class SystemService {
     };
   }
 
+  stats() {
+    if (process.platform !== 'linux') return { supported: false };
+    try {
+      const load1 = Number(fs.readFileSync('/proc/loadavg', 'utf8').split(/\s+/u)[0]);
+      const meminfo = fs.readFileSync('/proc/meminfo', 'utf8');
+      const memValue = (key) => Number((meminfo.match(new RegExp(`^${key}:\\s+(\\d+) kB`, 'mu')) || [])[1] || 0);
+      const memTotal = memValue('MemTotal');
+      const memAvailable = memValue('MemAvailable');
+      const disk = fs.statfsSync('/');
+      const diskTotal = disk.blocks * disk.bsize;
+      const diskFree = disk.bavail * disk.bsize;
+      return {
+        supported: true,
+        load1: Number.isFinite(load1) ? load1 : null,
+        cpuCount: os.cpus().length,
+        memUsedPct: memTotal ? Math.round(((memTotal - memAvailable) / memTotal) * 100) : null,
+        diskUsedPct: diskTotal ? Math.round(((diskTotal - diskFree) / diskTotal) * 100) : null,
+        uptimeSec: Math.round(os.uptime())
+      };
+    } catch {
+      return { supported: false };
+    }
+  }
+
   osInfo() {
     let releaseText = '';
     if (process.platform === 'linux') {

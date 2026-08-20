@@ -314,3 +314,56 @@ test('multi-session runner is wired with capture tap, guard and shortcut', () =>
   assert.match(rendererSource, /Run on multiple sessions/u);
   assert.match(stylesCss, /\.multi-run-output/u);
 });
+
+test('recording chunks keep timing and are bounded from the front', () => {
+  const { appendRecordingChunk } = require('../src/main/services/terminal-service.cjs');
+  const recording = { chunks: [], bytes: 0, truncated: false };
+  appendRecordingChunk(recording, 'hello', 10);
+  appendRecordingChunk(recording, ' world', 250);
+  assert.deepEqual(recording.chunks.map((chunk) => chunk.t), [10, 250]);
+  assert.equal(recording.bytes, 11);
+  assert.equal(recording.truncated, false);
+
+  // Byte cap drops oldest chunks and marks truncation
+  const big = { chunks: [], bytes: 0, truncated: false };
+  for (let i = 0; i < 5; i++) appendRecordingChunk(big, 'x'.repeat(600_000), i * 100);
+  assert.ok(big.bytes <= 2_000_000);
+  assert.equal(big.truncated, true);
+  assert.ok(big.chunks[0].t > 0);
+
+  // Chunk-count cap
+  const many = { chunks: [], bytes: 0, truncated: false };
+  for (let i = 0; i < 5100; i++) appendRecordingChunk(many, 'a', i);
+  assert.equal(many.chunks.length, 5000);
+  assert.equal(many.truncated, true);
+});
+
+test('replay and host stats are wired end to end', () => {
+  assert.match(rendererSource, /async function openSessionReplay\(tab\)/u);
+  assert.match(rendererSource, /await api\.terminal\.recording\(tab\.id\)/u);
+  assert.match(rendererSource, /label: 'Replay session'/u);
+  assert.match(rendererSource, /function startHostStats\(\)/u);
+  assert.match(rendererSource, /startHostStats\(\);/u);
+  assert.match(preloadSource, /recording: \(id\) => invoke\('terminal:recording', id\)/u);
+  assert.match(preloadSource, /stats: \(\) => invoke\('system:stats'\)/u);
+  assert.match(ipcSource, /handle\('terminal:recording', \(id\) => terminalService\.exportRecording\(id\)\)/u);
+  assert.match(ipcSource, /handle\('system:stats', \(\) => systemService\.stats\(\)\)/u);
+  assert.match(indexHtml, /id="host-stats"/u);
+  assert.match(stylesCss, /\.replay-terminal/u);
+  assert.match(stylesCss, /\.host-stats/u);
+});
+
+test('system stats report sane values on linux', () => {
+  const { SystemService } = require('../src/main/services/system-service.cjs');
+  const stats = new SystemService().stats();
+  if (process.platform !== 'linux') {
+    assert.equal(stats.supported, false);
+    return;
+  }
+  assert.equal(stats.supported, true);
+  assert.ok(stats.load1 >= 0);
+  assert.ok(stats.cpuCount >= 1);
+  assert.ok(stats.memUsedPct >= 0 && stats.memUsedPct <= 100);
+  assert.ok(stats.diskUsedPct >= 0 && stats.diskUsedPct <= 100);
+  assert.ok(stats.uptimeSec > 0);
+});

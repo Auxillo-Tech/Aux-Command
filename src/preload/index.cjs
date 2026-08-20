@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     write: (id, data) => invoke('terminal:write', id, data),
     resize: (id, cols, rows) => invoke('terminal:resize', id, cols, rows),
     exportTranscript: (id) => invoke('terminal:export-transcript', id),
+    recording: (id) => invoke('terminal:recording', id),
     saveTranscript: (id) => invoke('terminal:save-transcript', id),
     printTranscript: (id) => invoke('terminal:print-transcript', id),
     startLogging: (id) => invoke('terminal:start-logging', id),
@@ -119,7 +120,8 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     clipboardRead: () => invoke('clipboard:read-text'),
     clipboardWrite: (text) => invoke('clipboard:write-text', text),
     openWebsite: () => invoke('system:open-website'),
-    osInfo: () => invoke('system:os-info')
+    osInfo: () => invoke('system:os-info'),
+    stats: () => invoke('system:stats')
   }),
   network: Object.freeze({
     ping: (host, count) => invoke('network:ping', host, count),

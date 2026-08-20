@@ -36,6 +36,7 @@
     importSshButton: $('#import-ssh-button'),
     profileMenuButton: $('#profile-menu-button'),
     assistButton: $('#assist-button'),
+    hostStats: $('#host-stats'),
     profileList: $('#profile-list'),
     connectionCount: $('#connection-count'),
     agentStatus: $('#agent-status'),
@@ -2125,6 +2126,116 @@
     input.select();
   }
 
+  async function openSessionReplay(tab) {
+    let recording;
+    try {
+      recording = await api.terminal.recording(tab.id);
+    } catch (error) {
+      toast('Replay unavailable', errorMessage(error), 'error');
+      return;
+    }
+    if (!recording.chunks?.length) {
+      toast('Nothing to replay yet', 'This session has not produced any output.', 'info');
+      return;
+    }
+
+    const host = node('div', { className: 'replay-terminal' });
+    const statusText = node('span', { className: 'replay-status', text: 'Ready' });
+    const playButton = node('button', { type: 'button', className: 'button primary', text: 'Play' });
+    const restartButton = node('button', { type: 'button', className: 'button', text: 'Restart' });
+    const speedSelect = node('select', { attrs: { 'aria-label': 'Replay speed' } },
+      [['1', '1×'], ['2', '2×'], ['4', '4×'], ['8', '8×'], ['instant', 'Instant']].map(([value, label]) => {
+        const option = node('option', { text: label });
+        option.value = value;
+        return option;
+      }));
+    speedSelect.value = '4';
+
+    const player = {
+      terminal: null,
+      index: 0,
+      playing: false,
+      token: 0
+    };
+
+    const setStatus = () => {
+      statusText.textContent = `${Math.min(player.index, recording.chunks.length)}/${recording.chunks.length} chunks${recording.truncated ? ' · bounded to recent activity' : ''}`;
+      playButton.textContent = player.playing ? 'Pause' : (player.index >= recording.chunks.length ? 'Done' : 'Play');
+    };
+
+    const resetTerminal = () => {
+      player.terminal?.dispose();
+      player.terminal = new window.Terminal({ ...terminalOptionsForProfile(tab.profile), disableStdin: true, convertEol: false });
+      host.replaceChildren();
+      player.terminal.open(host);
+      // E2E hook: replayed content is only reachable through the xterm buffer
+      // API (DOM rows carry no text), so tests read it via this reference.
+      host._replayTerminal = player.terminal;
+      player.index = 0;
+      setStatus();
+    };
+
+    const drive = async () => {
+      const token = ++player.token;
+      player.playing = true;
+      setStatus();
+      const speed = speedSelect.value;
+      while (player.playing && token === player.token && player.index < recording.chunks.length) {
+        const chunk = recording.chunks[player.index];
+        const previous = player.index > 0 ? recording.chunks[player.index - 1].t : chunk.t;
+        if (speed !== 'instant') {
+          const delay = Math.min(2000, Math.max(0, (chunk.t - previous) / Number(speed)));
+          if (delay > 4) await new Promise((resolve) => window.setTimeout(resolve, delay));
+          if (!player.playing || token !== player.token) break;
+        }
+        // Same forced refresh as writeTerminalData: software rendering may not
+        // repaint written rows on its own.
+        player.terminal.write(chunk.data, () => {
+          try { player.terminal.refresh(0, player.terminal.rows - 1); } catch { /* replay terminal may be closing */ }
+        });
+        player.index += 1;
+        if (player.index % 20 === 0 || player.index >= recording.chunks.length) setStatus();
+      }
+      if (token === player.token) {
+        player.playing = false;
+        setStatus();
+      }
+    };
+
+    playButton.addEventListener('click', () => {
+      if (player.playing) {
+        player.playing = false;
+        player.token += 1;
+        setStatus();
+      } else {
+        if (player.index >= recording.chunks.length) resetTerminal();
+        drive();
+      }
+    });
+    restartButton.addEventListener('click', () => {
+      player.playing = false;
+      player.token += 1;
+      resetTerminal();
+    });
+
+    const controller = showModal({
+      title: 'Session replay',
+      description: `${recording.title || tab.title} · recorded from session start${recording.truncated ? ' (oldest output dropped)' : ''}`,
+      body: node('div', { className: 'replay' }, [
+        node('div', { className: 'replay-controls' }, [playButton, restartButton, speedSelect, statusText]),
+        host
+      ]),
+      className: 'wide',
+      actions: [{ label: 'Close', run: () => { player.playing = false; player.token += 1; player.terminal?.dispose(); controller.close(); return false; } }]
+    });
+    controller.onClose(() => {
+      player.playing = false;
+      player.token += 1;
+      player.terminal?.dispose();
+    });
+    resetTerminal();
+  }
+
   async function exportActiveTranscript() {
     const tab = activeTab();
     if (!tab?.terminal) {
@@ -2167,6 +2278,10 @@
         { label: 'Print transcript', busy: false, run: async () => {
           const result = await api.terminal.printTranscript(tab.id);
           toast(result?.printed ? 'Print job sent' : 'Print canceled', transcript.title || tab.title, result?.printed ? 'success' : 'info');
+          return false;
+        } },
+        { label: 'Replay session', busy: false, run: async () => {
+          await openSessionReplay(tab);
           return false;
         } },
         { label: 'Close', busy: false }
@@ -3184,6 +3299,27 @@
   // Multi-session command runner: send one command to selected live terminals
   // and collect each session's output side by side.
   // ---------------------------------------------------------------------------
+
+  async function refreshHostStats() {
+    try {
+      const stats = await api.system.stats();
+      if (!stats?.supported) {
+        elements.hostStats.hidden = true;
+        return;
+      }
+      const load = stats.load1 === null ? '–' : stats.load1.toFixed(2);
+      elements.hostStats.textContent = `load ${load} · mem ${stats.memUsedPct ?? '–'}% · disk ${stats.diskUsedPct ?? '–'}%`;
+      elements.hostStats.title = `Local host — load ${load} of ${stats.cpuCount} cores, memory ${stats.memUsedPct}% used, root disk ${stats.diskUsedPct}% used, up ${Math.floor(stats.uptimeSec / 3600)}h`;
+      elements.hostStats.hidden = false;
+    } catch {
+      elements.hostStats.hidden = true;
+    }
+  }
+
+  function startHostStats() {
+    refreshHostStats();
+    window.setInterval(refreshHostStats, 20000);
+  }
 
   function multiRunCaptureTap(id, data) {
     const capture = state.multiRun?.captures.get(id);
@@ -4840,6 +4976,7 @@
       state.initialProfiles = initial.profiles || [];
       // Probe reachability only after the profile list is populated.
       startHealthMonitoring();
+      startHostStats();
       restoreInitialSessions(initial.sessions || []);
       api.transfer.list().then((entries) => {
         state.transferQueue.entries = Array.isArray(entries) ? entries : [];
