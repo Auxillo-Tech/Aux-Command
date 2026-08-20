@@ -318,6 +318,43 @@
     return corrected === command ? null : { corrected, replaced: token, replacement: best };
   }
 
+  // Cross-session history search: substring matches rank above in-order
+  // subsequence (fuzzy) matches; MRU order is preserved inside each rank.
+  function searchHistory(query, entries, limit = 50) {
+    const text = String(query || '').trim().toLowerCase();
+    const source = Array.isArray(entries) ? entries : [];
+    if (!text) return source.slice(0, limit);
+    const substring = [];
+    const fuzzy = [];
+    for (const entry of source) {
+      const command = String(entry.command || '').toLowerCase();
+      if (command.includes(text)) {
+        substring.push(entry);
+      } else {
+        let index = 0;
+        for (const char of text) {
+          index = command.indexOf(char, index);
+          if (index === -1) break;
+          index += 1;
+        }
+        if (index !== -1) fuzzy.push(entry);
+      }
+      if (substring.length >= limit) break;
+    }
+    return [...substring, ...fuzzy].slice(0, limit);
+  }
+
+  // Remove ANSI/OSC control sequences so captured terminal output reads as
+  // plain text in result panes.
+  function stripAnsi(text) {
+    return String(text || '')
+      .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
+      .replace(/\x1b[[?][0-9;?]*[a-zA-Z~]/g, '')
+      .replace(/\x1b[()][A-Z0-9]/g, '')
+      .replace(/\x1b[=>]/g, '')
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+  }
+
   return {
     OsDetector,
     osInfoFromRelease,
@@ -327,6 +364,8 @@
     suggest,
     correctCommand,
     detectCommandNotFound,
+    searchHistory,
+    stripAnsi,
     dictionaryFor,
     levenshtein,
     DANGER_RULES
