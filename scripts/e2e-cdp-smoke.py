@@ -108,7 +108,7 @@ def main() -> int:
           }))()
         """, timeout=20)
         expected_namespaces = [
-            'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'rdp',
+            'ai', 'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'rdp',
             'reachability', 'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal',
             'transfer', 'tunnels', 'updates', 'vault', 'vnc',
         ]

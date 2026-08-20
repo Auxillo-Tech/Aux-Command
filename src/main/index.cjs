@@ -32,6 +32,7 @@ const { ReachabilityService } = require('./services/reachability-service.cjs');
 const { SshKeyService } = require('./services/ssh-key-service.cjs');
 const { ProfileSync } = require('./services/profile-sync.cjs');
 const { LiveMonitorService } = require('./services/live-monitor.cjs');
+const { AiAssistService } = require('./services/ai-assist.cjs');
 const { RemoteDesktopGateway } = require('./services/rdp-gateway.cjs');
 const { registerIpc } = require('./ipc.cjs');
 
@@ -148,6 +149,7 @@ function initializeServices() {
   const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
   const liveMonitor = new LiveMonitorService();
   const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow });
+  const aiAssist = new AiAssistService(settingsStore, vaultService);
 
   // Route managed transfers through the correct protocol service with full profile data.
   const transferServiceFor = (profile) => profile.protocol === 'ftp' || profile.protocol === 'ftps' ? ftpService : sftpService;
@@ -178,7 +180,8 @@ function initializeServices() {
     sshKeyService,
     profileSync,
     liveMonitor,
-    remoteDesktopGateway
+    remoteDesktopGateway,
+    aiAssist
   };
 
   registerIpc({

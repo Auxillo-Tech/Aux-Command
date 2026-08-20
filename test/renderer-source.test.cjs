@@ -388,10 +388,10 @@ test('renderer exposes explicit SCP fallback transfer mode for SSH profiles', ()
 test('UI separates session navigation from contextual commands and labels global actions', () => {
   assert.match(indexHtml, /id="session-tabs"[^>]*role="tablist"/u);
   assert.match(indexHtml, /class="session-toolbar"/u);
-  assert.match(indexHtml, /class="action-label">Local shell/u);
-  assert.match(indexHtml, /class="action-label">Snippets/u);
-  assert.match(indexHtml, /class="action-label">Tunnels/u);
-  assert.match(indexHtml, /class="action-label">Diagnostics/u);
+  assert.match(indexHtml, /class="action-label"[^>]*>Local shell/u);
+  assert.match(indexHtml, /class="action-label"[^>]*>Snippets/u);
+  assert.match(indexHtml, /class="action-label"[^>]*>Tunnels/u);
+  assert.match(indexHtml, /class="action-label"[^>]*>Diagnostics/u);
   assert.doesNotMatch(indexHtml, />Pane[−+]</u);
 });
 

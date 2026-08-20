@@ -37,6 +37,7 @@
     profileMenuButton: $('#profile-menu-button'),
     assistButton: $('#assist-button'),
     hostStats: $('#host-stats'),
+    languageSelect: $('#language-select'),
     profileList: $('#profile-list'),
     connectionCount: $('#connection-count'),
     agentStatus: $('#agent-status'),
@@ -128,6 +129,7 @@
     terminalSearchQuery: '',
     macroRecording: null,
     multiRun: null,
+    ai: null,
     selectedProfileId: '',
     diagnostics: null,
     updates: null,
@@ -1307,7 +1309,7 @@
     if (!filtered.length) {
       elements.profileList.append(node('div', { className: 'list-empty', text: 'No matching connections.' }));
     }
-    elements.connectionCount.textContent = `${state.profiles.length} profile${state.profiles.length === 1 ? '' : 's'}`;
+    elements.connectionCount.textContent = window.AuxI18n.profileCount(state.profiles.length);
   }
 
   function profileById(id) {
@@ -1834,7 +1836,7 @@
     }
   }
 
-  function openAssistModal() {
+  async function openAssistModal() {
     const activeTab = state.tabs.get(state.activeTabId);
     const detected = activeTab?.assist?.osInfo?.label;
     const enabled = checkbox('enabled', 'Enable terminal assist', state.assist.enabled);
@@ -1842,10 +1844,25 @@
     const autocorrect = checkbox('autocorrect', '“Did you mean” fixes after command-not-found errors', state.assist.autocorrect);
     const dangerGuard = checkbox('dangerGuard', 'Confirm before running destructive commands', state.assist.dangerGuard);
     const osDetection = checkbox('osDetection', 'Detect the session operating system (tab badge, per-OS suggestions)', state.assist.osDetection);
+
+    const aiStatus = await api.ai.status().catch(() => ({ enabled: false, endpoint: '', model: '', hasKey: false }));
+    const aiEnabled = checkbox('aiEnabled', 'Enable AI command assist (Ctrl+Shift+A)', aiStatus.enabled);
+    const aiEndpoint = node('input', { type: 'text', placeholder: 'http://127.0.0.1:8080 (llama.cpp, Ollama, or any OpenAI-compatible server)' });
+    aiEndpoint.value = aiStatus.endpoint || '';
+    const aiModel = node('input', { type: 'text', placeholder: 'Model name (optional for llama.cpp)' });
+    aiModel.value = aiStatus.model || '';
+    const aiKey = node('input', { type: 'password', autocomplete: 'new-password', placeholder: aiStatus.hasKey ? 'Stored key exists — leave blank to keep' : 'API key (optional, stored encrypted in the vault)' });
+
     const body = node('div', { className: 'assist-settings' }, [
       node('p', { className: 'muted', text: 'Assist watches only what you type and what the session prints back. Command history for suggestions stays in memory and is never written to disk. No probe commands are ever sent to your servers.' }),
       node('div', { className: 'checkbox-column' }, [enabled, suggestions, autocorrect, dangerGuard, osDetection]),
-      detected ? node('p', { className: 'muted', text: `Active session detected as: ${detected}` }) : null
+      detected ? node('p', { className: 'muted', text: `Active session detected as: ${detected}` }) : null,
+      node('div', { className: 'section-title', text: 'AI assist (optional, off by default)' }),
+      node('p', { className: 'muted', text: 'Bring your own endpoint: nothing is ever sent to any AI service unless you ask, and only to the endpoint you configure here. Replies are inserted, never executed.' }),
+      node('div', { className: 'checkbox-column' }, [aiEnabled]),
+      field('Endpoint', aiEndpoint, 'Base URL of an OpenAI-compatible chat-completions server.'),
+      field('Model', aiModel),
+      field('API key', aiKey, 'Stored encrypted via the desktop keyring; never shown again and never sent to the renderer.')
     ]);
     const controller = showModal({
       title: 'Terminal assist',
@@ -1866,6 +1883,13 @@
               osDetection: osDetection.querySelector('input').checked
             };
             await api.app.saveAssistSettings(next);
+            const aiResult = await api.ai.configure({
+              enabled: aiEnabled.querySelector('input').checked,
+              endpoint: aiEndpoint.value.trim(),
+              model: aiModel.value.trim(),
+              ...(aiKey.value ? { apiKey: aiKey.value } : {})
+            });
+            state.ai = aiResult;
             Object.assign(state.assist, next);
             refreshAssistUi();
             toast('Terminal assist updated', next.enabled ? 'Assist is on for all terminal sessions.' : 'Assist is off.', 'success');
@@ -1875,6 +1899,92 @@
         }
       ]
     });
+  }
+
+  async function openAiAssistModal() {
+    const status = state.ai?.enabled ? state.ai : await api.ai.status().catch(() => null);
+    state.ai = status || { enabled: false };
+    if (!state.ai.enabled) {
+      toast('AI assist is off', 'Enable it and set your endpoint under Assist first.', 'info');
+      openAssistModal();
+      return;
+    }
+    const activeTerminal = state.tabs.get(state.activeTabId);
+    const kindSelect = node('select', { attrs: { 'aria-label': 'AI request type' } }, [
+      Object.assign(node('option', { text: 'Natural language → command' }), { value: 'command' }),
+      Object.assign(node('option', { text: 'Explain the recent session output' }), { value: 'explain' })
+    ]);
+    const prompt = node('textarea', { placeholder: 'e.g. show the 10 largest files under /var/log', attrs: { rows: '3' } });
+    const includeContext = checkbox('includeContext', 'Attach the last lines of session output as context', false);
+    const response = node('pre', { className: 'ai-response', text: '' });
+    const insertButton = node('button', { type: 'button', className: 'button', text: 'Insert into terminal', hidden: true });
+    insertButton.hidden = true;
+    let lastReply = null;
+
+    const sessionContext = async () => {
+      if (!activeTerminal) return {};
+      const wantsOutput = kindSelect.value === 'explain' || includeContext.querySelector('input').checked;
+      let output = '';
+      if (wantsOutput) {
+        const transcript = await api.terminal.exportTranscript(activeTerminal.id).catch(() => null);
+        output = window.AuxAssist.stripAnsi(transcript?.text || '').slice(-4000);
+      }
+      return { osLabel: activeTerminal.assist?.osInfo?.label || '', output };
+    };
+
+    const ask = async () => {
+      response.textContent = 'Asking your endpoint…';
+      insertButton.hidden = true;
+      try {
+        const result = await api.ai.ask({ kind: kindSelect.value, prompt: prompt.value, context: await sessionContext() });
+        lastReply = result;
+        response.textContent = result.reply;
+        insertButton.hidden = !(result.kind === 'command' && activeTerminal && !activeTerminal.closed);
+      } catch (error) {
+        lastReply = null;
+        response.textContent = `Request failed: ${errorMessage(error)}`;
+      }
+      return false;
+    };
+
+    insertButton.addEventListener('click', () => {
+      const target = state.tabs.get(state.activeTabId);
+      if (!lastReply || !target || target.closed) return;
+      const command = lastReply.reply.split('\n')[0].trim();
+      controller.close();
+      target.assist?.mirror.feed(command);
+      api.terminal.write(target.id, command).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
+      updateAssistSuggestion(target);
+      target.terminal.focus();
+    });
+    kindSelect.addEventListener('change', () => {
+      prompt.placeholder = kindSelect.value === 'explain'
+        ? 'Optional question about the output (leave empty for a general explanation)'
+        : 'e.g. show the 10 largest files under /var/log';
+    });
+    prompt.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        ask();
+      }
+    });
+
+    const controller = showModal({
+      title: 'Ask AI',
+      description: `Endpoint: ${state.ai.endpoint}${state.ai.model ? ` · ${state.ai.model}` : ''}. Replies are inserted, never executed.`,
+      body: node('div', { className: 'ai-ask' }, [
+        field('Request type', kindSelect),
+        field('Prompt', prompt, '', 'full'),
+        node('div', { className: 'checkbox-column' }, [includeContext]),
+        response,
+        insertButton
+      ]),
+      actions: [
+        { label: 'Close', run: () => { controller.close(); return false; } },
+        { label: 'Ask', className: 'primary', run: ask }
+      ]
+    });
+    window.setTimeout(() => prompt.focus(), 0);
   }
 
   function createTerminalTab(session, profile) {
@@ -2417,7 +2527,7 @@
     elements.highlightToggle.setAttribute('aria-pressed', state.highlight.enabled ? 'true' : 'false');
     elements.exportTranscriptButton.disabled = !terminalTab;
     elements.terminalLogButton.disabled = !terminalTab || tab.closed;
-    elements.terminalLogButton.textContent = tab?.logging?.active ? 'Stop log' : 'Log';
+    elements.terminalLogButton.textContent = tab?.logging?.active ? window.AuxI18n.t('toolbar.stopLog') : window.AuxI18n.t('toolbar.log');
     elements.macroRecordButton.disabled = !terminalTab || tab.closed;
     elements.macroRecordButton.textContent = state.macroRecording ? 'Stop macro' : 'Macro';
     elements.macroRecordButton.classList.toggle('active', Boolean(state.macroRecording));
@@ -2435,7 +2545,7 @@
     applyPaneSize();
     elements.terminalStack.classList.toggle('layout-grid', state.layout === 'grid');
     elements.layoutToggle.classList.toggle('active', state.layout === 'grid');
-    elements.layoutToggle.textContent = state.layout === 'grid' ? 'Tiled' : 'Single';
+    elements.layoutToggle.textContent = state.layout === 'grid' ? window.AuxI18n.t('toolbar.tiled') : window.AuxI18n.t('toolbar.single');
     elements.layoutToggle.title = state.layout === 'grid' ? 'Switch to single-session view (Ctrl+Shift+L)' : 'Switch to tiled-session view (Ctrl+Shift+L)';
     elements.layoutToggle.setAttribute('aria-pressed', state.layout === 'grid' ? 'true' : 'false');
     for (const tab of state.tabs.values()) {
@@ -2524,7 +2634,7 @@
         else activeTab.view.querySelector('iframe')?.focus();
       }, 0);
     } else {
-      elements.activeSessionLabel.textContent = 'No active session';
+      elements.activeSessionLabel.textContent = window.AuxI18n.t('status.noSession');
     }
     updateSessionActions();
     // Roving tabindex uses a fallback tab when Home is active; do not regress to: tab.tabButton.setAttribute('tabindex', active ? '0' : '-1')
@@ -3300,6 +3410,35 @@
   // and collect each session's output side by side.
   // ---------------------------------------------------------------------------
 
+  function applyLanguage(language) {
+    window.AuxI18n.setLanguage(language);
+    window.AuxI18n.apply(document);
+    elements.languageSelect.title = window.AuxI18n.t('lang.label');
+    elements.languageSelect.setAttribute('aria-label', window.AuxI18n.t('lang.label'));
+    // Refresh the dynamic chrome strings that live outside data-i18n.
+    updateSessionActions();
+    updateProfiles(state.profiles);
+    if (!state.activeTabId) elements.activeSessionLabel.textContent = window.AuxI18n.t('status.noSession');
+  }
+
+  function initializeLanguage(settings) {
+    for (const [code, label] of window.AuxI18n.LANGUAGES) {
+      const option = node('option', { text: label });
+      option.value = code;
+      elements.languageSelect.append(option);
+    }
+    const language = settings?.ui?.language || 'en';
+    elements.languageSelect.value = language;
+    window.AuxI18n.setLanguage(language);
+    window.AuxI18n.apply(document);
+    elements.languageSelect.title = window.AuxI18n.t('lang.label');
+    elements.languageSelect.addEventListener('change', () => {
+      const next = elements.languageSelect.value;
+      api.app.saveUiSettings({ language: next }).catch((error) => setStatus(`Language not saved: ${errorMessage(error)}`, 'error'));
+      applyLanguage(next);
+    });
+  }
+
   async function refreshHostStats() {
     try {
       const stats = await api.system.stats();
@@ -3504,6 +3643,7 @@
       { label: 'Find in terminal', category: 'Action', detail: 'Search the active terminal buffer', run: () => openTerminalSearch() },
       { label: 'Search session history', category: 'Action', detail: 'Find a command typed in any open session and insert it (Ctrl+Shift+Y)', run: () => openHistorySearch() },
       { label: 'Run on multiple sessions', category: 'Action', detail: 'Send one command to selected sessions and collect per-host output (Ctrl+Shift+M)', run: () => openMultiRunModal() },
+      { label: 'Ask AI', category: 'Action', detail: 'Natural language → command or explain output via your own endpoint (Ctrl+Shift+A)', run: () => openAiAssistModal() },
       { label: 'Command snippets', category: 'Action', detail: 'Open snippet manager', run: () => openSnippetsModal() },
       { label: 'New connection profile', category: 'Action', detail: 'Create SSH, Mosh, Telnet, RDP, VNC or serial profile', run: () => openProfileModal() },
       { label: 'SSH tunnels', category: 'Action', detail: 'Open tunnel manager', run: () => openTunnelsModal() },
@@ -4937,6 +5077,7 @@
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'h') run(() => toggleHighlighting());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'y') run(() => openHistorySearch());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'm') run(() => openMultiRunModal());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'a') run(() => openAiAssistModal());
     if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && state.activeTabId) {
       run(() => requestCloseTab(state.activeTabId));
     }
@@ -4953,6 +5094,7 @@
     setStatus('Loading workspace…', 'busy');
     try {
       const initial = await api.app.getState();
+      initializeLanguage(initial.settings);
       applyPersistedWorkspaceSettings(initial.settings);
       api.system.osInfo().then((info) => {
         state.assist.localOsInfo = window.AuxAssist.osInfoFromRelease(info.platform, info.releaseText);
@@ -4987,13 +5129,13 @@
       await restoreSavedSessions();
       elements.appVersion.textContent = `Aux Command ${initial.version}`;
       const agentAvailable = Boolean(initial.diagnostics?.sshAgent);
-      elements.agentStatus.textContent = agentAvailable ? 'SSH agent ready' : 'No SSH agent';
+      elements.agentStatus.textContent = agentAvailable ? window.AuxI18n.t('sidebar.agentReady') : window.AuxI18n.t('sidebar.agentNone');
       elements.agentStatus.classList.toggle('good', agentAvailable);
       elements.sftpEmpty.classList.add('visible');
       elements.appShell.setAttribute('aria-busy', 'false');
       state.initializing = false;
       elements.initializationError.hidden = true;
-      setStatus('Ready');
+      setStatus(window.AuxI18n.t('status.ready'));
       maybeStartFirstRunTour(initial.settings);
     } catch (error) {
       state.initializing = false;
