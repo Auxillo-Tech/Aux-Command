@@ -169,6 +169,14 @@ Install optional runtime tools with:
   - Dangerous-command guard that asks for confirmation before transmitting
     Enter on destructive commands (`rm -rf /`, `dd of=/dev/…`, `mkfs`,
     firewall flushes, shutdown/reboot, fork bombs).
+- Optional AI command assist (`Ctrl+Shift+A`) — **off by default, bring your
+  own endpoint**: point it at llama.cpp, Ollama, or any OpenAI-compatible
+  server; nothing is ever sent anywhere unless you ask, the API key is stored
+  encrypted in the vault, and replies are inserted into the terminal, never
+  executed.
+- Localized interface: the workspace chrome is available in English, Deutsch,
+  Español, Français, Italiano, 日本語, Português, Русский and 中文, switchable
+  live from the status bar.
 
 ### SSH operations
 
@@ -347,6 +355,7 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | `Ctrl+Space` | Accept inline command suggestion |
 | `Ctrl+Shift+Y` | Search command history across sessions |
 | `Ctrl+Shift+M` | Run a command on multiple sessions |
+| `Ctrl+Shift+A` | Ask AI (only when enabled with your own endpoint) |
 
 Tiled/single-session layout and tiled pane-size toolbar choices are persisted locally and restored on restart.
 

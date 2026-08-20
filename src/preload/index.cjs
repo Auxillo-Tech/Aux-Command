@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     saveHighlightSettings: (highlight) => invoke('app:save-highlight-settings', highlight),
     saveOnboardingSettings: (onboarding) => invoke('app:save-onboarding-settings', onboarding),
     saveAssistSettings: (assist) => invoke('app:save-assist-settings', assist),
+    saveUiSettings: (ui) => invoke('app:save-ui-settings', ui),
     saveSessions: (sessions) => invoke('app:save-sessions', sessions),
     getSessions: () => invoke('app:get-sessions')
   }),
@@ -122,6 +123,11 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     openWebsite: () => invoke('system:open-website'),
     osInfo: () => invoke('system:os-info'),
     stats: () => invoke('system:stats')
+  }),
+  ai: Object.freeze({
+    status: () => invoke('ai:status'),
+    configure: (config) => invoke('ai:configure', config),
+    ask: (request) => invoke('ai:ask', request)
   }),
   network: Object.freeze({
     ping: (host, count) => invoke('network:ping', host, count),

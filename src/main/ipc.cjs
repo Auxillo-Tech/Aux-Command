@@ -29,6 +29,7 @@ function registerIpc({
   profileSync,
   liveMonitor,
   remoteDesktopGateway,
+  aiAssist,
   getWindow
 }) {
   const handle = (channel, handler) => {
@@ -86,8 +87,12 @@ function registerIpc({
   handle('app:save-highlight-settings', (highlight) => settingsStore.saveHighlight(highlight));
   handle('app:save-onboarding-settings', (onboarding) => settingsStore.saveOnboarding(onboarding));
   handle('app:save-assist-settings', (assist) => settingsStore.saveAssist(assist));
+  handle('app:save-ui-settings', (ui) => settingsStore.saveUi(ui));
   handle('system:os-info', () => systemService.osInfo());
   handle('system:stats', () => systemService.stats());
+  handle('ai:status', () => aiAssist.status());
+  handle('ai:configure', (config) => aiAssist.configure(config));
+  handle('ai:ask', (request) => aiAssist.ask(request));
   handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
   handle('app:get-sessions', () => settingsStore.getSessions());
 

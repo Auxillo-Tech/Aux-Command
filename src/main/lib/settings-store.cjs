@@ -27,6 +27,14 @@ const DEFAULT_SETTINGS = Object.freeze({
     dangerGuard: true,
     osDetection: true
   }),
+  ai: Object.freeze({
+    enabled: false,
+    endpoint: '',
+    model: ''
+  }),
+  ui: Object.freeze({
+    language: 'en'
+  }),
   sessions: []
 });
 
@@ -68,6 +76,24 @@ function normalizeHighlightSettings(input = {}) {
     if (rules.length >= 50) break;
   }
   return { enabled: Boolean(source.enabled), rules };
+}
+
+function normalizeAiSettings(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const endpoint = /^https?:\/\//iu.test(String(source.endpoint || '').trim()) ? String(source.endpoint).trim().slice(0, 500) : '';
+  return {
+    // AI assist is opt-in and impossible to enable without an endpoint.
+    enabled: Boolean(source.enabled) && Boolean(endpoint),
+    endpoint,
+    model: String(source.model || '').trim().slice(0, 200)
+  };
+}
+
+const UI_LANGUAGES = new Set(['en', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'zh']);
+
+function normalizeUiSettings(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  return { language: UI_LANGUAGES.has(source.language) ? source.language : 'en' };
 }
 
 function normalizeWorkspaceSettings(input = {}) {
@@ -116,6 +142,8 @@ function normalizeSettings(input = {}) {
     highlight: normalizeHighlightSettings(source.highlight),
     onboarding: normalizeOnboardingSettings(source.onboarding),
     assist: normalizeAssistSettings(source.assist),
+    ai: normalizeAiSettings(source.ai),
+    ui: normalizeUiSettings(source.ui),
     sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
   };
 }
@@ -159,6 +187,18 @@ class SettingsStore {
     return this.get();
   }
 
+  saveAi(input) {
+    const ai = normalizeAiSettings(input);
+    this.store.update((data) => ({ ...normalizeSettings(data), ai }));
+    return this.get();
+  }
+
+  saveUi(input) {
+    const ui = normalizeUiSettings(input);
+    this.store.update((data) => ({ ...normalizeSettings(data), ui }));
+    return this.get();
+  }
+
   saveSessions(sessions) {
     const normalized = Array.isArray(sessions) ? sessions.map(normalizeSession).filter(Boolean) : [];
     this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 32) }));
@@ -170,4 +210,4 @@ class SettingsStore {
   }
 }
 
-module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings, normalizeHighlightSettings, normalizeAssistSettings };
+module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings, normalizeHighlightSettings, normalizeAssistSettings, normalizeAiSettings, normalizeUiSettings };

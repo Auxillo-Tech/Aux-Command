@@ -888,3 +888,13 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 /* Local host stats */
 .host-stats { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; color: #8ea3b5; font-family: var(--mono); font-size: 11px; white-space: nowrap; }
 .host-stats[hidden] { display: none; }
+
+/* AI assist */
+.ai-ask { display: flex; flex-direction: column; gap: 12px; }
+.ai-ask textarea { width: 100%; font-family: var(--mono); font-size: 12.5px; resize: vertical; }
+.ai-response { margin: 0; min-height: 48px; max-height: 260px; overflow-y: auto; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(8, 16, 26, .7); font-family: var(--mono); font-size: 12.5px; line-height: 1.5; color: #dcecf4; white-space: pre-wrap; word-break: break-word; }
+.ai-response:empty { display: none; }
+
+/* Language selector */
+.language-select { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: #8ea3b5; font-size: 11px; cursor: pointer; }
+.language-select:hover { color: #dcecf4; }
