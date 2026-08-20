@@ -23,8 +23,8 @@ part switchable on its own from the Assist panel.
 |---|---|---|
 | Cross-session history search | shipped | Ctrl+Shift+Y overlay across all open sessions, host-tagged, substring-then-fuzzy ranking; inserts, never executes. |
 | Multi-host command runner | shipped | Ctrl+Shift+M: select open sessions → run one command on all → per-session collected output, danger guard included. |
-| Per-host quick dashboard | planned | CPU/RAM/disk/uptime chips in the tab header, extending Live Monitor probes. |
-| Session recording & replay | planned | Timing-aware recording on top of existing transcripts, with an asciinema-style replay viewer. |
+| Per-host quick dashboard | shipped | Live local-host load/memory/disk chip in the status bar (20 s refresh from /proc). Remote SSH stats stay on-demand through Live Monitor by design — background per-tab SSH polling would hammer servers. |
+| Session recording & replay | shipped | Timing-aware bounded recording per session; "Replay session" in the transcript menu plays it back in a read-only terminal with 1×/2×/4×/8×/instant speeds. |
 | Drag-and-drop upload into SFTP panel | shipped | Was already present via `sftp:upload-paths`; verified, no work needed. |
 
 ## Phase 3 — Reach *(decision needed)*

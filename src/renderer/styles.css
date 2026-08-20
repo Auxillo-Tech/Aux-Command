@@ -878,3 +878,13 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .multi-run-block { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
 .multi-run-host { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; background: rgba(255, 255, 255, .04); font-size: 12px; }
 .multi-run-output { margin: 0; padding: 8px 10px; max-height: 140px; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.45; color: #c6d8e4; white-space: pre-wrap; word-break: break-word; }
+
+/* Session replay */
+.replay { display: flex; flex-direction: column; gap: 12px; }
+.replay-controls { display: flex; align-items: center; gap: 10px; }
+.replay-status { margin-left: auto; color: #8ea3b5; font-size: 12px; }
+.replay-terminal { height: 380px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: #060b13; overflow: hidden; }
+
+/* Local host stats */
+.host-stats { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; color: #8ea3b5; font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.host-stats[hidden] { display: none; }

@@ -87,6 +87,7 @@ function registerIpc({
   handle('app:save-onboarding-settings', (onboarding) => settingsStore.saveOnboarding(onboarding));
   handle('app:save-assist-settings', (assist) => settingsStore.saveAssist(assist));
   handle('system:os-info', () => systemService.osInfo());
+  handle('system:stats', () => systemService.stats());
   handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
   handle('app:get-sessions', () => settingsStore.getSessions());
 
@@ -98,6 +99,7 @@ function registerIpc({
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
   handle('terminal:export-transcript', (id) => terminalService.exportTranscript(id));
+  handle('terminal:recording', (id) => terminalService.exportRecording(id));
   handle('terminal:save-transcript', async (id) => {
     const transcript = terminalService.exportTranscript(id);
     const safeTitle = String(transcript.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
