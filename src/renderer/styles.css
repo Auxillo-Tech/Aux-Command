@@ -843,3 +843,20 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 
 /* Preview harness (test/renderer-preview.html) */
 .mock-terminal-screen { height: 100%; margin: 0; padding: 14px 16px; overflow: hidden; background: #060b13; color: #dcecf4; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+
+/* Terminal assist */
+.assist-bar { position: absolute; right: 14px; bottom: 12px; z-index: 5; display: none; align-items: center; gap: 8px; max-width: min(72%, 640px); padding: 6px 10px; border: 1px solid var(--line); border-radius: 9px; background: rgba(8, 16, 26, .94); font-family: var(--mono); font-size: 12px; box-shadow: 0 10px 26px rgba(0, 0, 0, .32); }
+.assist-bar.visible { display: flex; }
+.assist-typed { color: #7f93a4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.assist-ghost { color: #dcecf4; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.assist-hint { flex: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; color: #63d8a8; font-size: 10px; letter-spacing: .04em; }
+.assist-chip-label { color: #ffc46b; }
+.assist-chip-command { color: #dcecf4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assist-chip-action { flex: none; padding: 3px 10px; border: 1px solid rgba(99, 216, 168, .5); border-radius: 6px; background: rgba(99, 216, 168, .12); color: #63d8a8; font-size: 11px; cursor: pointer; }
+.assist-chip-action:hover { background: rgba(99, 216, 168, .22); }
+.assist-chip-dismiss { flex: none; width: 20px; height: 20px; border: none; border-radius: 5px; background: transparent; color: #7f93a4; font-size: 13px; cursor: pointer; }
+.assist-chip-dismiss:hover { color: #dcecf4; background: rgba(255, 255, 255, .06); }
+.tab-os-badge { flex: none; margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; color: #63b8d8; font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; }
+.tab-os-badge[hidden] { display: none; }
+.assist-settings .muted { color: #8ea3b5; font-size: 12.5px; line-height: 1.5; }
+.assist-settings .checkbox-column { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }

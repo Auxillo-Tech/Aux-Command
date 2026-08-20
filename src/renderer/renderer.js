@@ -35,6 +35,7 @@
     profileSearch: $('#profile-search'),
     importSshButton: $('#import-ssh-button'),
     profileMenuButton: $('#profile-menu-button'),
+    assistButton: $('#assist-button'),
     profileList: $('#profile-list'),
     connectionCount: $('#connection-count'),
     agentStatus: $('#agent-status'),
@@ -102,6 +103,15 @@
     customGroups: [],
     collapsedGroups: new Set(),
     highlight: { enabled: false, rules: [], version: 0 },
+    assist: {
+      enabled: true,
+      suggestions: true,
+      autocorrect: true,
+      dangerGuard: true,
+      osDetection: true,
+      localOsInfo: null,
+      history: new Map()
+    },
     health: new Map(),
     healthTimer: null,
     healthChecking: false,
@@ -1620,6 +1630,251 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Terminal assist: OS detection, inline suggestions, autocorrect and the
+  // dangerous-command guard. Pure logic lives in assist.js (window.AuxAssist);
+  // everything here is wiring and UI.
+  // ---------------------------------------------------------------------------
+
+  function assistHistoryFor(profile) {
+    const key = `${profile.protocol}:${profile.host || 'local'}:${profile.username || ''}`;
+    let history = state.assist.history.get(key);
+    if (!history) {
+      history = new window.AuxAssist.CommandHistory();
+      state.assist.history.set(key, history);
+    }
+    return history;
+  }
+
+  function setupTabAssist(tab, profile) {
+    const seed = profile.protocol === 'local' ? state.assist.localOsInfo : null;
+    const bar = node('div', { className: 'assist-bar', attrs: { 'aria-live': 'polite' } });
+    tab.view.append(bar);
+    tab.assist = {
+      mirror: new window.AuxAssist.CommandLineMirror(),
+      detector: new window.AuxAssist.OsDetector(seed),
+      history: assistHistoryFor(profile),
+      bar,
+      osInfo: seed,
+      suggestion: null,
+      correction: null,
+      pendingCommand: '',
+      watchBuffer: '',
+      watchRemaining: 0
+    };
+    if (seed) updateOsBadge(tab);
+  }
+
+  function updateOsBadge(tab) {
+    if (!tab.assist?.osInfo || !state.assist.osDetection) return;
+    let badge = tab.tabElement.querySelector('.tab-os-badge');
+    if (!badge) {
+      badge = node('span', { className: 'tab-os-badge' });
+      tab.tabElement.querySelector('.tab-title')?.after(badge);
+    }
+    badge.textContent = tab.assist.osInfo.label;
+    badge.title = `Detected operating system: ${tab.assist.osInfo.label}`;
+  }
+
+  function clearAssistBar(tab) {
+    if (!tab.assist) return;
+    tab.assist.suggestion = null;
+    tab.assist.bar.classList.remove('visible');
+    tab.assist.bar.replaceChildren();
+  }
+
+  function updateAssistSuggestion(tab) {
+    if (!tab.assist) return;
+    if (tab.assist.correction) return; // the correction chip owns the bar until dismissed
+    if (!state.assist.enabled || !state.assist.suggestions || !tab.assist.mirror.tracked) {
+      clearAssistBar(tab);
+      return;
+    }
+    const suggestion = window.AuxAssist.suggest(tab.assist.mirror.line, tab.assist.history, tab.assist.osInfo);
+    if (!suggestion) {
+      clearAssistBar(tab);
+      return;
+    }
+    tab.assist.suggestion = suggestion;
+    tab.assist.bar.replaceChildren(
+      node('span', { className: 'assist-typed', text: tab.assist.mirror.line }),
+      node('span', { className: 'assist-ghost', text: suggestion.completion }),
+      node('span', { className: 'assist-hint', text: 'Ctrl+Space' })
+    );
+    tab.assist.bar.classList.add('visible');
+  }
+
+  function acceptAssistSuggestion(tab) {
+    const suggestion = tab.assist?.suggestion;
+    if (!suggestion) return;
+    tab.assist.mirror.feed(suggestion.completion);
+    api.terminal.write(tab.id, suggestion.completion).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
+    updateAssistSuggestion(tab);
+  }
+
+  function showAssistCorrection(tab, correction) {
+    if (!tab.assist) return;
+    tab.assist.correction = correction;
+    tab.assist.suggestion = null;
+    const insert = node('button', { type: 'button', className: 'assist-chip-action', text: 'Insert' });
+    insert.addEventListener('click', () => {
+      tab.assist.correction = null;
+      tab.assist.mirror.feed(correction.corrected);
+      api.terminal.write(tab.id, correction.corrected).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
+      clearAssistBar(tab);
+      tab.terminal.focus();
+      updateAssistSuggestion(tab);
+    });
+    const dismiss = node('button', { type: 'button', className: 'assist-chip-dismiss', text: '×', title: 'Dismiss' });
+    dismiss.addEventListener('click', () => {
+      tab.assist.correction = null;
+      clearAssistBar(tab);
+      tab.terminal.focus();
+    });
+    tab.assist.bar.replaceChildren(
+      node('span', { className: 'assist-chip-label', text: 'Did you mean:' }),
+      node('code', { className: 'assist-chip-command', text: correction.corrected }),
+      insert,
+      dismiss
+    );
+    tab.assist.bar.classList.add('visible');
+  }
+
+  function dispatchTerminalInput(tab, data) {
+    const targets = state.broadcastInput ? [...state.tabs.values()].filter((candidate) => candidate.terminal) : [tab];
+    for (const target of targets) {
+      if (!target.closed) api.terminal.write(target.id, data).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
+    }
+  }
+
+  function commitTerminalInput(tab, data) {
+    if (state.assist.enabled && tab.assist) {
+      if (tab.assist.correction) {
+        tab.assist.correction = null;
+        clearAssistBar(tab);
+      }
+      const result = tab.assist.mirror.feed(data);
+      for (const commit of result.committed) {
+        if (commit.tracked && commit.line.trim()) {
+          tab.assist.history.add(commit.line);
+          tab.assist.pendingCommand = commit.line;
+          tab.assist.watchBuffer = '';
+          tab.assist.watchRemaining = 2048;
+        }
+      }
+      updateAssistSuggestion(tab);
+    }
+    dispatchTerminalInput(tab, data);
+  }
+
+  function handleTerminalInput(tab, data) {
+    if (state.assist.enabled && state.assist.dangerGuard && tab.assist && /[\r\n]/u.test(data)) {
+      const preview = tab.assist.mirror.preview(data);
+      const hit = preview.committed
+        .filter((commit) => commit.tracked)
+        .map((commit) => window.AuxAssist.dangerCheck(commit.line))
+        .find(Boolean);
+      if (hit) {
+        confirmAction({
+          title: 'Run dangerous command?',
+          description: `${hit.reason}\n\n${hit.command}`,
+          confirmLabel: 'Run command',
+          danger: true
+        }).then((confirmed) => {
+          // The typed line stays visible either way; only Enter was held back.
+          if (confirmed) commitTerminalInput(tab, data);
+          tab.terminal.focus();
+        });
+        return;
+      }
+    }
+    commitTerminalInput(tab, data);
+  }
+
+  function handleAssistOutput(tab, data) {
+    if (!state.assist.enabled || !tab.assist) return;
+    if (state.assist.osDetection && !tab.assist.detector.locked) {
+      const previous = tab.assist.osInfo;
+      const info = tab.assist.detector.feed(data);
+      if (info && info !== previous) {
+        tab.assist.osInfo = info;
+        updateOsBadge(tab);
+      }
+    }
+    if (state.assist.autocorrect && tab.assist.pendingCommand && tab.assist.watchRemaining > 0) {
+      tab.assist.watchBuffer = `${tab.assist.watchBuffer}${data}`.slice(-2048);
+      tab.assist.watchRemaining -= data.length;
+      const token = window.AuxAssist.detectCommandNotFound(tab.assist.watchBuffer);
+      if (token) {
+        const correction = window.AuxAssist.correctCommand(tab.assist.pendingCommand, token, tab.assist.history, tab.assist.osInfo);
+        tab.assist.pendingCommand = '';
+        tab.assist.watchBuffer = '';
+        tab.assist.watchRemaining = 0;
+        if (correction) showAssistCorrection(tab, correction);
+      } else if (tab.assist.watchRemaining <= 0) {
+        tab.assist.pendingCommand = '';
+        tab.assist.watchBuffer = '';
+      }
+    }
+  }
+
+  function refreshAssistUi() {
+    for (const tab of state.tabs.values()) {
+      if (!tab.assist) continue;
+      if (!state.assist.enabled) {
+        tab.assist.correction = null;
+        clearAssistBar(tab);
+      } else {
+        updateAssistSuggestion(tab);
+      }
+      const badge = tab.tabElement.querySelector('.tab-os-badge');
+      if (badge) badge.hidden = !(state.assist.enabled && state.assist.osDetection);
+    }
+  }
+
+  function openAssistModal() {
+    const activeTab = state.tabs.get(state.activeTabId);
+    const detected = activeTab?.assist?.osInfo?.label;
+    const enabled = checkbox('enabled', 'Enable terminal assist', state.assist.enabled);
+    const suggestions = checkbox('suggestions', 'Inline command suggestions (accept with Ctrl+Space)', state.assist.suggestions);
+    const autocorrect = checkbox('autocorrect', '“Did you mean” fixes after command-not-found errors', state.assist.autocorrect);
+    const dangerGuard = checkbox('dangerGuard', 'Confirm before running destructive commands', state.assist.dangerGuard);
+    const osDetection = checkbox('osDetection', 'Detect the session operating system (tab badge, per-OS suggestions)', state.assist.osDetection);
+    const body = node('div', { className: 'assist-settings' }, [
+      node('p', { className: 'muted', text: 'Assist watches only what you type and what the session prints back. Command history for suggestions stays in memory and is never written to disk. No probe commands are ever sent to your servers.' }),
+      node('div', { className: 'checkbox-column' }, [enabled, suggestions, autocorrect, dangerGuard, osDetection]),
+      detected ? node('p', { className: 'muted', text: `Active session detected as: ${detected}` }) : null
+    ]);
+    const controller = showModal({
+      title: 'Terminal assist',
+      description: 'Typing help, safety checks and OS awareness for every terminal session.',
+      body,
+      className: 'narrow',
+      actions: [
+        { label: 'Cancel', run: () => { controller.close(); return false; } },
+        {
+          label: 'Save',
+          className: 'primary',
+          run: async () => {
+            const next = {
+              enabled: enabled.querySelector('input').checked,
+              suggestions: suggestions.querySelector('input').checked,
+              autocorrect: autocorrect.querySelector('input').checked,
+              dangerGuard: dangerGuard.querySelector('input').checked,
+              osDetection: osDetection.querySelector('input').checked
+            };
+            await api.app.saveAssistSettings(next);
+            Object.assign(state.assist, next);
+            refreshAssistUi();
+            toast('Terminal assist updated', next.enabled ? 'Assist is on for all terminal sessions.' : 'Assist is off.', 'success');
+            controller.close();
+            return false;
+          }
+        }
+      ]
+    });
+  }
+
   function createTerminalTab(session, profile) {
     const terminal = new window.Terminal(terminalOptionsForProfile(profile));
     const fitAddon = new window.FitAddon.FitAddon();
@@ -1666,13 +1921,11 @@
     };
     state.tabs.set(session.id, tab);
     observeResizablePane(tab);
+    setupTabAssist(tab, profile);
 
     terminal.onData((data) => {
       recordTerminalMacroInput(data);
-      const targets = state.broadcastInput ? [...state.tabs.values()].filter((candidate) => candidate.terminal) : [tab];
-      for (const target of targets) {
-        if (!target.closed) api.terminal.write(target.id, data).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
-      }
+      handleTerminalInput(tab, data);
     });
     terminal.onResize(({ cols, rows }) => {
       window.clearTimeout(tab.resizeTimer);
@@ -1689,6 +1942,11 @@
     });
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown') return true;
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.code === 'Space'
+        && state.assist.enabled && state.assist.suggestions && tab.assist?.suggestion) {
+        acceptAssistSuggestion(tab);
+        return false;
+      }
       if (event.ctrlKey && event.shiftKey && event.code === 'KeyC') {
         const selection = terminal.getSelection();
         if (selection) api.system.clipboardWrite(selection).catch(() => {});
@@ -1979,6 +2237,10 @@
     state.highlight.enabled = Boolean(highlight.enabled);
     state.highlight.rules = Array.isArray(highlight.rules) ? highlight.rules.map((rule) => ({ ...rule })) : [];
     state.highlight.version += 1;
+    const assist = settings?.assist || {};
+    for (const key of ['enabled', 'suggestions', 'autocorrect', 'dangerGuard', 'osDetection']) {
+      if (key in assist) state.assist[key] = Boolean(assist[key]);
+    }
     state.layout = workspace.layout === 'grid' ? 'grid' : 'single';
     const width = Number(workspace.paneMinWidth);
     const height = Number(workspace.paneMinHeight);
@@ -4147,8 +4409,10 @@
   function subscribeEvents() {
     api.terminal.onData(({ id, data }) => {
       const tab = state.tabs.get(id);
-      if (tab) writeTerminalData(tab, data);
-      else {
+      if (tab) {
+        writeTerminalData(tab, data);
+        handleAssistOutput(tab, data);
+      } else {
         const previous = state.pendingTerminalData.get(id) || '';
         state.pendingTerminalData.set(id, `${previous}${data}`.slice(-1_048_576));
       }
@@ -4238,6 +4502,7 @@
     elements.tourBackdrop.addEventListener('click', () => endTour(true));
     elements.updatesButton.addEventListener('click', openUpdatesModal);
     elements.diagnosticsButton.addEventListener('click', openDiagnosticsModal);
+    elements.assistButton.addEventListener('click', openAssistModal);
     elements.sshKeysButton.addEventListener('click', () => openSshKeyManager().catch((error) => toast('Could not open SSH Key Manager', errorMessage(error), 'error')));
     elements.networkToolsButton = document.getElementById('network-tools-button');
     if (elements.networkToolsButton) elements.networkToolsButton.addEventListener('click', openNetworkTools);
@@ -4365,6 +4630,18 @@
     try {
       const initial = await api.app.getState();
       applyPersistedWorkspaceSettings(initial.settings);
+      api.system.osInfo().then((info) => {
+        state.assist.localOsInfo = window.AuxAssist.osInfoFromRelease(info.platform, info.releaseText);
+        // Local tabs opened before this resolved still deserve their badge.
+        for (const tab of state.tabs.values()) {
+          if (tab.assist && tab.profile?.protocol === 'local' && !tab.assist.osInfo) {
+            tab.assist.osInfo = state.assist.localOsInfo;
+            tab.assist.detector.osInfo = state.assist.localOsInfo;
+            tab.assist.detector.locked = true;
+            updateOsBadge(tab);
+          }
+        }
+      }).catch(() => { /* assist works without local OS info */ });
       state.snippets = initial.snippets || [];
       state.diagnostics = initial.diagnostics || null;
       updateUpdateState(initial.updates || {});

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     saveSidebarSettings: (sidebar) => invoke('app:save-sidebar-settings', sidebar),
     saveHighlightSettings: (highlight) => invoke('app:save-highlight-settings', highlight),
     saveOnboardingSettings: (onboarding) => invoke('app:save-onboarding-settings', onboarding),
+    saveAssistSettings: (assist) => invoke('app:save-assist-settings', assist),
     saveSessions: (sessions) => invoke('app:save-sessions', sessions),
     getSessions: () => invoke('app:get-sessions')
   }),
@@ -117,7 +118,8 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     filePath: (file) => webUtils.getPathForFile(file),
     clipboardRead: () => invoke('clipboard:read-text'),
     clipboardWrite: (text) => invoke('clipboard:write-text', text),
-    openWebsite: () => invoke('system:open-website')
+    openWebsite: () => invoke('system:open-website'),
+    osInfo: () => invoke('system:os-info')
   }),
   network: Object.freeze({
     ping: (host, count) => invoke('network:ping', host, count),

@@ -20,12 +20,31 @@ const DEFAULT_SETTINGS = Object.freeze({
   onboarding: Object.freeze({
     tourCompleted: false
   }),
+  assist: Object.freeze({
+    enabled: true,
+    suggestions: true,
+    autocorrect: true,
+    dangerGuard: true,
+    osDetection: true
+  }),
   sessions: []
 });
 
 function normalizeOnboardingSettings(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   return { tourCompleted: Boolean(source.tourCompleted) };
+}
+
+function normalizeAssistSettings(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const flag = (key) => (key in source ? Boolean(source[key]) : DEFAULT_SETTINGS.assist[key]);
+  return {
+    enabled: flag('enabled'),
+    suggestions: flag('suggestions'),
+    autocorrect: flag('autocorrect'),
+    dangerGuard: flag('dangerGuard'),
+    osDetection: flag('osDetection')
+  };
 }
 
 const HIGHLIGHT_COLORS = new Set(['red', 'amber', 'green', 'blue', 'magenta', 'cyan']);
@@ -96,6 +115,7 @@ function normalizeSettings(input = {}) {
     sidebar: normalizeSidebarSettings(source.sidebar),
     highlight: normalizeHighlightSettings(source.highlight),
     onboarding: normalizeOnboardingSettings(source.onboarding),
+    assist: normalizeAssistSettings(source.assist),
     sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
   };
 }
@@ -133,6 +153,12 @@ class SettingsStore {
     return this.get();
   }
 
+  saveAssist(input) {
+    const assist = normalizeAssistSettings(input);
+    this.store.update((data) => ({ ...normalizeSettings(data), assist }));
+    return this.get();
+  }
+
   saveSessions(sessions) {
     const normalized = Array.isArray(sessions) ? sessions.map(normalizeSession).filter(Boolean) : [];
     this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 32) }));
@@ -144,4 +170,4 @@ class SettingsStore {
   }
 }
 
-module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings, normalizeHighlightSettings };
+module.exports = { SettingsStore, normalizeSettings, normalizeWorkspaceSettings, normalizeSidebarSettings, normalizeHighlightSettings, normalizeAssistSettings };

@@ -85,6 +85,8 @@ function registerIpc({
   handle('app:save-sidebar-settings', (sidebar) => settingsStore.saveSidebar(sidebar));
   handle('app:save-highlight-settings', (highlight) => settingsStore.saveHighlight(highlight));
   handle('app:save-onboarding-settings', (onboarding) => settingsStore.saveOnboarding(onboarding));
+  handle('app:save-assist-settings', (assist) => settingsStore.saveAssist(assist));
+  handle('system:os-info', () => systemService.osInfo());
   handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
   handle('app:get-sessions', () => settingsStore.getSessions());
 
