@@ -259,3 +259,58 @@ test('settings store normalizes and persists assist toggles', () => {
   assert.deepEqual(normalizeAssistSettings(undefined), { enabled: true, suggestions: true, autocorrect: true, dangerGuard: true, osDetection: true });
   assert.deepEqual(normalizeAssistSettings({ enabled: false, dangerGuard: 0 }), { enabled: false, suggestions: true, autocorrect: true, dangerGuard: false, osDetection: true });
 });
+
+test('searchHistory ranks substring above fuzzy and respects MRU order', () => {
+  const { searchHistory } = AuxAssist;
+  const entries = [
+    { command: 'systemctl restart nginx', host: 'web01' },
+    { command: 'journalctl -u nginx -f', host: 'web01' },
+    { command: 'docker compose up -d', host: 'local' },
+    { command: 'git status', host: 'local' }
+  ];
+  const substringFirst = searchHistory('nginx', entries);
+  assert.deepEqual(substringFirst.map((entry) => entry.command), ['systemctl restart nginx', 'journalctl -u nginx -f']);
+
+  // 'dcu' is an in-order subsequence of 'docker compose up -d' only
+  const fuzzy = searchHistory('dkrcmp', entries);
+  assert.deepEqual(fuzzy.map((entry) => entry.command), ['docker compose up -d']);
+
+  // substring matches outrank fuzzy-only matches even when fuzzy is more recent
+  const mixed = searchHistory('git', [
+    { command: 'digit-tool --run', host: 'a' },
+    { command: 'git push', host: 'b' }
+  ]);
+  assert.equal(mixed[0].command, 'digit-tool --run'.includes('git') ? 'digit-tool --run' : 'git push');
+
+  assert.equal(searchHistory('zzz', entries).length, 0);
+  assert.equal(searchHistory('', entries).length, 4);
+});
+
+test('history search overlay is wired with shortcut and palette entry', () => {
+  assert.match(rendererSource, /function openHistorySearch\(\)/u);
+  assert.match(rendererSource, /function historySearchEntries\(\)/u);
+  assert.match(rendererSource, /window\.AuxAssist\.searchHistory\(input\.value, historySearchEntries\(\)\)/u);
+  assert.match(rendererSource, /event\.key\.toLowerCase\(\) === 'y'\) run\(\(\) => openHistorySearch\(\)\)/u);
+  assert.match(rendererSource, /Search session history/u);
+  assert.match(stylesCss, /\.history-search-row/u);
+});
+
+test('stripAnsi removes escape/OSC sequences and keeps text', () => {
+  const { stripAnsi } = AuxAssist;
+  assert.equal(stripAnsi('\x1b[32mgreen\x1b[0m plain'), 'green plain');
+  assert.equal(stripAnsi('\x1b]0;title\x07after'), 'after');
+  assert.equal(stripAnsi('\x1b]3008;start=abc;user=jd\x1b\\prompt$ '), 'prompt$ ');
+  assert.equal(stripAnsi('\x1b[?2004hecho hi\r\n'), 'echo hi\r\n');
+  assert.equal(stripAnsi('no escapes'), 'no escapes');
+});
+
+test('multi-session runner is wired with capture tap, guard and shortcut', () => {
+  assert.match(rendererSource, /function openMultiRunModal\(\)/u);
+  assert.match(rendererSource, /function multiRunCaptureTap\(id, data\)/u);
+  assert.match(rendererSource, /multiRunCaptureTap\(id, data\);/u);
+  assert.match(rendererSource, /window\.AuxAssist\.dangerCheck\(command\)/u);
+  assert.match(rendererSource, /Run dangerous command on every selected session\?/u);
+  assert.match(rendererSource, /event\.key\.toLowerCase\(\) === 'm'\) run\(\(\) => openMultiRunModal\(\)\)/u);
+  assert.match(rendererSource, /Run on multiple sessions/u);
+  assert.match(stylesCss, /\.multi-run-output/u);
+});

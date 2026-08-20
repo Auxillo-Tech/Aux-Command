@@ -147,6 +147,10 @@ Install optional runtime tools with:
 - Command snippets.
 - Guarded macro recording that saves reviewed terminal input as replayable snippets.
 - Guarded broadcast input across terminal sessions.
+- Multi-session command runner: send one command to selected live sessions
+  and review per-session collected output side by side (`Ctrl+Shift+M`).
+- Cross-session command history search overlay that inserts — never runs —
+  the picked command (`Ctrl+Shift+Y`; history is memory-only).
 - Keyboard-first navigation and accessible tab/panel relationships.
 - Terminal assist (each part individually toggleable, on by default):
   - Passive OS/distro detection per session (os-release, MOTD, and banner
@@ -335,6 +339,9 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | `Ctrl+W` | Close active tab |
 | `Ctrl+Shift+C` | Copy terminal selection |
 | `Ctrl+Shift+V` | Paste into terminal |
+| `Ctrl+Space` | Accept inline command suggestion |
+| `Ctrl+Shift+Y` | Search command history across sessions |
+| `Ctrl+Shift+M` | Run a command on multiple sessions |
 
 Tiled/single-session layout and tiled pane-size toolbar choices are persisted locally and restored on restart.
 

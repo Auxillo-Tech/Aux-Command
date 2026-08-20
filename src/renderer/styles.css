@@ -860,3 +860,21 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .tab-os-badge[hidden] { display: none; }
 .assist-settings .muted { color: #8ea3b5; font-size: 12.5px; line-height: 1.5; }
 .assist-settings .checkbox-column { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+
+/* Session history search */
+.history-search { display: flex; flex-direction: column; gap: 10px; }
+.history-search input { width: 100%; }
+.history-search-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
+.history-search-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.history-search-row:hover, .history-search-row.selected { border-color: var(--line); background: rgba(69, 210, 255, .08); }
+.history-search-command { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: #dcecf4; }
+.history-search-host { flex: none; padding: 1px 7px; border: 1px solid var(--line); border-radius: 5px; color: #63b8d8; font-size: 10px; }
+
+/* Multi-session command runner */
+.multi-run { display: flex; flex-direction: column; gap: 12px; }
+.multi-run .checkbox-column { display: flex; flex-direction: column; gap: 8px; max-height: 160px; overflow-y: auto; }
+.multi-run input[type="text"] { width: 100%; font-family: var(--mono); }
+.multi-run-results { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; }
+.multi-run-block { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.multi-run-host { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; background: rgba(255, 255, 255, .04); font-size: 12px; }
+.multi-run-output { margin: 0; padding: 8px 10px; max-height: 140px; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.45; color: #c6d8e4; white-space: pre-wrap; word-break: break-word; }

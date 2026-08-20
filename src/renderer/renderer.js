@@ -126,6 +126,7 @@
     terminalSearchOpen: false,
     terminalSearchQuery: '',
     macroRecording: null,
+    multiRun: null,
     selectedProfileId: '',
     diagnostics: null,
     updates: null,
@@ -3179,10 +3180,194 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Multi-session command runner: send one command to selected live terminals
+  // and collect each session's output side by side.
+  // ---------------------------------------------------------------------------
+
+  function multiRunCaptureTap(id, data) {
+    const capture = state.multiRun?.captures.get(id);
+    if (!capture) return;
+    capture.text = `${capture.text}${data}`.slice(-20000);
+    capture.pre.textContent = window.AuxAssist.stripAnsi(capture.text).trim().slice(-4000);
+  }
+
+  function stopMultiRunCapture() {
+    if (!state.multiRun) return;
+    window.clearTimeout(state.multiRun.timer);
+    state.multiRun = null;
+  }
+
+  function openMultiRunModal() {
+    const liveTerminals = [...state.tabs.values()].filter((tab) => tab.terminal && !tab.closed);
+    if (!liveTerminals.length) {
+      toast('No live sessions', 'Open at least one terminal session first.', 'error');
+      return;
+    }
+    stopMultiRunCapture();
+    const boxes = liveTerminals.map((tab) => ({ tab, box: checkbox(`target-${tab.id}`, `${tab.title} (${tab.profile.protocol.toUpperCase()})`, true) }));
+    const input = node('input', {
+      type: 'text',
+      placeholder: 'Command to run on every selected session…',
+      attrs: { 'aria-label': 'Command to run' }
+    });
+    const results = node('div', { className: 'multi-run-results' });
+    const statusLine = node('p', { className: 'muted', text: `${liveTerminals.length} live session${liveTerminals.length === 1 ? '' : 's'} available. Output is captured for 6 seconds per run.` });
+
+    const startRun = async () => {
+      const command = input.value.trim();
+      if (!command) return false;
+      const targets = boxes.filter(({ box }) => box.querySelector('input').checked).map(({ tab }) => tab);
+      if (!targets.length) {
+        toast('No sessions selected', 'Tick at least one session to run against.', 'error');
+        return false;
+      }
+      const hit = window.AuxAssist.dangerCheck(command);
+      if (state.assist.enabled && state.assist.dangerGuard && hit) {
+        const confirmed = await confirmAction({
+          title: 'Run dangerous command on every selected session?',
+          description: `${hit.reason}\n\n${hit.command}\n\nTargets: ${targets.map((tab) => tab.title).join(', ')}`,
+          confirmLabel: `Run on ${targets.length} session${targets.length === 1 ? '' : 's'}`,
+          danger: true
+        });
+        if (!confirmed) return false;
+      }
+      stopMultiRunCapture();
+      results.replaceChildren();
+      const captures = new Map();
+      for (const tab of targets) {
+        const pre = node('pre', { className: 'multi-run-output', text: '…' });
+        results.append(node('div', { className: 'multi-run-block' }, [
+          node('div', { className: 'multi-run-host' }, [
+            node('strong', { text: tab.title }),
+            tab.assist?.osInfo ? node('span', { className: 'history-search-host', text: tab.assist.osInfo.label }) : null
+          ]),
+          pre
+        ]));
+        captures.set(tab.id, { pre, text: '' });
+      }
+      state.multiRun = { captures, timer: window.setTimeout(() => stopMultiRunCapture(), 6000) };
+      for (const tab of targets) {
+        tab.assist?.mirror.feed(`${command}\r`);
+        tab.assist?.history.add(command);
+        api.terminal.write(tab.id, `${command}\r`).catch((error) => {
+          const capture = captures.get(tab.id);
+          if (capture) capture.pre.textContent = `Write failed: ${errorMessage(error)}`;
+        });
+      }
+      return false;
+    };
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        startRun();
+      }
+    });
+
+    const controller = showModal({
+      title: 'Run on multiple sessions',
+      description: 'One command, every selected live terminal, output collected per session.',
+      body: node('div', { className: 'multi-run' }, [
+        statusLine,
+        node('div', { className: 'checkbox-column' }, boxes.map(({ box }) => box)),
+        input,
+        results
+      ]),
+      actions: [
+        { label: 'Close', run: () => { stopMultiRunCapture(); controller.close(); return false; } },
+        { label: 'Run', className: 'primary', run: () => { startRun(); return false; } }
+      ]
+    });
+    controller.onClose(() => stopMultiRunCapture());
+    window.setTimeout(() => input.focus(), 0);
+  }
+
+  function historySearchEntries() {
+    // Interleave per-host MRU lists by rank so the most recent commands from
+    // every session surface first.
+    const lists = [...state.assist.history.entries()].map(([key, history]) => ({
+      host: key.split(':')[1] || 'local',
+      entries: history.list()
+    }));
+    const merged = [];
+    const depth = Math.max(0, ...lists.map((list) => list.entries.length));
+    for (let rank = 0; rank < depth; rank++) {
+      for (const list of lists) {
+        if (rank < list.entries.length) merged.push({ command: list.entries[rank], host: list.host });
+      }
+    }
+    return merged;
+  }
+
+  function openHistorySearch() {
+    const activeTab = state.tabs.get(state.activeTabId);
+    const input = node('input', {
+      type: 'search',
+      placeholder: 'Search commands from every open session…',
+      attrs: { 'aria-label': 'Search command history' }
+    });
+    const list = node('div', { className: 'history-search-list', attrs: { role: 'listbox' } });
+    let matches = [];
+    let selected = 0;
+
+    const insert = (entry) => {
+      const target = state.tabs.get(state.activeTabId);
+      if (!target || !target.terminal || target.closed) {
+        toast('No active terminal', 'Open a terminal session to insert a command.', 'error');
+        return;
+      }
+      controller.close();
+      target.assist?.mirror.feed(entry.command);
+      api.terminal.write(target.id, entry.command).catch((error) => toast('Terminal input failed', errorMessage(error), 'error'));
+      updateAssistSuggestion(target);
+      target.terminal.focus();
+    };
+
+    const render = () => {
+      matches = window.AuxAssist.searchHistory(input.value, historySearchEntries());
+      selected = Math.min(selected, Math.max(0, matches.length - 1));
+      list.replaceChildren(...matches.map((entry, index) => {
+        const row = node('button', {
+          type: 'button',
+          className: `history-search-row${index === selected ? ' selected' : ''}`,
+          attrs: { role: 'option', 'aria-selected': index === selected ? 'true' : 'false' }
+        }, [
+          node('code', { className: 'history-search-command', text: entry.command }),
+          node('span', { className: 'history-search-host', text: entry.host })
+        ]);
+        row.addEventListener('click', () => insert(entry));
+        return row;
+      }));
+      if (!matches.length) {
+        list.append(node('div', { className: 'list-empty', text: state.assist.history.size ? 'No matching commands.' : 'Type in a terminal first — history fills as you work (memory only, never saved to disk).' }));
+      }
+    };
+
+    input.addEventListener('input', () => { selected = 0; render(); });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); selected = Math.min(selected + 1, matches.length - 1); render(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); selected = Math.max(selected - 1, 0); render(); }
+      else if (event.key === 'Enter' && matches[selected]) { event.preventDefault(); insert(matches[selected]); }
+    });
+
+    const controller = showModal({
+      title: 'Session history search',
+      description: activeTab ? `Insert into “${activeTab.title}” without running it.` : 'Commands are inserted into the active terminal, never executed.',
+      body: node('div', { className: 'history-search' }, [input, list]),
+      className: 'narrow',
+      actions: []
+    });
+    render();
+    window.setTimeout(() => input.focus(), 0);
+  }
+
   function paletteActions() {
     const actions = [
       { label: 'New local terminal', category: 'Action', detail: 'Open a local shell tab', run: () => connectProfile(localProfile()) },
       { label: 'Find in terminal', category: 'Action', detail: 'Search the active terminal buffer', run: () => openTerminalSearch() },
+      { label: 'Search session history', category: 'Action', detail: 'Find a command typed in any open session and insert it (Ctrl+Shift+Y)', run: () => openHistorySearch() },
+      { label: 'Run on multiple sessions', category: 'Action', detail: 'Send one command to selected sessions and collect per-host output (Ctrl+Shift+M)', run: () => openMultiRunModal() },
       { label: 'Command snippets', category: 'Action', detail: 'Open snippet manager', run: () => openSnippetsModal() },
       { label: 'New connection profile', category: 'Action', detail: 'Create SSH, Mosh, Telnet, RDP, VNC or serial profile', run: () => openProfileModal() },
       { label: 'SSH tunnels', category: 'Action', detail: 'Open tunnel manager', run: () => openTunnelsModal() },
@@ -4412,6 +4597,7 @@
       if (tab) {
         writeTerminalData(tab, data);
         handleAssistOutput(tab, data);
+        multiRunCaptureTap(id, data);
       } else {
         const previous = state.pendingTerminalData.get(id) || '';
         state.pendingTerminalData.set(id, `${previous}${data}`.slice(-1_048_576));
@@ -4613,6 +4799,8 @@
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'b') run(() => toggleBroadcastInput());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 's') run(() => openSnippetsModal());
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'h') run(() => toggleHighlighting());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'y') run(() => openHistorySearch());
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'm') run(() => openMultiRunModal());
     if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && state.activeTabId) {
       run(() => requestCloseTab(state.activeTabId));
     }

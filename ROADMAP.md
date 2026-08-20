@@ -21,11 +21,11 @@ part switchable on its own from the Assist panel.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Cross-session history search | planned | Ctrl+R-style overlay across all open sessions, filterable by host; inserts, never executes. |
-| Multi-host command runner | planned | Select open sessions → run one command on all → per-host collected output table. Builds on Broadcast. |
+| Cross-session history search | shipped | Ctrl+Shift+Y overlay across all open sessions, host-tagged, substring-then-fuzzy ranking; inserts, never executes. |
+| Multi-host command runner | shipped | Ctrl+Shift+M: select open sessions → run one command on all → per-session collected output, danger guard included. |
 | Per-host quick dashboard | planned | CPU/RAM/disk/uptime chips in the tab header, extending Live Monitor probes. |
 | Session recording & replay | planned | Timing-aware recording on top of existing transcripts, with an asciinema-style replay viewer. |
-| Drag-and-drop upload into SFTP panel | planned | Uses the existing `sftp:upload-paths` path. |
+| Drag-and-drop upload into SFTP panel | shipped | Was already present via `sftp:upload-paths`; verified, no work needed. |
 
 ## Phase 3 — Reach *(decision needed)*
 
