@@ -26,7 +26,10 @@ The Electron main process owns all privileged operations:
 - SFTP networking and filesystem dialogs;
 - OpenSSH tunnel lifecycle;
 - host-tool diagnostics;
-- clipboard and external-link access.
+- clipboard and external-link access;
+- timing-aware terminal output recording for session replay;
+- the optional AI assist relay, which only ever contacts the operator-configured
+  OpenAI-compatible endpoint and keeps the API key in the encrypted vault.
 
 IPC handlers verify that every request originated from the single Aux Command renderer. Inputs are normalized before reaching process-spawning or filesystem APIs.
 
@@ -37,6 +40,12 @@ The sandboxed preload exposes a narrow, frozen API. The renderer has no Node.js 
 ### Renderer
 
 The renderer owns presentation state only: profile lists, terminal tabs, modals, SFTP rows, tunnel status, and keyboard interaction. Dynamic content is inserted with `textContent`/DOM nodes rather than untrusted HTML.
+
+Two dependency-free renderer modules are shared verbatim with the unit suite:
+`assist.js` (terminal assist: command-line mirroring, OS detection, suggestions,
+autocorrect, dangerous-command guard) and `i18n.js` (UI chrome translation
+catalogs for nine languages). Assist command history lives in memory only and
+is never written to disk.
 
 ## Persistent state
 
@@ -50,6 +59,8 @@ Files include:
 
 - `profiles.json` - connection settings and snippets;
 - `known-hosts.json` - host fingerprints accepted by the graphical SFTP client;
+- `settings.json` - workspace, highlight, assist, UI-language and AI-endpoint
+  settings (never secrets: the AI API key lives in the vault);
 - `vault.json` - encrypted credential blobs only when a secure desktop secret-service backend is available.
 
 Files are written atomically and restricted to mode `0600` where the filesystem supports POSIX permissions.

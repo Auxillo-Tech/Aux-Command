@@ -1,5 +1,9 @@
 # Aux Command release roadmap
 
+> The live product roadmap with current feature statuses is
+> [`ROADMAP.md`](../ROADMAP.md) at the repository root. This document is the
+> versioned release plan.
+
 Aux Command is a free, open-source public product. Every feature in this roadmap targets the public build; there are no paid tiers, enterprise-only packs, or payment walls.
 
 ## 0.1 - operational foundation

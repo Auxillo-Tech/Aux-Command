@@ -5,6 +5,9 @@ against MobaXterm for feature reach but built around safety, privacy, and speed.
 
 Statuses: **shipped** · **in progress** · **planned** · **decision needed**
 
+The versioned release plan (0.1 → 1.0) lives in
+[`docs/ROADMAP.md`](docs/ROADMAP.md); this document tracks feature status.
+
 ## Phase 1 — Smart Terminal Assist *(shipped)*
 
 A globally toggleable assistance layer for every terminal session, with each
