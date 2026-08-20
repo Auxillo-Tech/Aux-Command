@@ -1,6 +1,6 @@
 {
   "name": "aux-command",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Auxillo's Linux-native remote operations workstation for SSH, SFTP, FTP, FTPS, tunnels, RDP, VNC, Mosh, Telnet, serial consoles and local shells.",
   "main": "src/main/index.cjs",
   "desktopName": "aux-command.desktop",

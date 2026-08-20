@@ -12,7 +12,7 @@
 
 It is built as an original Auxillo public product with native Linux tooling, explicit trust boundaries, modern Electron hardening, no paid feature walls, and verifiable release engineering.
 
-> Current status: **0.2.x Linux x86_64 engineering release**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, GPG-signed releases, and source validation are in place. Releases are cryptographically signed with the Aux Command Release Signing key.
+> Current status: **0.4.x Linux x86_64 engineering release**. The repository, GitHub Actions, package builds, release/update wiring, security documentation, GPG-signed releases, and source validation are in place. Releases are cryptographically signed with the Aux Command Release Signing key.
 
 ---
 
@@ -68,21 +68,21 @@ Full instructions are in [`INSTALL.md`](INSTALL.md).
 Use this when you want the least invasive installation path.
 
 ```bash
-chmod +x Aux-Command-0.3.0-x86_64.AppImage
-./Aux-Command-0.3.0-x86_64.AppImage
+chmod +x Aux-Command-0.4.0-x86_64.AppImage
+./Aux-Command-0.4.0-x86_64.AppImage
 ```
 
 If the host does not support AppImage FUSE mounting, extract and run it:
 
 ```bash
-./Aux-Command-0.3.0-x86_64.AppImage --appimage-extract
+./Aux-Command-0.4.0-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 ### Debian / Ubuntu
 
 ```bash
-sudo apt install ./Aux-Command-0.3.0-amd64.deb
+sudo apt install ./Aux-Command-0.4.0-amd64.deb
 aux-command
 ```
 
@@ -96,14 +96,14 @@ The Debian package declares the core runtime dependencies:
 Fedora / RHEL-style systems:
 
 ```bash
-sudo dnf install ./Aux-Command-0.3.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 
 openSUSE-style systems:
 
 ```bash
-sudo zypper install ./Aux-Command-0.3.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 

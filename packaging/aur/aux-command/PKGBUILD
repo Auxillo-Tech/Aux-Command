@@ -1,7 +1,7 @@
 # Maintainer: Auxillo <https://auxillo.tech>
 # From-source AUR package: builds the unpacked Electron app with electron-builder.
 pkgname=aux-command
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial"
 arch=('x86_64')
