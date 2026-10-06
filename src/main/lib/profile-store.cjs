@@ -1,9 +1,11 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
+const { resolveSshConfig } = require('./ssh-config-resolver.cjs');
 const { JsonStore } = require('./json-store.cjs');
 const { defaultLocalProfile, defaultInfraProfiles, defaultInfraSnippets } = require('./command-builder.cjs');
-const { normalizeProfile, normalizeSnippet } = require('./validation.cjs');
+const { normalizeProfile, normalizeSnippet, expandHome } = require('./validation.cjs');
 const { readDefaultSshConfig } = require('./ssh-config-parser.cjs');
 
 const PROFILE_STORE_VERSION = 2;
@@ -13,7 +15,9 @@ const MANAGED_CONNECTIVITY_FIELDS = Object.freeze([
 ]);
 
 class ProfileStore {
-  constructor(dataDir) {
+  constructor(dataDir, options = {}) {
+    this.resolveSsh = options.resolveSsh || resolveSshConfig;
+    this.sshConfigFile = options.sshConfigFile;
     this.store = new JsonStore(path.join(dataDir, 'profiles.json'), {
       version: PROFILE_STORE_VERSION,
       profiles: [defaultLocalProfile(), ...defaultInfraProfiles()],
@@ -54,7 +58,7 @@ class ProfileStore {
     const profiles = [];
     for (const profile of data.profiles) {
       try {
-        profiles.push(normalizeProfile(profile, profile.id));
+        profiles.push(normalizeProfile({ ...profile, sshAliases: [...(profile.sshAliases || []), ...(data.sshAliasGroups?.[profile.id] || [])] }, profile.id));
       } catch (error) {
         process.stderr.write(`Aux Command skipped invalid profile ${profile?.id || '(no id)'} in profiles.json: ${error?.message || error}\n`);
       }
@@ -127,27 +131,52 @@ class ProfileStore {
     return this.list().length < before;
   }
 
-  importSshConfig() {
+  async importSshConfig() {
     const imported = readDefaultSshConfig();
+    // Resolve all entries before writing: a bad config must not partially
+    // replace working saved connections. Ignore copied fields when resolving.
+    for (const profile of imported) {
+      const config = await this.resolveSsh({ name: profile.name, protocol: 'ssh', host: profile.sshAlias, sshAlias: profile.sshAlias, useSshConfig: true }, { configFile: this.sshConfigFile });
+      profile.host = config.hostname[0];
+      profile.port = Number(config.port[0]);
+      profile.username = config.user?.[0] || '';
+      profile.identityFile = (config.identityfile || []).find((file) => fs.existsSync(expandHome(file))) || (config.identityfile?.length === 1 && config.identityfile[0] !== 'none' ? config.identityfile[0] : '');
+      profile.proxyJump = config.proxyjump?.[0] === 'none' ? '' : config.proxyjump?.[0] || '';
+      profile.compression = config.compression?.[0] === 'yes';
+      profile.agentForwarding = config.forwardagent?.[0] === 'yes';
+    }
     let added = 0;
+    let updated = 0;
     this.store.update((data) => {
       // Display names and resolved hosts can change without creating a new
       // SSH connection. Keep imported aliases stable across repeated imports.
       const identity = (profile) => profile.protocol === 'ssh' && profile.useSshConfig && profile.sshAlias
         ? JSON.stringify(['ssh-alias', profile.sshAlias])
         : JSON.stringify([profile.protocol, profile.name, profile.host]);
-      const aliases = new Set(data.profiles.map(identity));
+      const aliases = new Map(data.profiles.map((profile) => [identity(profile), profile]));
+      for (const existing of data.profiles) {
+        if (existing.protocol !== 'ssh' || !existing.useSshConfig) continue;
+        for (const alias of [...(existing.sshAliases || []), ...(data.sshAliasGroups?.[existing.id] || [])]) aliases.set(JSON.stringify(['ssh-alias', alias]), existing);
+      }
       for (const profile of imported) {
         const key = identity(profile);
         if (!aliases.has(key)) {
           data.profiles.push(profile);
-          aliases.add(key);
+          aliases.set(key, profile);
           added += 1;
+        } else {
+          const existing = aliases.get(key);
+          // Explicitly consolidated aliases remain callable in OpenSSH, but
+          // reimport must not recreate their redundant sidebar profiles.
+          if (existing.sshAlias !== profile.sshAlias) continue;
+          for (const field of ['host', 'port', 'username', 'identityFile', 'proxyJump', 'compression', 'agentForwarding']) existing[field] = profile[field];
+          existing.updatedAt = new Date().toISOString();
+          updated += 1;
         }
       }
       return data;
     });
-    return { found: imported.length, added, profiles: this.list() };
+    return { found: imported.length, added, updated, profiles: this.list() };
   }
 
   exportSafe() {

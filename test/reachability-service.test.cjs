@@ -45,3 +45,34 @@ test('unreachable hosts resolve to a false result rather than throwing', async (
   assert.equal(results[0].reachable, false);
   assert.ok(results[0].error);
 });
+
+
+test('proxy routes and resolution errors are unknown, never direct offline results', async () => {
+  let resolutions = 0;
+  const service = new ReachabilityService({ resolveSsh: async (profile) => {
+    resolutions += 1;
+    if (profile.id === 'bad') throw new Error('invalid config');
+    return { hostname: ['127.0.0.1'], port: ['1'], proxycommand: ['relay %h %p'] };
+  } });
+  const results = await service.check([
+    { id: 'jump', protocol: 'ssh', host: '127.0.0.1', port: 1, proxyJump: 'bastion' },
+    { id: 'command', protocol: 'ssh', host: '127.0.0.1', port: 1, sshAlias: 'relay' },
+    { id: 'bad', protocol: 'ssh', host: '127.0.0.1', port: 1, sshAlias: 'bad' }
+  ]);
+  assert.equal(resolutions, 2);
+  for (const result of results) {
+    assert.equal(result.reachable, null);
+    assert.equal(result.latencyMs, null);
+    assert.ok(result.error);
+  }
+});
+
+test('direct SSH aliases probe the effective hostname and port', async () => {
+  const server = net.createServer((socket) => socket.end());
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const service = new ReachabilityService({ resolveSsh: async () => ({ hostname: ['127.0.0.1'], port: [String(server.address().port)] }) });
+    const [result] = await service.check([{ id: 'alias', protocol: 'ssh', host: 'outdated.invalid', port: 1, sshAlias: 'current' }]);
+    assert.equal(result.reachable, true);
+  } finally { server.close(); }
+});

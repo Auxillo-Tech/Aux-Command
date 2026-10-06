@@ -8,7 +8,7 @@ LIB_DIR="$ROOT/.cache/build-libs/libxcrypt-compat/usr/lib64"
 RPMBUILD_DIR="$ROOT/.cache/build-tools/rpm-build/usr/bin"
 
 has_libcrypt_compat() {
-  ldconfig -p 2>/dev/null | grep -q 'libcrypt\.so\.1' || [[ -e "$LIB_DIR/libcrypt.so.1" ]]
+  [[ -e /lib/x86_64-linux-gnu/libcrypt.so.1 || -e /usr/lib64/libcrypt.so.1 || -e "$LIB_DIR/libcrypt.so.1" ]] || { ldconfig -p 2>/dev/null | grep 'libcrypt\.so\.1' >/dev/null; }
 }
 
 prepare_fedora_libcrypt_compat() {

@@ -88,9 +88,12 @@ class VaultService {
       throw new Error('Persistent credential encryption is unavailable on this desktop session');
     }
     const encrypted = Buffer.from(encoded, 'base64');
-    return this.safeStorage.decryptStringAsync
-      ? this.safeStorage.decryptStringAsync(encrypted)
-      : this.safeStorage.decryptString(encrypted);
+    if (this.safeStorage.decryptStringAsync) {
+      const decrypted = await this.safeStorage.decryptStringAsync(encrypted);
+      if (typeof decrypted?.result !== 'string') throw new Error('Could not decrypt stored credential');
+      return decrypted.result;
+    }
+    return this.safeStorage.decryptString(encrypted);
   }
 
   delete(id) {

@@ -63,3 +63,20 @@ test('rejects basic_text persistence and prototype-like credential IDs', async (
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test('unwraps Electron asynchronous decryption when reopening existing encrypted credentials', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-vault-async-'));
+  try {
+    const storage = {
+      ...encryptedStorage(),
+      encryptStringAsync: async (value) => Buffer.from(`encrypted:${value}`),
+      decryptStringAsync: async (value) => ({ result: value.toString().replace(/^encrypted:/u, ''), shouldReEncrypt: false })
+    };
+    await new VaultService(directory, storage).set('credential', 'stored-password', true);
+    const reopened = new VaultService(directory, storage);
+    assert.equal(await reopened.get('credential'), 'stored-password');
+    storage.decryptStringAsync = async () => ({ shouldReEncrypt: false });
+    await assert.rejects(reopened.get('credential'), /decrypt/i);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});

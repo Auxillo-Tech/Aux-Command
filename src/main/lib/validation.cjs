@@ -103,6 +103,7 @@ function normalizeProfile(input = {}, existingId = '') {
     identityFile,
     knownHostsFile,
     sshAlias: rejectOptionLike(cleanString(input.sshAlias, 'sshAlias', { max: 255 }), 'sshAlias', { rejectWhitespace: true }),
+    sshAliases: [...new Set((Array.isArray(input.sshAliases) ? input.sshAliases : []).slice(0, 128).map((alias) => rejectOptionLike(cleanString(alias, 'SSH alias', { required: true, max: 255 }), 'SSH alias', { rejectWhitespace: true })))],
     transferMode: protocol === 'ssh' ? transferMode : 'sftp',
     credentialId: cleanString(input.credentialId, 'credentialId', { max: 128 }),
     credentialKind,

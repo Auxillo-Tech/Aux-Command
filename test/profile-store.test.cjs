@@ -135,21 +135,22 @@ test('migrates old stores without injecting vendor infrastructure or deleting cu
 });
 
 
-test('SSH reimport matches the connection alias after renaming a profile', (t) => {
+test('SSH reimport matches the connection alias after renaming a profile', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-profile-reimport-'));
   t.mock.method(os, 'homedir', () => directory);
   fs.mkdirSync(path.join(directory, '.ssh'));
   const config = path.join(directory, '.ssh/config');
   try {
     fs.writeFileSync(config, 'Host prod\n  HostName server.example\n  User deploy\n');
-    const store = new ProfileStore(path.join(directory, 'data'));
-    assert.equal(store.importSshConfig().added, 1);
+    const store = new ProfileStore(path.join(directory, 'data'), { sshConfigFile: path.join(directory, '.ssh/config') });
+    assert.equal((await store.importSshConfig()).added, 1);
     const imported = store.list().find((p) => p.sshAlias === 'prod');
     store.save({ ...imported, name: 'Production', group: 'Work', credentialId: 'saved-credential' });
-    assert.equal(store.importSshConfig().added, 0);
+    assert.equal((await store.importSshConfig()).added, 0);
     fs.writeFileSync(config, 'Host prod\n  HostName replacement.example\n  User deploy\nHost prod-admin\n  HostName replacement.example\n  User root\n');
-    assert.equal(store.importSshConfig().added, 1, 'distinct aliases must remain available');
+    assert.equal((await store.importSshConfig()).added, 1, 'distinct aliases must remain available');
     const saved = store.get(imported.id);
+    assert.equal(saved.host, 'replacement.example');
     assert.equal(saved.name, 'Production');
     assert.equal(saved.group, 'Work');
     assert.equal(saved.credentialId, 'saved-credential');
@@ -157,4 +158,52 @@ test('SSH reimport matches the connection alias after renaming a profile', (t) =
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+
+test('SSH refresh resolves wildcard settings and is atomic when resolution fails', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-profile-refresh-'));
+  t.mock.method(os, 'homedir', () => directory);
+  fs.mkdirSync(path.join(directory, '.ssh'));
+  const filename = path.join(directory, '.ssh/config');
+  try {
+    fs.writeFileSync(filename, 'Host *\n User global-user\n Port 2200\nHost one two\n HostName example.test\n User ignored\n Port 2222\n');
+    const store = new ProfileStore(path.join(directory, 'data'), { sshConfigFile: path.join(directory, '.ssh/config') });
+    assert.equal((await store.importSshConfig()).added, 2);
+    for (const p of store.list().filter((p) => p.protocol === 'ssh')) {
+      assert.equal(p.username, 'global-user');
+      assert.equal(p.port, 2200);
+    }
+    const before = store.list();
+    store.resolveSsh = async (profile) => {
+      if (profile.sshAlias === 'two') throw new Error('bad config');
+      return { hostname: ['changed.test'], port: ['22'], user: ['changed'] };
+    };
+    await assert.rejects(store.importSshConfig(), /bad config/);
+    assert.deepEqual(store.list(), before);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test('reimport preserves explicitly consolidated aliases without duplicating profiles', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-alias-group-'));
+  t.mock.method(os, 'homedir', () => directory);
+  fs.mkdirSync(path.join(directory, '.ssh'));
+  fs.writeFileSync(path.join(directory, '.ssh/config'), 'Host main alternate\n HostName example.test\n');
+  try {
+    const store = new ProfileStore(path.join(directory, 'data'), { sshConfigFile: path.join(directory, '.ssh/config') });
+    const canonical = store.save({ name: 'Server', protocol: 'ssh', host: 'example.test', sshAlias: 'main', sshAliases: ['alternate'], useSshConfig: true });
+    const result = await store.importSshConfig();
+    assert.equal(result.added, 0);
+    assert.equal(result.updated, 1);
+    assert.deepEqual(store.get(canonical.id).sshAliases, ['alternate']);
+    const raw = JSON.parse(fs.readFileSync(path.join(directory, 'data/profiles.json')));
+    raw.sshAliasGroups = { [canonical.id]: ['alternate'] };
+    delete raw.profiles.find((p) => p.id === canonical.id).sshAliases;
+    fs.writeFileSync(path.join(directory, 'data/profiles.json'), JSON.stringify(raw));
+    const reopened = new ProfileStore(path.join(directory, 'data'), { sshConfigFile: path.join(directory, '.ssh/config') });
+    assert.equal(reopened.list().length, 2);
+    assert.deepEqual(reopened.exportSafe().profiles.find((p) => p.id === canonical.id).sshAliases, ['alternate']);
+    assert.equal((await reopened.importSshConfig()).added, 0);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

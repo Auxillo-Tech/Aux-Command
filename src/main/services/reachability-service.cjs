@@ -1,6 +1,7 @@
 'use strict';
 
 const net = require('node:net');
+const { resolveSshConfig } = require('../lib/ssh-config-resolver.cjs');
 
 const DEFAULT_TIMEOUT = 2500;
 const MAX_CONCURRENT = 8;
@@ -11,6 +12,7 @@ const MAX_TARGETS = 200;
 // authentication or service-level health check.
 class ReachabilityService {
   constructor(options = {}) {
+    this.resolveSsh = options.resolveSsh || resolveSshConfig;
     this.timeout = Math.max(500, Number(options.timeout) || DEFAULT_TIMEOUT);
     this.concurrency = Math.max(1, Number(options.concurrency) || MAX_CONCURRENT);
   }
@@ -50,7 +52,27 @@ class ReachabilityService {
         const index = cursor;
         cursor += 1;
         const target = list[index];
-        const outcome = await this.#probe(String(target.host), Number(target.port));
+        let host = String(target.host);
+        let port = Number(target.port);
+        let outcome;
+        // A direct TCP failure says nothing about a route through a bastion or
+        // ProxyCommand. Never start background authentication just for a dot.
+        if (target.proxyJump && target.proxyJump !== 'none') {
+          outcome = { reachable: null, latencyMs: null, error: 'SSH proxy route is checked when you connect' };
+        } else if (['ssh', 'mosh'].includes(target.protocol)) {
+          try {
+            const config = await this.resolveSsh(target);
+            if ([config.proxyjump?.[0], config.proxycommand?.[0]].some((value) => value && value !== 'none')) {
+              outcome = { reachable: null, latencyMs: null, error: 'SSH proxy route is checked when you connect' };
+            } else {
+              host = config.hostname[0];
+              port = Number(config.port[0]);
+            }
+          } catch {
+            outcome = { reachable: null, latencyMs: null, error: 'SSH configuration could not be resolved' };
+          }
+        }
+        outcome ||= await this.#probe(host, port);
         results[index] = {
           id: target.id,
           reachable: outcome.reachable,

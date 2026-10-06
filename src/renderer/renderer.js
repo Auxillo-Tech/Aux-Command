@@ -762,7 +762,7 @@
   function healthTargets() {
     return state.profiles
       .filter((profile) => !['local', 'serial'].includes(profile.protocol) && profile.host && profile.port)
-      .map((profile) => ({ id: profile.id, host: profile.host, port: profile.port }));
+      .map((profile) => ({ ...profile }));
   }
 
   async function probeConnectionHealth() {
@@ -778,7 +778,7 @@
       const results = await api.reachability.check(targets);
       for (const result of results || []) {
         state.health.set(result.id, {
-          status: result.reachable ? 'up' : 'down',
+          status: result.reachable === null ? 'unknown' : result.reachable ? 'up' : 'down',
           latencyMs: result.latencyMs,
           error: result.error,
           checkedAt: result.checkedAt
@@ -795,7 +795,7 @@
 
   function healthTitle(profile) {
     const record = state.health.get(profile.id);
-    if (!record || record.status === 'unknown') return `${profile.name} · reachability unknown`;
+    if (!record || record.status === 'unknown') return `${profile.name} · ${record?.error || 'reachability unknown'}`;
     if (record.status === 'checking') return `${profile.name} · checking…`;
     if (record.status === 'up') return `${profile.name} · reachable${record.latencyMs != null ? ` (${record.latencyMs} ms)` : ''}`;
     return `${profile.name} · unreachable${record.error ? ` (${record.error})` : ''}`;
@@ -1319,7 +1319,7 @@
   async function importSshConfig() {
     const result = await runTask('Importing SSH configuration…', () => api.profiles.importSshConfig(), 'SSH configuration imported');
     updateProfiles(result.profiles);
-    toast('SSH import complete', `${result.added} new profile${result.added === 1 ? '' : 's'} added from ${result.found} host entr${result.found === 1 ? 'y' : 'ies'}.`, 'success');
+    toast('SSH import complete', `${result.added} added, ${result.updated || 0} refreshed from ${result.found} SSH host entries.`, 'success');
   }
 
   async function connectProfile(profile) {

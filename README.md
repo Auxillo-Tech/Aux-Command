@@ -182,7 +182,8 @@ Install optional runtime tools with:
 
 - Native OpenSSH sessions.
 - SSH agent support through the user's existing environment.
-- `~/.ssh/config` import support.
+- `~/.ssh/config` import and refresh support. Reimport resolves current OpenSSH settings, updates connection fields and preserves profile names, groups, saved credentials and appearance. Explicitly consolidated aliases remain consolidated on reimport.
+- Connection status uses the effective SSH destination. ProxyJump/ProxyCommand routes show an unknown status with an explanation; a direct TCP failure is not treated as proof that a routed server is offline.
 - Identity files.
 - Advanced per-profile OpenSSH known-hosts-file override for isolated lab or fixture profiles.
 - ProxyJump support.
