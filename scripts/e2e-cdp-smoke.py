@@ -120,7 +120,7 @@ def main() -> int:
         """, timeout=20)
         expected_namespaces = [
             'ai', 'app', 'external', 'gateway', 'monitor', 'network', 'profiles', 'prompts', 'rdp',
-            'reachability', 'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal',
+            'reachability', 'recovery', 'sftp', 'snippets', 'sshKeys', 'sync', 'system', 'terminal',
             'transfer', 'tunnels', 'updates', 'vault', 'vnc',
         ]
         require(baseline['title'] == 'Aux Command', 'wrong document title', baseline)

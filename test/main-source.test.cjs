@@ -56,7 +56,7 @@ test('package exposes GitHub release update configuration', () => {
     repo: 'Aux-Command',
     releaseType: 'release'
   }]);
-  assert.match(mainSource, /new UpdateService\(app, getWindow\)/u);
+  assert.match(mainSource, /new UpdateService\(app, getWindow[,)]/u);
   assert.match(updateSource, /this\.updater\.autoDownload = false/u);
   assert.match(updateSource, /checkForUpdates\(\)/u);
   assert.match(ipcSource, /updates:check/u);

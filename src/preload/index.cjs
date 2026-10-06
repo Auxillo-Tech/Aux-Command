@@ -31,7 +31,15 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     delete: (id) => invoke('profiles:delete', id),
     importSshConfig: () => invoke('profiles:import-ssh-config'),
     export: () => invoke('profiles:export'),
-    import: () => invoke('profiles:import')
+    import: () => invoke('profiles:import'),
+    applyImport: (token, mode) => invoke('profiles:apply-import', token, mode)
+  }),
+  recovery: Object.freeze({
+    list: () => invoke('recovery:list'),
+    export: () => invoke('recovery:export'),
+    preview: () => invoke('recovery:preview'),
+    restore: (token) => invoke('recovery:restore', token),
+    restoreLocal: (id) => invoke('recovery:restore-local', id)
   }),
   terminal: Object.freeze({
     create: (request) => invoke('terminal:create', request),
@@ -109,6 +117,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     check: () => invoke('updates:check'),
     download: () => invoke('updates:download'),
     quitAndInstall: () => invoke('updates:quit-and-install'),
+    restorePrevious: () => invoke('updates:restore-previous'),
     onStatus: (callback) => subscribe('updates:status', callback)
   }),
   prompts: Object.freeze({

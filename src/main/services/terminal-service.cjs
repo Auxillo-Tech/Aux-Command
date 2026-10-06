@@ -1,5 +1,7 @@
 'use strict';
 
+const { diagnoseConnection } = require('../lib/connection-diagnostics.cjs');
+
 const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -114,7 +116,7 @@ class TerminalService {
       }
       this.#closeLogStream(session);
       this.sessions.delete(id);
-      this.#send('terminal:exit', { id, exitCode, signal });
+      this.#send('terminal:exit', { id, exitCode, signal, diagnosis: exitCode !== 0 && !session.userClosed ? diagnoseConnection(session.protocol, session.transcript) : null });
     });
 
     return { id, title: session.title, protocol: session.protocol, profileId: session.profileId };

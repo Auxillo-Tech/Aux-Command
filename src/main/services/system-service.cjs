@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { findExecutable } = require('../lib/executable-finder.cjs');
 
 const TOOLS = [
@@ -154,7 +155,14 @@ class SystemService {
 
   writeTextFile(filename, content) {
     fs.mkdirSync(path.dirname(filename), { recursive: true });
-    fs.writeFileSync(filename, content, { mode: 0o600 });
+    const temp = path.join(path.dirname(filename), `.aux-export-${randomUUID()}.tmp`);
+    try {
+      fs.writeFileSync(temp, content, { mode: 0o600, flag: 'wx' });
+      fs.renameSync(temp, filename);
+    } catch (error) {
+      try { fs.rmSync(temp, { force: true }); } catch { /* preserve original error */ }
+      throw error;
+    }
     return true;
   }
 }

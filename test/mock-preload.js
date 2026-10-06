@@ -47,8 +47,10 @@
       delete: async () => true,
       importSshConfig: async () => ({ found: 0, added: 0, profiles }),
       export: async () => ({ canceled: false, filePath: '/home/jd/aux-command-profiles.json' }),
-      import: async () => ({ canceled: true })
+      import: async () => ({ canceled: true }),
+      applyImport: async () => ({ profiles, snippets: [], added: 0, updated: 0, skipped: profiles.length })
     },
+    recovery: { list: async () => [], export: async () => ({ canceled: true }), preview: async () => ({ canceled: true }) },
     terminal: {
       create: async ({ profile }) => {
         const id = `preview-session-${++counter}`;

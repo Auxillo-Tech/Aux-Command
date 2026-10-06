@@ -35,7 +35,14 @@ jobs:
             traceroute \
             dnsutils \
             whois \
-            socat
+            socat openssh-server mosh xvfb xauth x11vnc x11-utils \
+            freerdp2-x11 freerdp2-shadow-x11 python3-venv libgtk-3-0t64 clang
+          sudo mkdir -p /run/sshd
+
+      - name: Prepare isolated protocol test environment
+        run: |
+          python3 -m venv /tmp/aux-protocol-venv
+          /tmp/aux-protocol-venv/bin/pip install pyftpdlib==2.2.0 pyOpenSSL==26.4.0 websocket-client==1.9.2
 
       - name: Install JavaScript dependencies deterministically
         run: npm ci
@@ -43,13 +50,24 @@ jobs:
       - name: Validate source and tests
         run: npm run check
 
+      - name: Qualify local protocol connections and recovery
+        env:
+          AUX_FTP_TEST_PYTHON: /tmp/aux-protocol-venv/bin/python
+        run: bash scripts/qualify-linux.sh
+
+      - name: Test import/export, recovery, keyboard access and session soak
+        run: /tmp/aux-protocol-venv/bin/python scripts/run-ui-qualification.py
+
       - name: Audit dependency vulnerabilities and registry signatures
         run: |
           npm audit --omit=dev --audit-level=high
           npm audit signatures
 
       - name: Build x64 Linux packages and production SBOM without publishing
-        run: npm run dist:x64 -- --publish never
+        run: CC=clang CXX=clang++ npm run dist:x64 -- --publish never
+
+      - name: Verify installers on Debian, Ubuntu and Fedora
+        run: bash scripts/test-installers.sh dist
 
       - name: Build source archives
         run: bash scripts/source-archives.sh

@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 function registerIpc({
   ipcMain,
@@ -10,6 +11,7 @@ function registerIpc({
   shell,
   app,
   profileStore,
+  recoveryService,
   settingsStore,
   terminalService,
   externalService,
@@ -60,7 +62,10 @@ function registerIpc({
   handle('profiles:list', () => profileStore.list());
   handle('profiles:save', (profile) => profileStore.save(profile));
   handle('profiles:delete', (id) => profileStore.delete(id));
-  handle('profiles:import-ssh-config', () => profileStore.importSshConfig());
+  handle('profiles:import-ssh-config', async () => {
+    recoveryService.snapshot('Before SSH config import');
+    return profileStore.importSshConfig();
+  });
   handle('profiles:export', async () => {
     const result = await dialog.showSaveDialog(getWindow(), {
       title: 'Export Aux Command profiles',
@@ -78,9 +83,46 @@ function registerIpc({
       filters: [{ name: 'JSON', extensions: ['json'] }]
     });
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
-    const payload = JSON.parse(systemService.readTextFile(result.filePaths[0]));
-    return { canceled: false, ...profileStore.importSafe(payload) };
+    const payload = readImport(result.filePaths[0]);
+    const token = rememberImport('profiles', payload);
+    return { canceled: false, token, preview: Object.fromEntries(['merge', 'update', 'copy'].map(mode => [mode, profileStore.previewImport(payload, mode)])) };
   });
+  handle('profiles:apply-import', (token, mode) => {
+    const payload = takeImport(token, 'profiles');
+    profileStore.previewImport(payload, mode);
+    const recoveryId = recoveryService.snapshot('Before profile JSON import');
+    return { ...profileStore.importSafe(payload, mode), recoveryId };
+  });
+  const pendingImports = new Map();
+  function readImport(filename) {
+    try { return JSON.parse(systemService.readTextFile(filename).replace(/^\uFEFF/u, '')); }
+    catch (error) { throw new Error(`Could not read import file: ${error.message}`); }
+  }
+  function rememberImport(kind, payload) {
+    pendingImports.clear();
+    const token = randomUUID(); pendingImports.set(token, { kind, payload, expires: Date.now() + 600000 }); return token;
+  }
+  function takeImport(token, kind) {
+    const pending = pendingImports.get(token);
+    if (!pending || pending.kind !== kind || pending.expires < Date.now()) throw new Error('Import preview expired; choose the file again');
+    pendingImports.delete(token); return pending.payload;
+  }
+  handle('recovery:list', () => recoveryService.list());
+  handle('recovery:restore-local', (id) => recoveryService.restoreLocal(id));
+  handle('recovery:export', async () => {
+    const result = await dialog.showSaveDialog(getWindow(), { title: 'Back up workspace', defaultPath: path.join(app.getPath('documents'), 'aux-command-workspace.json'), filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    systemService.writeTextFile(result.filePath, JSON.stringify(recoveryService.exportWorkspace(), null, 2) + '\n');
+    return { canceled: false, filePath: result.filePath };
+  });
+  handle('recovery:preview', async () => {
+    const result = await dialog.showOpenDialog(getWindow(), { title: 'Restore workspace backup', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (result.canceled || !result.filePaths[0]) return { canceled: true };
+    const payload = readImport(result.filePaths[0]);
+    const validated = recoveryService.validateWorkspace(payload);
+    return { canceled: false, token: rememberImport('workspace', payload), profiles: validated.profiles.profiles.length, snippets: validated.profiles.snippets.length };
+  });
+  handle('recovery:restore', (token) => recoveryService.restoreWorkspace(takeImport(token, 'workspace')));
 
   handle('app:save-workspace-settings', (workspace) => settingsStore.saveWorkspace(workspace));
   handle('app:save-sidebar-settings', (sidebar) => settingsStore.saveSidebar(sidebar));
@@ -256,6 +298,7 @@ function registerIpc({
   handle('updates:check', () => updateService.check());
   handle('updates:download', () => updateService.download());
   handle('updates:quit-and-install', () => updateService.quitAndInstall());
+  handle('updates:restore-previous', () => updateService.restorePrevious());
 
   handle('clipboard:read-text', () => clipboard.readText());
   handle('clipboard:write-text', (text) => {

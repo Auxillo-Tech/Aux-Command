@@ -377,6 +377,11 @@
       installButton.addEventListener('click', () => api.updates.quitAndInstall().catch((error) => updateUpdateState({ error: errorMessage(error) })));
       updateActions.push(installButton);
     }
+    if (updateStatus.recoveryAvailable) {
+      const restore = node('button', { type: 'button', className: 'mini-button', text: `Restore previous version (${updateStatus.recoveryVersion})` });
+      restore.addEventListener('click', () => showModal({ title: 'Restore previous AppImage?', description: 'This replaces the AppImage on disk with the saved previous version. Your current sessions keep running until you close the application.', body: node('p', { text: 'After restoring, close Aux Command when your work is finished and reopen the AppImage. The previous version may lack recent fixes. Workspace settings are retained.' }), actions: [{ label: 'Cancel', busy: false }, { label: 'Restore previous version', className: 'primary', run: async () => { const result = await api.updates.restorePrevious(); toast('Previous version restored', result.filePath + ' — close and reopen when ready.', 'success'); return true; } }] }));
+      updateActions.push(restore);
+    }
     return updateActions;
   }
 
@@ -563,7 +568,7 @@
 
   function modalFocusableElements(modal) {
     return [...modal.querySelectorAll('button:not([disabled]):not([hidden]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      .filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+      .filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true' && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
   }
 
   function isEditableShortcutTarget(target) {
@@ -1316,10 +1321,31 @@
     return state.profiles.find((profile) => profile.id === id) || null;
   }
 
+  let sshImportPending = false;
   async function importSshConfig() {
-    const result = await runTask('Importing SSH configuration…', () => api.profiles.importSshConfig(), 'SSH configuration imported');
-    updateProfiles(result.profiles);
-    toast('SSH import complete', `${result.added} added, ${result.updated || 0} refreshed from ${result.found} SSH host entries.`, 'success');
+    if (sshImportPending) return;
+    sshImportPending = true;
+    const buttons = [elements.importSshButton, elements.welcomeImport];
+    for (const button of buttons) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
+    const progress = node('p', { text: 'Reading ~/.ssh/config and resolving its SSH hosts…', attrs: { role: 'status', 'aria-live': 'polite' } });
+    const controller = showModal({ title: 'Import SSH config', body: progress, closeable: false });
+    try {
+      const result = await runTask('Importing SSH configuration…', () => api.profiles.importSshConfig());
+      updateProfiles(result.profiles);
+      controller.close();
+      showModal({ title: 'SSH import complete', description: `${result.found} SSH host entries found.`,
+        body: node('div', {}, [
+          node('p', { text: `${result.added} added; ${result.updated || 0} existing profiles refreshed.` }),
+          node('p', { text: result.found ? 'Existing profile names, groups and saved credentials are retained. No connection is opened by importing.' : 'No named Host entries were found in ~/.ssh/config or its included files. Wildcard-only Host blocks do not create connection profiles.' }),
+          node('p', { text: 'The previous profile data is available under Import / Export → Recovery points.' })
+        ]), actions: [{ label: 'Done', className: 'primary', busy: false }] });
+    } catch (error) {
+      controller.close();
+      showModal({ title: 'SSH import failed', body: node('p', { text: errorMessage(error) }), actions: [{ label: 'Close', busy: false }] });
+    } finally {
+      sshImportPending = false;
+      for (const button of buttons) { button.disabled = false; button.removeAttribute('aria-busy'); }
+    }
   }
 
   async function connectProfile(profile) {
@@ -3245,36 +3271,71 @@
     });
   }
 
+  function applyRecoveredWorkspace(result) {
+    if (state.workspacePersistTimer) { clearTimeout(state.workspacePersistTimer); state.workspacePersistTimer = null; }
+    updateProfiles(result.profiles);
+    state.snippets = result.snippets;
+    applyPersistedWorkspaceSettings(result.settings);
+    initializeLanguage(result.settings);
+    renderProfiles();
+    toast('Workspace restored', 'Profiles and settings restored. Active sessions were not restarted.', 'success');
+  }
+
   function openProfileDataMenu() {
     const body = node('div', { className: 'menu-stack' });
-    const importButton = node('button', { type: 'button', className: 'menu-action' }, [
-      node('strong', { text: 'Import Aux Command profiles' }),
-      node('span', { text: 'Merge a JSON export. Credentials are never imported.' })
-    ]);
-    const exportButton = node('button', { type: 'button', className: 'menu-action' }, [
-      node('strong', { text: 'Export profiles' }),
-      node('span', { text: 'Create a portable JSON backup without secrets.' })
-    ]);
-    body.append(importButton, exportButton);
-    const controller = showModal({ title: 'Profile data', body, className: 'narrow', actions: [{ label: 'Close', busy: false }] });
-    importButton.addEventListener('click', async () => {
-      try {
-        const result = await api.profiles.import();
-        if (!result.canceled) {
-          updateProfiles(result.profiles);
-          toast('Profiles imported', `${result.added} profile${result.added === 1 ? '' : 's'} added.`, 'success');
-          controller.close();
-        }
-      } catch (error) { toast('Import failed', errorMessage(error), 'error'); }
+    const action = (title, detail, run) => {
+      const button = node('button', { type: 'button', className: 'menu-action' }, [node('strong', { text: title }), node('span', { text: detail })]);
+      button.addEventListener('click', async () => {
+        button.disabled = true; button.setAttribute('aria-busy', 'true');
+        try { await run(); } catch (error) { toast(title, errorMessage(error), 'error'); }
+        finally { button.disabled = false; button.removeAttribute('aria-busy'); }
+      });
+      body.append(button);
+    };
+    const controller = showModal({ title: 'Import / Export and recovery', description: 'Portable exports exclude saved passwords, private keys and SSH config files. Treat profile notes and commands as private data.', body, className: 'narrow', actions: [{ label: 'Close', busy: false }] });
+    action('Import Aux Command profiles', 'Preview a JSON export and choose how to handle existing profiles.', async () => {
+      const result = await api.profiles.import(); if (result.canceled) return;
+      controller.close();
+      const mode = node('select', { attrs: { 'aria-label': 'Existing profile handling' } }, [
+        node('option', { value: 'merge', text: 'Add missing; keep existing profiles' }),
+        node('option', { value: 'update', text: 'Update matching profiles' }),
+        node('option', { value: 'copy', text: 'Create separate copies' })
+      ]);
+      const summary = node('p', { attrs: { role: 'status', 'aria-live': 'polite' } });
+      const refresh = () => { const p = result.preview[mode.value]; summary.textContent = `${p.added} profiles to add, ${p.updated} to update, ${p.skipped} to leave unchanged; ${p.snippetsAdded} snippets to add, ${p.snippetsUpdated} to update. ${p.conflicts} differing matches.`; };
+      mode.addEventListener('change', refresh); refresh();
+      showModal({ title: 'Review profile import', description: 'A recovery point is created before applying the import.', body: node('div', {}, [mode, summary, node('p', { text: 'Only import files you trust: they may contain startup commands and snippets. Credentials are not imported; local credentials are retained only for an unchanged connection.' })]), actions: [
+        { label: 'Cancel', busy: false },
+        { label: 'Import', className: 'primary', run: async () => {
+          const saved = await api.profiles.applyImport(result.token, mode.value);
+          updateProfiles(saved.profiles); state.snippets = saved.snippets;
+          toast('Import complete', `${saved.added} added, ${saved.updated} updated, ${saved.skipped} unchanged.`, 'success'); return true;
+        } }
+      ] });
     });
-    exportButton.addEventListener('click', async () => {
-      try {
-        const result = await api.profiles.export();
-        if (!result.canceled) {
-          toast('Profiles exported', result.filePath, 'success');
-          controller.close();
-        }
-      } catch (error) { toast('Export failed', errorMessage(error), 'error'); }
+    action('Export profiles', 'Save profiles and snippets without saved credentials.', async () => {
+      const result = await api.profiles.export(); if (!result.canceled) toast('Profiles exported', result.filePath, 'success');
+    });
+    action('Back up workspace', 'Save profiles, snippets, layout and preferences without secrets.', async () => {
+      const result = await api.recovery.export(); if (!result.canceled) toast('Workspace backed up', result.filePath, 'success');
+    });
+    action('Restore workspace backup', 'Review a backup before replacing profiles and preferences.', async () => {
+      const result = await api.recovery.preview(); if (result.canceled) return;
+      controller.close();
+      showModal({ title: 'Restore workspace backup?', description: `${result.profiles} profiles and ${result.snippets} snippets will replace the current lists and workspace settings.`, body: node('p', { text: 'A recovery point is created first. Passwords, private keys and SSH configuration are not restored from portable backups. Active sessions continue.' }), actions: [
+        { label: 'Cancel', busy: false }, { label: 'Restore', className: 'primary', run: async () => { applyRecoveredWorkspace(await api.recovery.restore(result.token)); return true; } }
+      ] });
+    });
+    action('Recovery points', 'Undo an import or restore using one of the last ten local snapshots.', async () => {
+      const points = await api.recovery.list(); controller.close();
+      const list = node('div', { className: 'menu-stack' });
+      if (!points.length) list.append(node('p', { text: 'No recovery points yet. They are created automatically before imports and restores.' }));
+      for (const point of points) {
+        const button = node('button', { type: 'button', className: 'menu-action', text: `${new Date(point.createdAt).toLocaleString()} — ${point.reason}` });
+        button.addEventListener('click', () => showModal({ title: 'Restore recovery point?', description: 'This replaces the current profiles and workspace settings. Saved credentials stay in the local keyring.', body: node('p', { text: `${point.reason} — ${new Date(point.createdAt).toLocaleString()}` }), actions: [{ label: 'Cancel', busy: false }, { label: 'Restore', className: 'primary', run: async () => { applyRecoveredWorkspace(await api.recovery.restoreLocal(point.id)); return true; } }] }));
+        list.append(button);
+      }
+      showModal({ title: 'Recovery points', body: list, actions: [{ label: 'Close', busy: false }] });
     });
   }
 
@@ -4879,13 +4940,16 @@
         state.pendingTerminalData.set(id, `${previous}${data}`.slice(-1_048_576));
       }
     });
-    api.terminal.onExit(({ id, exitCode, signal }) => {
+    api.terminal.onExit(({ id, exitCode, signal, diagnosis }) => {
       const tab = state.tabs.get(id);
       if (!tab) return;
       tab.closed = true;
       tab.tabElement.classList.add('closed');
       tab.terminal.write(`\r\n\x1b[90m[Process exited${signal ? ` with signal ${signal}` : ` with code ${exitCode}`} — press Ctrl+W to close]\x1b[0m\r\n`);
-      if (state.activeTabId === id) setStatus(`Session exited with ${signal || exitCode}`);
+      if (diagnosis) {
+        tab.terminal.write(`\r\n${diagnosis.title}: ${diagnosis.guidance}\r\n`);
+        toast(diagnosis.title, diagnosis.guidance, 'error');
+      } else if (state.activeTabId === id) setStatus(`Session exited with ${signal || exitCode}`);
     });
     api.tunnels.onStatus((tunnel) => {
       state.tunnels.set(tunnel.id, tunnel);

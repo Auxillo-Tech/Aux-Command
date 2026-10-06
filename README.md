@@ -320,7 +320,7 @@ On Debian 12, use Clang 16 or newer to compile the native SSH dependency against
 
 ## Verification status
 
-Validation on 6 October 2026: **272 tests passed, zero failed or skipped**; the full dependency audit reported zero vulnerabilities. Controlled local tests also passed for FTP/implicit FTPS, Mosh, local/remote/SOCKS tunnels, and embedded RDP/VNC, including changed-certificate rejection.
+Validation on 6 October 2026: **280 tests passed, zero failed or skipped**; the full dependency audit reported zero vulnerabilities. Controlled local tests also passed for FTP/implicit FTPS, Mosh, local/remote/SOCKS tunnels, and embedded RDP/VNC, including changed-certificate rejection.
 
 The live updater authenticated the published **v0.4.0** release, downloaded its AppImage, verified the installer against the signed manifest, and installed it into an isolated temporary location. The current source fixes are prepared as an **unpublished 0.4.1 candidate**, not a published release. Debian/RPM upgrades and encrypted credential preservation were tested separately.
 
@@ -356,6 +356,12 @@ Tiled/single-session layout and tiled pane-size toolbar choices are persisted lo
 Right-click copies selected terminal text; with no selection it pastes clipboard text.
 
 ---
+
+## Import and recovery
+
+The SSH import button reads `~/.ssh/config` directly and shows a visible summary, including when every host already exists. JSON imports preview additions and conflicts before applying changes. The Import / Export menu also provides workspace backups and automatic local recovery points. Portable exports omit saved credentials and private-key material.
+
+See [Import, export and recovery](docs/BACKUP_RECOVERY.md) for duplicate handling, portable key paths, workspace restore and previous-AppImage recovery.
 
 ## Data location
 

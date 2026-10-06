@@ -2,7 +2,9 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const { resolveSshConfig } = require('./ssh-config-resolver.cjs');
+const { planProfileImport } = require('./profile-import.cjs');
 const { JsonStore } = require('./json-store.cjs');
 const { defaultLocalProfile, defaultInfraProfiles, defaultInfraSnippets } = require('./command-builder.cjs');
 const { normalizeProfile, normalizeSnippet, expandHome } = require('./validation.cjs');
@@ -187,35 +189,24 @@ class ProfileStore {
       format: 'aux-command-profiles',
       version: 1,
       exportedAt: new Date().toISOString(),
-      profiles: profiles.map((profile) => ({ ...profile, credentialId: '' })),
+      profiles: profiles.map((profile) => {
+        const portable = filename => filename === os.homedir() ? '~' : filename.startsWith(os.homedir() + path.sep) ? '~/' + path.relative(os.homedir(), filename) : filename;
+        return { ...profile, credentialId: '', identityFile: portable(profile.identityFile), knownHostsFile: portable(profile.knownHostsFile) };
+      }),
       snippets: this.snippets()
     };
   }
 
-  importSafe(payload) {
-    if (!payload || payload.format !== 'aux-command-profiles' || !Array.isArray(payload.profiles)) {
-      throw new Error('Unsupported Aux Command profile export');
-    }
-    const imported = payload.profiles.map((profile) => normalizeProfile({ ...profile, credentialId: '' }));
-    const snippets = Array.isArray(payload.snippets) ? payload.snippets.map((snippet) => normalizeSnippet(snippet)) : [];
-    this.store.update((data) => {
-      const currentIds = new Set(data.profiles.map((profile) => profile.id));
-      for (const profile of imported) {
-        if (currentIds.has(profile.id)) profile.id = require('node:crypto').randomUUID();
-        currentIds.add(profile.id);
-        data.profiles.push(profile);
-      }
-      data.snippets ||= [];
-      const snippetIds = new Set(data.snippets.map((snippet) => snippet.id));
-      for (const snippet of snippets) {
-        if (snippetIds.has(snippet.id)) snippet.id = require('node:crypto').randomUUID();
-        snippetIds.add(snippet.id);
-        data.snippets.push(snippet);
-      }
-      return data;
-    });
-    return { added: imported.length, snippetsAdded: snippets.length, profiles: this.list(), snippets: this.snippets() };
+  previewImport(payload, mode = 'merge') {
+    return planProfileImport(payload, { profiles: this.list(), snippets: this.snippets() }, mode).summary;
   }
+
+  importSafe(payload, mode = 'merge') {
+    const plan = planProfileImport(payload, { profiles: this.list(), snippets: this.snippets() }, mode);
+    this.store.update(data => ({ ...data, profiles: plan.profiles, snippets: plan.snippets }));
+    return { ...plan.summary, profiles: this.list(), snippets: this.snippets() };
+  }
+
 }
 
 module.exports = { ProfileStore };

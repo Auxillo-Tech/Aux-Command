@@ -1,0 +1,22 @@
+'use strict';
+// Test-only Electron entry point. Native file dialogs use disposable fixtures.
+const { app, dialog } = require('electron');
+const fs = require('node:fs'); const path = require('node:path'); const os = require('node:os');
+const root = path.resolve(__dirname, '..');
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-ui-recovery-'));
+const home = path.join(directory, 'home'); const bin = path.join(directory, 'bin');
+fs.mkdirSync(path.join(home, '.ssh'), { recursive: true }); fs.mkdirSync(bin);
+fs.writeFileSync(path.join(home, '.ssh/config'), 'Host fixture-import\n HostName 127.0.0.1\n User fixture\n');
+fs.writeFileSync(path.join(bin, 'ssh'), '#!/bin/sh\nprintf "hostname 127.0.0.1\\nport 22\\nuser fixture\\n"\n', { mode: 0o755 });
+process.env.PATH = `${bin}:${process.env.PATH}`;
+os.homedir = () => home;
+app.setPath('userData', path.join(directory, 'app'));
+app.getVersion = () => require('../package.json').version;
+app.getAppPath = () => root;
+const profiles = path.join(directory, 'profiles.json');
+const workspace = path.join(directory, 'workspace.json');
+fs.writeFileSync(profiles, JSON.stringify({ format: 'aux-command-profiles', version: 1, profiles: [{ id: 'json-fixture', name: 'JSON fixture', host: '127.0.0.1' }], snippets: [] }));
+dialog.showOpenDialog = async (_window, options) => ({ canceled: false, filePaths: [options.title.includes('workspace') ? workspace : profiles] });
+dialog.showSaveDialog = async (_window, options) => ({ canceled: false, filePath: options.title.includes('workspace') ? workspace : path.join(directory, 'exported-profiles.json') });
+console.log(JSON.stringify({ fixtureDirectory: directory }));
+require('../src/main/index.cjs');

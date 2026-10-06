@@ -77,7 +77,7 @@ test('assigns unique IDs to colliding imported profiles', () => {
         { id: 'duplicate', name: 'Two', protocol: 'ssh', host: 'two.example' }
       ]
     };
-    const result = store.importSafe(payload);
+    const result = store.importSafe(payload, 'copy');
     const imported = result.profiles.filter((profile) => ['One', 'Two'].includes(profile.name));
     assert.equal(imported.length, 2);
     assert.equal(new Set(imported.map((profile) => profile.id)).size, 2);

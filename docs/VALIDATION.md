@@ -57,3 +57,16 @@ xvfb-run -a node_modules/electron/dist/electron scripts/test-live-updater.cjs
 The updater test uses a simulated old application version and the real public release/signature/download services. It replaces only a disposable AppImage path, intercepts the automatic desktop launch, and prints the resulting path for inspection. It does not publish anything or replace your installed application. The temporary directory is intentionally retained for inspection; remove the printed test directory when finished.
 
 RDP qualification includes trust-on-first-use persistence and rejection after the test trust record is changed. The fixture uses a loopback TLS RDP server, not a Windows domain server. FTP qualification includes implicit FTPS with a temporary trusted certificate and rejection of a hostname mismatch. These fixture certificates and keys are never packaged.
+
+## Import/recovery UI and installer matrix
+
+With the desktop tools above and Python `websocket-client` installed, run:
+
+```bash
+/path/to/test-venv/bin/python scripts/run-ui-qualification.py
+bash scripts/test-installers.sh /path/to/candidate-packages
+```
+
+The UI runner starts a disposable Electron profile and uses fixture file dialogs. It checks the actual SSH and JSON import buttons, repeat imports, workspace backup/restore and undo, keyboard focus, a doubled display scale, desktop smoke, and twenty session/reload cycles. It prints an evidence directory with logs and screenshots. Installer checks require Docker and pull Debian 12, Ubuntu 24.04 and Fedora 44 images; only the candidate package directory is mounted read-only, and test containers are removed after use.
+
+The Linux build and release workflows run these checks automatically. Public tag builds must have the configured signing secret; manual unsigned engineering artifacts remain permitted without publication.

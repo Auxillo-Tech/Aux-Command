@@ -13,6 +13,7 @@ const {
   shell
 } = require('electron');
 const { ProfileStore } = require('./lib/profile-store.cjs');
+const { RecoveryService } = require('./services/recovery-service.cjs');
 const { SettingsStore } = require('./lib/settings-store.cjs');
 const { PromptBroker } = require('./lib/prompt-broker.cjs');
 const { ExternalService } = require('./services/external-service.cjs');
@@ -130,6 +131,7 @@ function initializeServices() {
   const dataDir = path.join(app.getPath('userData'), 'aux-command-data');
   const profileStore = new ProfileStore(dataDir);
   const settingsStore = new SettingsStore(dataDir);
+  const recoveryService = new RecoveryService(dataDir, profileStore, settingsStore);
   const promptBroker = new PromptBroker(getWindow);
   const vaultService = new VaultService(dataDir, safeStorage);
   const knownHostService = new KnownHostService(dataDir, promptBroker);
@@ -139,7 +141,7 @@ function initializeServices() {
   const ftpService = new FtpService(vaultService, getWindow);
   const externalService = new ExternalService();
   const systemService = new SystemService();
-  const updateService = new UpdateService(app, getWindow);
+  const updateService = new UpdateService(app, getWindow, { recoveryService });
   const transferQueue = new TransferQueue(getWindow);
   const vncBridge = new VncBridgeService();
   const rdpEmbed = new RdpEmbedService({ vaultService, vncBridge });
@@ -160,6 +162,7 @@ function initializeServices() {
   };
 
   services = {
+    recoveryService,
     profileStore,
     settingsStore,
     promptBroker,

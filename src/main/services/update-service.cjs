@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const { UpdateRecovery } = require('./update-recovery.cjs');
 
 const RELEASE_REPOSITORY = 'Auxillo-Tech/Aux-Command';
 const RELEASE_SIGNING_FINGERPRINT = 'FAC028574B9C6875D10DA4DC6443E86108ABD2A2';
@@ -67,6 +68,7 @@ class UpdateService {
   constructor(app, getWindow, options = {}) {
     this.app = app;
     this.getWindow = getWindow;
+    this.workspaceRecovery = options.recoveryService || null;
     this.updater = options.updater || require('electron-updater').autoUpdater;
     this.fetch = options.fetch || globalThis.fetch;
     this.repository = options.repository || RELEASE_REPOSITORY;
@@ -74,6 +76,7 @@ class UpdateService {
     this.verifiedRelease = null;
     this.downloadedFile = null;
     this.operation = null;
+    this.recovery = app.getPath ? new UpdateRecovery(path.join(app.getPath('userData'), 'update-recovery')) : null;
     this.status = {
       supported: Boolean(app.isPackaged),
       checking: false,
@@ -120,7 +123,7 @@ class UpdateService {
   }
 
   getStatus() {
-    return { ...this.status };
+    return { ...this.status, ...(this.recovery?.status() || {}) };
   }
 
   async #exclusive(name, task) {
@@ -133,6 +136,12 @@ class UpdateService {
   check() { return this.#exclusive('check', () => this.#check()); }
   download() { return this.#exclusive('download', () => this.#download()); }
   quitAndInstall() { return this.#exclusive('installation', () => this.#install()); }
+  restorePrevious() {
+    return this.#exclusive('recovery', async () => {
+      if (!this.recovery || !process.env.APPIMAGE) throw new Error('Previous-version recovery is available for AppImage installs only');
+      return this.recovery.restore(process.env.APPIMAGE);
+    });
+  }
 
   async #check() {
     if (!this.app.isPackaged) {
@@ -202,7 +211,20 @@ class UpdateService {
       this.#merge({ downloaded: false, error: error?.message || String(error) });
       throw error;
     }
-    this.updater.quitAndInstall(false, true);
+    this.workspaceRecovery?.snapshot('Before application update');
+    const image = process.env.APPIMAGE;
+    if (image && this.recovery) await this.recovery.prepare(image, this.app.getVersion());
+    this.#merge({ error: null });
+    try {
+      this.updater.quitAndInstall(false, true);
+      if (this.status.error) throw new Error(this.status.error);
+    } catch (error) {
+      if (image && this.recovery) {
+        try { await this.recovery.restore(image); }
+        catch (recoveryError) { throw new AggregateError([error, recoveryError], 'Update failed; restore the previous AppImage using Updates → Restore previous version'); }
+      }
+      throw error;
+    }
     return true;
   }
 

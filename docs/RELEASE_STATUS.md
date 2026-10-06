@@ -4,6 +4,12 @@ Validated: **6 October 2026**, Linux x86_64.
 
 The published release used in the updater test is **v0.4.0**. Current fixes are on a development branch and packaged as an **unpublished 0.4.1 test candidate**. A candidate build does not publish a release or update existing installations.
 
+## Import and recovery additions
+
+SSH imports now show progress, completion counts and errors in dialogs. Profile JSON imports preview explicit merge/update/copy choices. Workspace backups include preferences and layout; local recovery points and a restore journal protect against accidental imports and interrupted restores. Update recovery keeps a checksum-verified previous AppImage and attempts restoration after a synchronous installer failure. Connection exits now include stage-specific guidance without copying terminal contents into diagnostic messages.
+
+The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI and session-soak checks, plus installer checks in Debian 12, Ubuntu 24.04 and Fedora 44 containers. Tagged release publication requires the signing secret. Workflow configuration has been checked locally; GitHub-hosted results require pushing the branch.
+
 ## Confirmed fixes
 
 - Process cleanup reaps adopted descendants and terminates guarded process trees.
@@ -18,7 +24,7 @@ The published release used in the updater test is **v0.4.0**. Current fixes are 
 
 ## Evidence
 
-- `npm run check`: **272 passed, 0 failed, 0 skipped**.
+- `npm run check`: **280 passed, 0 failed, 0 skipped**.
 - Full `npm audit`: **0 reported vulnerabilities**.
 - Actual signed public-release check, AppImage download and installer replacement in an isolated directory using the real electron-updater implementation. Installation handoff is intercepted to avoid opening a normal desktop session; packaged launch is tested separately.
 - FTP and implicit FTPS: listing, upload/download, editing, rename/remove, reconnect, cancellation and TLS hostname rejection against disposable loopback servers.
