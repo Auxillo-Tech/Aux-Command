@@ -118,7 +118,7 @@ def terminate_tree(root_pid: int) -> None:
     _signal_many(reversed(first), signal.SIGTERM)
     deadline = time.monotonic() + 0.75
     while time.monotonic() < deadline:
-        alive = [pid for pid in descendants(root_pid) if os.path.exists(f'/proc/{pid}')]
+        alive = [pid for pid in descendants(root_pid) if pid != os.getpid() and os.path.exists(f'/proc/{pid}')]
         if not alive:
             return
         time.sleep(0.05)
@@ -150,7 +150,9 @@ def main(argv: list[str]) -> int:
             return
         shutting_down = True
         if child_pid > 1:
-            terminate_tree(child_pid)
+            # Orphaned grandchildren are reparented to this subreaper and
+            # are no longer reachable from child_pid.
+            terminate_tree(os.getpid())
 
     for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, stop_tree)
@@ -171,14 +173,20 @@ def main(argv: list[str]) -> int:
         os.close(ready_fd)
     close_inherited_parent_fds()
 
+    child_exit_code = None
     while True:
         try:
-            waited_pid, status = os.waitpid(child_pid, 0)
+            # Reap every adopted child while the session is alive. Waiting only
+            # for child_pid leaves exited grandchildren as zombies indefinitely.
+            waited_pid, status = os.waitpid(-1, 0)
             if waited_pid == child_pid:
-                return wait_status_to_exit_code(status)
+                child_exit_code = wait_status_to_exit_code(status)
+                stop_tree(signal.SIGTERM, None)
         except InterruptedError:
             continue
         except ChildProcessError:
+            if child_exit_code is not None:
+                return child_exit_code
             return 143 if shutting_down else 1
 
 

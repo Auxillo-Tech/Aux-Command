@@ -87,7 +87,7 @@ function expandIncludes(content, baseDir, visited = new Set(), depth = 0) {
         if (visited.has(key)) continue;
         visited.add(key);
         try {
-          output.push(expandIncludes(fs.readFileSync(file, 'utf8'), path.dirname(file), visited, depth + 1));
+          output.push(expandIncludes(fs.readFileSync(file, 'utf8'), baseDir, visited, depth + 1));
         } catch {
           // Unreadable include files are skipped, matching a permissive import.
         }

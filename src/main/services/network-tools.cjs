@@ -185,7 +185,8 @@ class NetworkToolService {
         }
         finish(error);
       });
-      child.once('exit', (code, signal) => {
+      // Pipes can still contain output after the process has exited.
+      child.once('close', (code, signal) => {
         if (entry.cancelled) finish(new Error(`${command} was cancelled`));
         else if (entry.timedOut) {
           // Long traceroutes and whois lookups routinely hit the timeout after

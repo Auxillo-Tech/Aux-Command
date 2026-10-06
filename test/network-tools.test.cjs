@@ -166,3 +166,31 @@ test('NetworkToolService sends a valid Wake-on-LAN magic packet', async (t) => {
     server.close();
   }
 });
+
+
+test('captures output that arrives after the command exits but before its pipes close', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-network-capture-'));
+  const originalPath = process.env.PATH;
+  fs.writeFileSync(path.join(directory, 'traceroute'), `#!/usr/bin/python3
+import os, time
+if os.fork() == 0:
+    time.sleep(0.1)
+    os.write(1, b'final stdout\\n')
+    os.write(2, b'final stderr\\n')
+os._exit(0)
+`, { mode: 0o700 });
+  process.env.PATH = directory;
+  try {
+    const { NetworkToolService } = require('../src/main/services/network-tools.cjs');
+    const result = await new NetworkToolService({ commandTimeout: 3000 }).traceroute('127.0.0.1');
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, 'final stdout\n');
+    assert.equal(result.stderr, 'final stderr\n');
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

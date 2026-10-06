@@ -133,3 +133,28 @@ test('migrates old stores without injecting vendor infrastructure or deleting cu
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test('SSH reimport matches the connection alias after renaming a profile', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-profile-reimport-'));
+  t.mock.method(os, 'homedir', () => directory);
+  fs.mkdirSync(path.join(directory, '.ssh'));
+  const config = path.join(directory, '.ssh/config');
+  try {
+    fs.writeFileSync(config, 'Host prod\n  HostName server.example\n  User deploy\n');
+    const store = new ProfileStore(path.join(directory, 'data'));
+    assert.equal(store.importSshConfig().added, 1);
+    const imported = store.list().find((p) => p.sshAlias === 'prod');
+    store.save({ ...imported, name: 'Production', group: 'Work', credentialId: 'saved-credential' });
+    assert.equal(store.importSshConfig().added, 0);
+    fs.writeFileSync(config, 'Host prod\n  HostName replacement.example\n  User deploy\nHost prod-admin\n  HostName replacement.example\n  User root\n');
+    assert.equal(store.importSshConfig().added, 1, 'distinct aliases must remain available');
+    const saved = store.get(imported.id);
+    assert.equal(saved.name, 'Production');
+    assert.equal(saved.group, 'Work');
+    assert.equal(saved.credentialId, 'saved-credential');
+    assert.equal(store.list().filter((p) => p.sshAlias === 'prod').length, 1);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

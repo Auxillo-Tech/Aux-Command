@@ -107,3 +107,22 @@ test('expands Include directives with globs, nesting, and cycle protection', () 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+
+test('nested relative Includes stay relative to the original SSH directory', () => {
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { expandIncludes } = require('../src/main/lib/ssh-config-parser.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-ssh-relative-'));
+  try {
+    fs.mkdirSync(path.join(directory, 'config.d'));
+    fs.writeFileSync(path.join(directory, 'config.d/entry'), 'Include shared.conf\n');
+    fs.writeFileSync(path.join(directory, 'shared.conf'), 'Host expected\n  HostName expected.example\n');
+    fs.writeFileSync(path.join(directory, 'config.d/shared.conf'), 'Host wrong\n  HostName wrong.example\n');
+    const profiles = parseSshConfig(expandIncludes('Include config.d/entry\n', directory));
+    assert.deepEqual(profiles.map((p) => p.name), ['expected']);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

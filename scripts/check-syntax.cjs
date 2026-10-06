@@ -34,6 +34,7 @@ if (failures) {
 process.stdout.write(`Syntax validated for ${files.length} JavaScript files.\n`);
 
 const pythonFiles = [
+  path.join(root, 'src/main/helpers/process_guard.py'),
   path.join(root, 'src/main/helpers/pty_bridge.py'),
   path.join(root, 'src/main/helpers/serial_bridge.py'),
   path.join(root, 'src/main/helpers/telnet_bridge.py')

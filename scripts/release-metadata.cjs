@@ -60,7 +60,7 @@ function renderLicenses(components) {
     '='.repeat(78),
     item.text,
     ''
-  ].join('\n')).join('\n')}`;
+  ].join('\n')).join('\n')}\n${fs.readFileSync(path.join(root, 'src/renderer/assets/fonts/LICENSE.txt'), 'utf8')}`;
 }
 
 function main() {

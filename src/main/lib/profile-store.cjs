@@ -131,9 +131,14 @@ class ProfileStore {
     const imported = readDefaultSshConfig();
     let added = 0;
     this.store.update((data) => {
-      const aliases = new Set(data.profiles.map((profile) => `${profile.protocol}:${profile.name}:${profile.host}`));
+      // Display names and resolved hosts can change without creating a new
+      // SSH connection. Keep imported aliases stable across repeated imports.
+      const identity = (profile) => profile.protocol === 'ssh' && profile.useSshConfig && profile.sshAlias
+        ? JSON.stringify(['ssh-alias', profile.sshAlias])
+        : JSON.stringify([profile.protocol, profile.name, profile.host]);
+      const aliases = new Set(data.profiles.map(identity));
       for (const profile of imported) {
-        const key = `${profile.protocol}:${profile.name}:${profile.host}`;
+        const key = identity(profile);
         if (!aliases.has(key)) {
           data.profiles.push(profile);
           aliases.add(key);

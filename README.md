@@ -313,6 +313,8 @@ npm run dist:x64 -- --publish never
 
 The Fedora build wrapper handles common local packaging gaps by downloading build helpers under the ignored `.cache/` directory instead of installing system packages automatically.
 
+On Debian 12, use Clang 16 or newer to compile the native SSH dependency against Electron 43 headers. With `clang-16` installed, run `CC=clang-16 CXX=clang++-16 npm run pack` for an unpacked test build, or pass the same compiler variables to `npm run dist:x64 -- --publish never`. Desktop smoke tests under Xvfb also require `libgtk-3-0`, `xauth`, and Python `websocket-client`.
+
 ---
 
 ## Verification status

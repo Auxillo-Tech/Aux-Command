@@ -11,11 +11,11 @@ const { TerminalService } = require('../src/main/services/terminal-service.cjs')
 const { SftpService } = require('../src/main/services/sftp-service.cjs');
 
 function commandExists(command) {
-  return spawnSync('bash', ['-lc', `command -v ${command}`], { encoding: 'utf8' }).status === 0;
+  return spawnSync('bash', ['-lc', `PATH="$PATH:/usr/sbin:/sbin" command -v ${command}`], { encoding: 'utf8' }).status === 0;
 }
 
 function commandPath(command) {
-  return spawnSync('bash', ['-lc', `command -v ${command}`], { encoding: 'utf8' }).stdout.trim() || command;
+  return spawnSync('bash', ['-lc', `PATH="$PATH:/usr/sbin:/sbin" command -v ${command}`], { encoding: 'utf8' }).stdout.trim() || command;
 }
 
 const hasSshFixtureTools = commandExists('sshd') && commandExists('ssh-keygen') && commandExists('ssh');

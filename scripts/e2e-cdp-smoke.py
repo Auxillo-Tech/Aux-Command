@@ -98,6 +98,17 @@ def main() -> int:
         cdp.call('Log.enable')
         cdp.call('Page.bringToFront')
 
+        cdp.eval("""
+          (async () => {
+            for (let i = 0; i < 200; i++) {
+              const shell = document.getElementById('app-shell');
+              if (shell?.getAttribute('aria-busy') === 'false') return true;
+              await new Promise(r => setTimeout(r, 50));
+            }
+            throw new Error('Renderer initialization did not finish');
+          })()
+        """, timeout=15)
+
         baseline = cdp.eval("""
           (async () => ({
             readyState: document.readyState,
@@ -123,6 +134,13 @@ def main() -> int:
           (async () => {
             const root = document.getElementById('tour-root');
             const present = Boolean(root);
+            const state = await window.auxCommand.app.getState();
+            if (!state.settings?.onboarding?.tourCompleted) {
+              for (let i = 0; i < 60 && root?.hidden; i++) {
+                await new Promise(r => setTimeout(r, 50));
+              }
+              if (!root || root.hidden) throw new Error('First-run tour did not appear');
+            }
             if (root && !root.hidden) {
               document.getElementById('tour-skip').click();
               await new Promise(r => setTimeout(r, 200));
@@ -246,7 +264,11 @@ def main() -> int:
             searchPanel?.querySelector('button[title="Close search"]')?.click();
 
             dispatchShortcut('KeyP', 'P');
-            await new Promise(r => setTimeout(r, 150));
+            // Opening the palette awaits an IPC response; wait for its rows,
+            // rather than assuming the remote VM will render within 150 ms.
+            for (let i = 0; i < 60 && !document.querySelector('.palette-row'); i++) {
+              await new Promise(r => setTimeout(r, 50));
+            }
             const paletteText = document.getElementById('modal-root').innerText;
             const paletteOpen = paletteText.includes('Command palette') && paletteText.includes('Duplicate session') && paletteText.includes('Grow tiled panes');
             closeTopModal();
@@ -283,6 +305,7 @@ def main() -> int:
               searchOpen,
               searchInToolbar,
               paletteOpen,
+              paletteText,
               duplicateWorked,
               reconnectWorked,
               paneBefore,
