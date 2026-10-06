@@ -33,7 +33,13 @@ test('transfer queue validates specs before enqueueing', () => {
   assert.throws(() => queue.enqueue({ profile, direction: 'download', localPath: '/tmp/a', remotePath: '' }), /remote path/u);
 });
 
-test('transfer queue passes the full profile and processes one entry at a time', async () => {
+test('transfer queue passes the full profile and processes one entry at a time', async (t) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'aux-queue-order-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'first'), 'test');
+  fs.writeFileSync(path.join(directory, 'second'), 'test');
   const calls = [];
   let releaseFirst;
   const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
@@ -46,8 +52,8 @@ test('transfer queue passes the full profile and processes one entry at a time',
     download: async () => assert.fail('download should not be called')
   };
   const queue = new TransferQueue(() => eventWindow(), service);
-  const first = queue.enqueue({ profile, direction: 'upload', localPath: '/tmp/first', remotePath: '/first' });
-  const second = queue.enqueue({ profile, direction: 'upload', localPath: '/tmp/second', remotePath: '/second' });
+  const first = queue.enqueue({ profile, direction: 'upload', localPath: path.join(directory, 'first'), remotePath: '/first' });
+  const second = queue.enqueue({ profile, direction: 'upload', localPath: path.join(directory, 'second'), remotePath: '/second' });
 
   assert.equal('profile' in first, false, 'IPC snapshots must not expose profile internals');
   assert.equal('abortController' in first, false, 'IPC snapshots must be structured-clone safe');

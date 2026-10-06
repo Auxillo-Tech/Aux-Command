@@ -1,206 +1,41 @@
-# Aux Command 0.2.2 - signed engineering release
+# Release validation status
 
-Validated: **2026-07-24T13:57:00Z**
-Scope: **Free/open-source Linux x86_64 engineering release with GPG-signed releases, GitHub repository, CI, release/update path, and public-facing documentation**
+Validated: **6 October 2026**, Linux x86_64.
 
-## Current verdict
+The published release used in the updater test is **v0.4.0**. Current fixes are on a development branch and packaged as an **unpublished 0.4.1 test candidate**. A candidate build does not publish a release or update existing installations.
 
-The backend, process-lifecycle, packaging, dependency, UI safety, and release-integrity foundation is qualified for live-protocol and GitHub-publication phases.
+## Confirmed fixes
 
-Aux Command is declared as AGPL-3.0-or-later free/open-source software with all features intended for the public build and no enterprise-only or paid feature walls. GitHub Releases are configured as the desktop distribution/update path for `Auxillo-Tech/Aux-Command`, the GitHub repository is populated, Linux CI passes on `main`, and releases are GPG-signed with the Aux Command Release Signing key (`SIGNING_KEY.asc`). Release verification requires `AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2`.
+- Process cleanup reaps adopted descendants and terminates guarded process trees.
+- SSH import refreshes effective OpenSSH settings, preserves personal profile settings, and recognizes consolidated aliases.
+- Proxied SSH reachability no longer reports a misleading direct TCP failure.
+- Electron asynchronous credential decryption returns the actual password string.
+- Linux packages declare missing Electron runtime libraries.
+- The updater verifies downloaded AppImage bytes against the GPG-signed manifest, rechecks them before installation, and prevents overlapping update operations. Unsolicited download events cannot authorize installation; authentication response sizes are bounded while streaming.
+- FTP replacement preserves the original through a backup and attempts rollback if replacement fails. If rollback fails, the error identifies the retained original file.
+- Partial FTP downloads have private permissions from creation. Resumed files cannot retain stale trailing bytes. Cancelled queued transfers do not start data transfer, and the inline editor stops at its byte limit.
+- Embedded RDP remembers server certificates and rejects changes instead of ignoring certificate validation.
 
-Live endpoint/hardware qualification remains incomplete for optional integrations such as Mosh and external RDP/VNC clients behind NAT or jump hosts.
+## Evidence
 
-## Distribution decision
+- `npm run check`: **272 passed, 0 failed, 0 skipped**.
+- Full `npm audit`: **0 reported vulnerabilities**.
+- Actual signed public-release check, AppImage download and installer replacement in an isolated directory using the real electron-updater implementation. Installation handoff is intercepted to avoid opening a normal desktop session; packaged launch is tested separately.
+- FTP and implicit FTPS: listing, upload/download, editing, rename/remove, reconnect, cancellation and TLS hostname rejection against disposable loopback servers.
+- Mosh startup command and actual data transfer through local, remote and SOCKS SSH tunnels against a disposable OpenSSH server.
+- RDP TLS connection through FreeRDP, virtual display and VNC bridge: client window, RFB handshake/framebuffer update, cleanup and changed-certificate rejection.
+- SSH/SFTP/SCP, Telnet and simulated serial flows in the automated suite.
+- Keyring unavailability and decryption failures preserve existing encrypted credentials; malformed JSON files are quarantined and failed persistence does not replace in-memory state.
+- Debian 12 and Fedora 44 installer upgrades preserve profile/vault fixture files and resolve required runtime libraries.
+- Real GNOME keyring upgrade from the published 0.4.0 app preserves encrypted credentials, profile settings and remembered SSH host keys.
+- Packaged AppImage desktop smoke covers renderer startup, local terminals, layout, command palette, reconnect, snippets, diagnostics and updates UI.
 
-Aux Command desktop binaries and update metadata should live on **GitHub Releases**, not on the Auxillo production server.
+## Remaining field qualification
 
-- GitHub owns versioned desktop release assets, release notes, checksums, and update metadata.
-- The Auxillo server does not need to host desktop installer/update files.
-- GitHub release/update configuration targets `Auxillo-Tech/Aux-Command`; update `package.json` `build.publish.owner` and `build.publish.repo` if the repository changes before tagging.
-- GitHub repository readiness is complete for public distribution: metadata, topics, issue templates, pull request template, Dependabot config, security policy, Linux CI, tag-triggered release workflow, signed release assets, and public homepage metadata are configured.
+Controlled fixtures do not establish universal interoperability. Still needed: Windows RDP/domain environments, representative NAT/jump-host networks, physical serial unplug/reconnect, real screen-reader use, and broader Wayland, high-DPI and multi-monitor environments. This is not a claim of production 1.0 certification.
 
-See `docs/GITHUB_RELEASES.md` for the release/update runbook.
+## Reproduction and publication
 
-## Toolchain
+See [VALIDATION.md](VALIDATION.md) for commands and [LIVE_QUALIFICATION.md](LIVE_QUALIFICATION.md) for field coverage. Test fixtures use temporary profiles, keys and loopback servers; personal infrastructure is not part of application defaults or installer contents.
 
-- Node.js: `v22.22.2`
-- npm: `10.9.7`
-- Python: `3.11.15`
-- Electron: `43.2.0`
-- electron-builder: `26.15.3`
-- electron-updater: `6.8.9`
-- Host: Linux x64
-
-## Verified foundation
-
-### Source and dependency gates
-
-- `npm run check`: **178/178 tests passed** (environment-dependent live-network tests skip cleanly where host tools are unavailable)
-- JavaScript syntax: 71 files passed
-- Python syntax: 5 files passed
-- Shell syntax: 5 files passed
-- `npm audit --omit=dev --audit-level=moderate`: zero vulnerabilities
-- `npm audit --audit-level=moderate`: zero vulnerabilities
-- `npm audit signatures`: 303 verified registry signatures and 41 verified attestations
-
-### Security and process lifecycle
-
-- Renderer uses context isolation and sandboxing; Node integration is disabled.
-- Main-window sender and main-frame validation protect privileged IPC.
-- Navigation, popup creation, Chromium permission requests, and permission checks are denied by default.
-- Hardware acceleration is disabled before Electron readiness.
-- Electron fuses verified from the packaged executable:
- Run as Node disabled
- cookie encryption enabled
- `NODE_OPTIONS` disabled
- Node CLI inspection disabled
- ASAR-only application loading enabled
- embedded ASAR integrity validation enabled
-- PTY and tunnel children launch through an exact-parent Linux `PR_SET_PDEATHSIG` guard with readiness synchronization.
-- The parent-death signal is `SIGKILL`, preventing bridge or OpenSSH handlers from suppressing abnormal-exit cleanup.
-- Normal user-requested terminal termination uses the graceful control path with timed force escalation.
-- Corrupt JSON stores are quarantined instead of silently discarded.
-- SFTP downloads are committed with mode `0600`.
-- Tunnel state becomes `running` only from OpenSSH readiness evidence, never elapsed time alone.
-
-### UI/functionality gates added in this phase
-
-- Local startup commands now execute before returning to an interactive login shell.
-- Mosh-visible SSH transport options now alter the generated Mosh `--ssh=` command instead of being inert.
-- GitHub release update service wired through `electron-updater`.
-- Packaged diagnostics modal exposes GitHub update status and manual check/download/install controls.
-- Session-toolbar controls now derive enabled/disabled state from active protocol and tab count.
-- SFTP ownership is tied to the active owning terminal tab to avoid stale cross-tab actions.
-- Credential-kind changes require replacement/removal instead of silently reinterpreting a stored secret.
-- SFTP busy state is request-token scoped to avoid stale request cleanup.
-- Tunnel startup feedback distinguishes `starting` from evidence-backed `running`.
-- Routine notifications use the persistent status bar instead of obscuring terminal content; actionable errors remain accessible and capped.
-- Compact UI, separate profile connect/edit actions, contextual control availability, and a durable initialization-retry surface are source-tested.
-- Per-profile terminal theme, font stack, font size, cursor style, cursor blink, and scrollback settings are validated and applied when terminal tabs open.
-- Quick Connect now includes Serial and routes `/dev/...` device paths through the bundled serial bridge.
-- Advanced per-profile OpenSSH known-hosts-file overrides allow isolated lab/fixture profiles without touching the operator's real `~/.ssh/known_hosts`.
-- Renderer branding and Linux package icons now use the supplied Auxillo gradient logo; packaged smoke verified `./assets/logo.png` is loaded from the AppImage.
-- Package metadata and `LICENSE` now declare AGPL-3.0-or-later free/open-source distribution rather than proprietary/private packaging.
-- Active terminal sessions now retain a bounded local transcript and expose an Export control so operators can review, copy, save, or print output after a session exits but before closing the tab.
-- Active terminal sessions expose an explicit Log/Stop log control that writes output to a user-selected local `.log`/`.txt` file with a warning that logs may contain secrets or customer data.
-- Active terminal sessions expose guarded Macro/Stop macro recording; captured operator input must be reviewed before it is saved as a replayable command snippet.
-- Global shortcuts now ignore editable fields, non-closeable SSH prompt focus excludes hidden close buttons, and the command palette exposes combobox/listbox ARIA state.
-- Top-level Updates toolbar action exposes the same GitHub release check/download/install path that diagnostics shows.
-- Graphical SFTP now supports inline UTF-8 remote text file viewing/editing with a 1 MB safety limit; live local OpenSSH fixture coverage verifies first save, readback, overwrite, and readback.
-- Graphical SFTP supports drag-and-drop local file upload through Electron `webUtils.getPathForFile` and a main-process absolute-path validation gate.
-- FTP and FTPS profiles now use the graphical file-browser flow through `basic-ftp`; plain FTP is guarded by an explicit insecure-transport warning before credentials or files are sent.
-- SSH profiles now expose explicit SCP fallback transfer mode for constrained legacy servers; live local OpenSSH fixture coverage verifies SCP upload/download and confirms SCP mode refuses directory browsing.
-- SFTP now clears stale directory selections and ignores late responses when switching profiles or paths, so transfers/actions cannot target the wrong SSH profile after a fast tab switch.
-- Workstation tiled/single layout and pane-size toolbar choices persist through a validated local settings store.
-- CDP smoke validation is state-independent for tiled-layout entry and treats screenshot capture as diagnostic-only after functional smoke has passed.
-
-### Packaged runtime
-
-Fresh AppImage with isolated configuration/cache passed:
-
-- preload API and initial-state checks, including `updates` API namespace
-- local interactive PTY command/output
-- tiled terminal layout
-- guarded broadcast confirmation and persistent warning
-- terminal search hosted in the contextual toolbar instead of over the terminal canvas
-- command palette
-- session duplication
-- replacement-first reconnect
-- pane resizing
-- snippet creation/execution
-- diagnostics modal with GitHub update state
-- top-level Updates modal with GitHub release update state
-- screenshot capture remains available as a diagnostic artifact when CDP/compositor timing allows it; failure to capture a screenshot after functional smoke passes is reported as `screenshotWarning`, not as an app failure
-
-Packaged accessibility/source assertions passed:
-
-- linked tab/tabpanel relationships
-- one roving terminal-tab focus target
-- programmatic input labels
-- modal background isolation
-- forward focus containment
-- focus restoration
-- no terminal-wide live region
-- SFTP busy-state semantics
-
-### Distribution qualification
-
-- Fedora RPM, Ubuntu `.deb`, and Fedora AppImage qualification were previously performed for the 0.1.0 artifact family.
-- Current local package build completed for AppImage, `.deb`, and `.rpm` with `--publish never`; Electron Builder generated `latest-linux.yml` for GitHub release discovery.
-- Source archives were generated and verified to exclude `node_modules`, `dist`, and `.cache`.
-- Production CycloneDX SBOM and runtime dependency licenses are generated before release manifest creation.
-- GitHub Actions workflows are present for CI build and tag/manual release publication.
-- Workflow YAML parse check passed for `.github/workflows/linux-build.yml` and `.github/workflows/release.yml`.
-- Latest GitHub Actions `Linux build` on `main` completed successfully for commit `a52e0fa` and produced the `aux-command-linux-x64` workflow artifact.
-- Public-facing GitHub documentation now includes professional README content, supported operating system/package guidance, and a dedicated `INSTALL.md`.
-
-## 0.3.0 local build
-
-The 0.3.0 codebase (embedded RDP, SSH config Include parsing, multi-hop
-ProxyJump, log highlighting, connection health, redesigned interface) builds
-cleanly into all three Linux package formats with `npm run dist:x64`:
-
-| Artifact | Size (bytes) |
-|---|---:|
-| `Aux-Command-0.3.0-x86_64.AppImage` | 136,153,733 |
-| `Aux-Command-0.3.0-amd64.deb` | 105,780,516 |
-| `Aux-Command-0.3.0-x86_64.rpm` | 91,604,597 |
-
-Structural validation: the AppImage is a valid type-2 image and boots to the
-real renderer (CDP-confirmed); the `.deb` control declares `aux-command 0.3.0
-amd64` with the correct runtime `Depends`; the `.rpm` header reports
-`aux-command 0.3.0 x86_64`, `AGPL-3.0-or-later`. SHA-256 digests for a given
-build are written to `dist/Aux-Command-0.3.0-SHA256SUMS.txt`. Canonical,
-GPG-signed release artifacts are produced by the GitHub Actions release
-workflow on tag; local build digests are not pinned here because they differ
-per build host.
-
-## Historical 0.1.0 artifacts from local build
-
-The frozen six-artifact set contained:
-
-- `Aux-Command-0.1.0-x86_64.AppImage`
-- `Aux-Command-0.1.0-amd64.deb`
-- `Aux-Command-0.1.0-x86_64.rpm`
-- `aux-command-0.1.0-sbom.cdx.json`
-- `aux-command-0.1.0-source.tar.gz`
-- `aux-command-0.1.0-source.zip`
-
-Exact byte sizes and SHA-256 digests are canonical in `dist/release-manifest.json` and `dist/SHA256SUMS`. They are intentionally not duplicated here because this document is included in the source archives; embedding source-archive hashes here would create a circular, immediately stale release record.
-
-`npm run release:verify -- --allow-unsigned` and `(cd dist && sha256sum -c SHA256SUMS)` passed for the frozen six-artifact set.
-
-## Remaining release gates
-
-### External trust/provenance blockers
-
-1. **Production signing identity:** releases are GPG-signed with the Aux Command Release Signing key (`SIGNING_KEY.asc`, fingerprint `FAC028574B9C6875D10DA4DC6443E86108ABD2A2`). Verify with `npm run release:verify` and `AUX_COMMAND_GPG_FINGERPRINT` set to that fingerprint.
-2. **GitHub platform extras:** branch protection is available on the public repository. GitHub artifact attestations remain optional and plan-dependent; Auxillo GPG signatures are the primary trust path.
-3. **Published updater validation:** update checks target published GitHub Releases for `Auxillo-Tech/Aux-Command` (current line v0.2.3).
-
-### Product/live qualification still required
-
-Representative live qualification is still needed for:
-
-- real remote SSH/SFTP/SCP endpoints beyond local fixtures
-- OpenSSH local, remote, and SOCKS forwarding against representative hosts
-- Mosh
-- RDP
-- VNC
-- X11 forwarding
-- physical serial hardware
-- assistive-technology testing with a real screen reader
-- broader Wayland/X11, desktop-environment, high-DPI, and multi-monitor coverage
-
-See `docs/LIVE_QUALIFICATION.md` for the live evidence checklist.
-
-## Release classification
-
-- **Foundation engineering status:** qualified for GitHub repo setup and live-protocol qualification
-- **Internal x64 engineering release:** yes
-- **GitHub release/update path wired in code:** yes
-- **Draft GitHub release:** yes
-- **Published GitHub release:** no
-- **Signed/authenticated public release:** no
-- **Unrestricted production 1.0:** no
+Before publication, use the existing [GitHub release runbook](GITHUB_RELEASES.md), set the intended release version, build and sign the final artifacts, and verify them with the pinned release signing fingerprint. The development candidates are not signed public releases.

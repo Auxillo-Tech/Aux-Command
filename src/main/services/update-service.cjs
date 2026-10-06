@@ -11,6 +11,23 @@ function sha256(data) {
   return createHash('sha256').update(data).digest('hex');
 }
 
+async function verifyDownloadedArtifact(filename, manifest) {
+  const stat = await fs.promises.stat(filename);
+  if (!stat.isFile()) throw new Error('Downloaded update is not a regular file');
+  const candidates = (manifest?.artifacts || []).filter((item) =>
+    item.kind === 'appimage' && item.size === stat.size && /^[0-9a-f]{64}$/u.test(item.sha256 || ''));
+  if (!candidates.length) throw new Error('Downloaded installer is not included in the signed release manifest');
+  const hash = createHash('sha256');
+  for await (const chunk of fs.createReadStream(filename)) hash.update(chunk);
+  const digest = hash.digest('hex');
+  const after = await fs.promises.stat(filename);
+  if (stat.ino !== after.ino || stat.size !== after.size || stat.mtimeMs !== after.mtimeMs ||
+      !candidates.some((item) => item.sha256 === digest)) {
+    throw new Error('Downloaded installer does not match the signed release manifest');
+  }
+  return filename;
+}
+
 async function verifyDetachedManifest(manifestBytes, signatureText, publicKeyText, expectedFingerprint = RELEASE_SIGNING_FINGERPRINT) {
   const openpgp = await import('openpgp');
   const publicKey = await openpgp.readKey({ armoredKey: publicKeyText });
@@ -55,6 +72,8 @@ class UpdateService {
     this.repository = options.repository || RELEASE_REPOSITORY;
     this.publicKeyPath = options.publicKeyPath || path.join(app.getAppPath(), 'SIGNING_KEY.asc');
     this.verifiedRelease = null;
+    this.downloadedFile = null;
+    this.operation = null;
     this.status = {
       supported: Boolean(app.isPackaged),
       checking: false,
@@ -95,27 +114,34 @@ class UpdateService {
       authenticated: Boolean(this.verifiedRelease),
       error: null
     }));
-    this.updater.on('update-downloaded', (info) => this.#merge({
-      checking: false,
-      updateAvailable: true,
-      downloaded: true,
-      latestVersion: info?.version || this.status.latestVersion,
-      authenticated: true,
-      error: null
-    }));
-    this.updater.on('error', (error) => this.#merge({ checking: false, error: error?.message || String(error) }));
+    // An updater event alone cannot authorize installation. download() verifies
+    // the actual installer bytes against the independently signed manifest.
+    this.updater.on('error', (error) => this.#merge({ checking: false, downloaded: false, error: error?.message || String(error) }));
   }
 
   getStatus() {
     return { ...this.status };
   }
 
-  async check() {
+  async #exclusive(name, task) {
+    if (this.operation) throw new Error(`An update ${this.operation} is already in progress.`);
+    this.operation = name;
+    try { return await task(); }
+    finally { this.operation = null; }
+  }
+
+  check() { return this.#exclusive('check', () => this.#check()); }
+  download() { return this.#exclusive('download', () => this.#download()); }
+  quitAndInstall() { return this.#exclusive('installation', () => this.#install()); }
+
+  async #check() {
     if (!this.app.isPackaged) {
       this.#merge({ supported: false, checking: false, authenticated: false, error: 'Update checks are only enabled in packaged releases.' });
       return this.getStatus();
     }
-    this.#merge({ supported: true, checking: true, authenticated: false, lastCheckedAt: new Date().toISOString(), error: null });
+    this.verifiedRelease = null;
+    this.downloadedFile = null;
+    this.#merge({ supported: true, checking: true, updateAvailable: false, downloaded: false, authenticated: false, lastCheckedAt: new Date().toISOString(), error: null });
     try {
       this.verifiedRelease = await this.#authenticateLatestRelease();
       this.#merge({ authenticated: true, latestVersion: this.verifiedRelease.version });
@@ -147,18 +173,35 @@ class UpdateService {
     }
   }
 
-  async download() {
+  async #download() {
     if (!this.app.isPackaged) throw new Error('Update downloads are only enabled in packaged releases.');
     if (!this.status.updateAvailable) throw new Error('No update is currently available.');
     if (!this.status.authenticated || this.verifiedRelease?.version !== this.status.latestVersion) {
       throw new Error('The available update has not passed signed release authentication.');
     }
-    await this.updater.downloadUpdate();
-    return this.getStatus();
+    this.downloadedFile = null;
+    this.#merge({ downloaded: false, error: null });
+    try {
+      const files = await this.updater.downloadUpdate();
+      if (!Array.isArray(files) || files.length !== 1) throw new Error('Updater did not return one downloaded installer');
+      this.downloadedFile = await verifyDownloadedArtifact(files[0], this.verifiedRelease.manifest);
+      this.#merge({ downloaded: true, error: null });
+      return this.getStatus();
+    } catch (error) {
+      this.#merge({ downloaded: false, error: error?.message || String(error) });
+      throw error;
+    }
   }
 
-  quitAndInstall() {
+  async #install() {
     if (!this.status.downloaded || !this.status.authenticated) throw new Error('No authenticated downloaded update is ready to install.');
+    try {
+      await verifyDownloadedArtifact(this.downloadedFile, this.verifiedRelease?.manifest);
+    } catch (error) {
+      this.downloadedFile = null;
+      this.#merge({ downloaded: false, error: error?.message || String(error) });
+      throw error;
+    }
     this.updater.quitAndInstall(false, true);
     return true;
   }
@@ -172,9 +215,14 @@ class UpdateService {
     if (!response.ok) throw new Error(`Update authentication request failed with HTTP ${response.status}`);
     const declared = Number(response.headers.get('content-length') || 0);
     if (declared > maximumBytes) throw new Error('Update authentication response is too large');
-    const data = Buffer.from(await response.arrayBuffer());
-    if (data.length > maximumBytes) throw new Error('Update authentication response is too large');
-    return data;
+    const chunks = [];
+    let length = 0;
+    for await (const chunk of response.body || []) {
+      length += chunk.length;
+      if (length > maximumBytes) throw new Error('Update authentication response is too large');
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks, length);
   }
 
   async #authenticateLatestRelease() {
@@ -212,5 +260,6 @@ module.exports = {
   RELEASE_SIGNING_FINGERPRINT,
   sha256,
   validateReleaseMetadata,
-  verifyDetachedManifest
+  verifyDetachedManifest,
+  verifyDownloadedArtifact
 };

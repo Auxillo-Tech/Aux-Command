@@ -320,18 +320,9 @@ On Debian 12, use Clang 16 or newer to compile the native SSH dependency against
 
 ## Verification status
 
-Current source validation passes:
+Validation on 6 October 2026: **272 tests passed, zero failed or skipped**; the full dependency audit reported zero vulnerabilities. Controlled local tests also passed for FTP/implicit FTPS, Mosh, local/remote/SOCKS tunnels, and embedded RDP/VNC, including changed-certificate rejection.
 
-```text
-Syntax validated for 71 JavaScript files.
-Syntax validated for 5 Python files.
-Syntax validated for 5 shell scripts.
-178 tests passed, 0 failed. A handful of live-network tests skip cleanly on hosts without ping/dig/traceroute/whois or loopback UDP.
-```
-
-Latest GitHub Actions `Linux build` on `main` completed successfully and produced the `aux-command-linux-x64` workflow artifact.
-
-Current public release line: **v0.3.0** on GitHub Releases (AppImage, `.deb`, `.rpm`, source archives, SBOM, `SHA256SUMS` + GPG signatures, `SIGNING_KEY.asc`).
+The live updater authenticated the published **v0.4.0** release, downloaded its AppImage, verified the installer against the signed manifest, and installed it into an isolated temporary location. The current source fixes are prepared as an **unpublished 0.4.1 candidate**, not a published release. Debian/RPM upgrades and encrypted credential preservation were tested separately.
 
 Still open for broader product qualification:
 

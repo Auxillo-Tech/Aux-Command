@@ -35,3 +35,25 @@ npm run dist:x64 -- --publish never
 `dist:x64` wraps Electron Builder with local compatibility handling for build-host gaps seen on current Fedora: missing `libcrypt.so.1` for Electron Builder's bundled `fpm`, and missing `rpmbuild` for RPM creation. The wrapper downloads/extracts only the required Fedora build packages under `.cache/` when needed; it does not install system packages.
 
 The GitHub Actions workflow at `.github/workflows/linux-build.yml` performs validation and creates x86_64 AppImage, Debian and RPM artifacts without publishing them from normal branch CI.
+
+## Controlled protocol and updater qualification
+
+These explicit integration commands are separate from `npm run check`. They create temporary profiles, keys and loopback servers. Run them in a development environment with the named tools installed.
+
+```bash
+# OpenSSH server/client, mosh client/server; non-root test user
+node scripts/test-mosh-tunnels.cjs
+
+# Xvfb, xauth, x11vnc, xwininfo, xfreerdp and freerdp-shadow-cli
+xvfb-run -a node scripts/test-rdp-vnc.cjs
+
+# A Python virtual environment containing pyftpdlib and pyOpenSSL; OpenSSL CLI
+AUX_FTP_TEST_PYTHON=/path/to/test-venv/bin/python node scripts/test-ftp.cjs
+
+# Network access to public GitHub Releases; Electron runtime dependencies
+xvfb-run -a node_modules/electron/dist/electron scripts/test-live-updater.cjs
+```
+
+The updater test uses a simulated old application version and the real public release/signature/download services. It replaces only a disposable AppImage path, intercepts the automatic desktop launch, and prints the resulting path for inspection. It does not publish anything or replace your installed application. The temporary directory is intentionally retained for inspection; remove the printed test directory when finished.
+
+RDP qualification includes trust-on-first-use persistence and rejection after the test trust record is changed. The fixture uses a loopback TLS RDP server, not a Windows domain server. FTP qualification includes implicit FTPS with a temporary trusted certificate and rejection of a hostname mismatch. These fixture certificates and keys are never packaged.

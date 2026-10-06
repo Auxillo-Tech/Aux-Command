@@ -8,10 +8,14 @@ This checklist tracks the gap between automated local fixture coverage and produ
 - Local sshd fixture for SSH terminal and graphical SFTP flows.
 - Loopback TCP fixture for bundled Telnet bridge.
 - Socat PTY fixture for bundled serial bridge.
-- OpenSSH argument construction for local, remote, and dynamic tunnels.
-- Mosh command construction.
-- External RDP/VNC launcher argument construction.
+- Actual loopback data transfer through OpenSSH local, remote and dynamic SOCKS tunnels.
+- Actual Mosh connection and startup command against a disposable OpenSSH/Mosh server.
+- Embedded RDP TLS connection, virtual desktop/VNC framebuffer, cleanup and changed-certificate rejection. External launcher argument construction is also covered.
+- FTP and implicit FTPS round trips, reconnect, cancellation and hostname verification.
+- Real signed GitHub updater check/download and isolated AppImage installation.
 - Packaged AppImage CDP smoke for local terminal, snippets, tiled layout, broadcast input, command palette, reconnect, and diagnostics. Screenshot capture is diagnostic-only because compositor/CDP timing can hang after the functional smoke has already passed.
+
+These controlled local checks were run on 6 October 2026. Reproduction commands are in [VALIDATION.md](VALIDATION.md). The field checklist below refers to representative external environments, not these loopback fixtures.
 
 ## Still required before public production claims
 

@@ -80,3 +80,19 @@ test('unwraps Electron asynchronous decryption when reopening existing encrypted
     await assert.rejects(reopened.get('credential'), /decrypt/i);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('keyring unavailability and decryption failure preserve existing encrypted credentials', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-vault-recovery-'));
+  try {
+    const storage = encryptedStorage();
+    await new VaultService(directory, storage).set('credential', 'keep-this-secret', true);
+    const filename = path.join(directory, 'vault.json');
+    const before = fs.readFileSync(filename);
+    const unavailable = new VaultService(directory, { ...storage, isEncryptionAvailable: () => false });
+    await assert.rejects(() => unavailable.get('credential'), /unavailable/);
+    const failed = new VaultService(directory, { ...storage, decryptStringAsync: async () => { throw new Error('Keyring locked'); } });
+    await assert.rejects(() => failed.get('credential'), /locked/);
+    assert.deepEqual(fs.readFileSync(filename), before);
+    assert.equal(await new VaultService(directory, storage).get('credential'), 'keep-this-secret');
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});

@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const ftp = require('basic-ftp');
+const { Writable } = require('node:stream');
 const { normalizeProfile, normalizeRemotePath } = require('../lib/validation.cjs');
 const { modeToString } = require('./sftp-service.cjs');
 
@@ -21,6 +22,28 @@ function ftpEntryMode(entry) {
     ? (((Number(permissions.user) || 0) << 6) | ((Number(permissions.group) || 0) << 3) | (Number(permissions.world) || 0))
     : Number(permissions || 0);
   return bits | (entry?.isDirectory ? 0o040000 : 0);
+}
+
+async function replaceFtpRemoteFile(client, partialPath, targetPath) {
+  try {
+    await client.rename(partialPath, targetPath);
+  } catch (initialError) {
+    // Some servers cannot overwrite with RNTO. Preserve the old file until
+    // replacement succeeds; FTP 550 alone does not mean the target is absent.
+    const backupPath = `${targetPath}.aux-backup-${randomUUID()}`;
+    try { await client.rename(targetPath, backupPath); }
+    catch { throw initialError; }
+    try {
+      await client.rename(partialPath, targetPath);
+    } catch (replacementError) {
+      try { await client.rename(backupPath, targetPath); }
+      catch (rollbackError) {
+        throw new AggregateError([replacementError, rollbackError], `Remote replacement failed. Original file is preserved at ${backupPath}`);
+      }
+      throw replacementError;
+    }
+    try { await client.remove(backupPath); } catch { /* retain backup if cleanup fails */ }
+  }
 }
 
 class FtpService {
@@ -50,7 +73,7 @@ class FtpService {
     };
     holder.client.ftp.verbose = false;
     holder.promise = this.#open(holder).then(() => holder).catch((error) => {
-      this.connections.delete(profile.id);
+      if (this.connections.get(profile.id) === holder) this.connections.delete(profile.id);
       try { holder.client.close(); } catch { /* already closed */ }
       throw error;
     });
@@ -147,16 +170,18 @@ class FtpService {
   async readText(profileInput, remotePath, limit = 1_000_000) {
     return this.#withConnection(profileInput, async (connection) => {
       const source = normalizeRemotePath(remotePath);
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-ftp-edit-'));
-      const localPath = path.join(tempDir, 'remote-edit');
-      try {
-        await connection.client.downloadTo(localPath, source);
-        const size = fs.statSync(localPath).size;
-        if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
-        return fs.readFileSync(localPath, 'utf8');
-      } finally {
-        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
-      }
+      const chunks = [];
+      let size = 0;
+      const sink = new Writable({
+        write(chunk, encoding, callback) {
+          size += chunk.length;
+          if (size > limit) return callback(new Error(`Remote file is too large for inline editing (limit ${limit} bytes)`));
+          chunks.push(Buffer.from(chunk));
+          callback();
+        }
+      });
+      await connection.client.downloadTo(sink, source);
+      return Buffer.concat(chunks, size).toString('utf8');
     });
   }
 
@@ -172,12 +197,7 @@ class FtpService {
       try {
         fs.writeFileSync(localPath, text, { mode: 0o600 });
         await connection.client.uploadFrom(localPath, partialPath);
-        try {
-          await connection.client.rename(partialPath, target);
-        } catch {
-          try { await connection.client.remove(target); } catch { /* target may not exist */ }
-          await connection.client.rename(partialPath, target);
-        }
+        await replaceFtpRemoteFile(connection.client, partialPath, target);
       } catch (error) {
         try { await connection.client.remove(partialPath); } catch { /* best effort cleanup */ }
         throw error;
@@ -194,6 +214,7 @@ class FtpService {
   }
 
   async #uploadOnConnection(profile, connection, localPath, remotePath, options = {}) {
+    options.signal?.throwIfAborted();
     if (!path.isAbsolute(localPath)) throw new Error('Local upload path must be absolute');
     const target = normalizeRemotePath(remotePath);
     const stat = fs.statSync(localPath);
@@ -204,18 +225,14 @@ class FtpService {
       try { offset = Math.min(stat.size, Number(await connection.client.size(partialPath))); } catch { offset = 0; }
     }
     const abort = () => connection.client.close();
+    options.signal?.throwIfAborted();
     options.signal?.addEventListener('abort', abort, { once: true });
     connection.client.trackProgress((info) => options.onProgress?.(offset + info.bytesOverall, stat.size));
     options.onProgress?.(offset, stat.size);
     try {
       if (offset > 0) await connection.client.appendFrom(localPath, partialPath, { localStart: offset });
       else await connection.client.uploadFrom(localPath, partialPath);
-      try {
-        await connection.client.rename(partialPath, target);
-      } catch {
-        try { await connection.client.remove(target); } catch { /* target may not exist */ }
-        await connection.client.rename(partialPath, target);
-      }
+      await replaceFtpRemoteFile(connection.client, partialPath, target);
     } catch (error) {
       if (options.signal?.aborted) {
         this.disconnect(profile.id);
@@ -235,6 +252,7 @@ class FtpService {
   }
 
   async #downloadOnConnection(profile, connection, remotePath, localPath, options = {}) {
+    options.signal?.throwIfAborted();
     if (!path.isAbsolute(localPath)) throw new Error('Local download path must be absolute');
     const source = normalizeRemotePath(remotePath);
     const partialPath = `${localPath}.aux-command-${options.transferId || randomUUID()}.part`;
@@ -243,10 +261,16 @@ class FtpService {
       ? Math.min(total, fs.statSync(partialPath).size)
       : 0;
     const abort = () => connection.client.close();
+    options.signal?.throwIfAborted();
     options.signal?.addEventListener('abort', abort, { once: true });
     connection.client.trackProgress((info) => options.onProgress?.(offset + info.bytesOverall, total));
     options.onProgress?.(offset, total);
     try {
+      // Protect partially downloaded data from the moment the file is created,
+      // and truncate stale trailing bytes when resuming a shortened remote file.
+      const fd = fs.openSync(partialPath, fs.constants.O_CREAT | fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW, 0o600);
+      try { fs.fchmodSync(fd, 0o600); fs.ftruncateSync(fd, offset); }
+      finally { fs.closeSync(fd); }
       await connection.client.downloadTo(partialPath, source, offset);
       fs.chmodSync(partialPath, 0o600);
       fs.renameSync(partialPath, localPath);
@@ -294,4 +318,4 @@ class FtpService {
   }
 }
 
-module.exports = { FtpService };
+module.exports = { FtpService, replaceFtpRemoteFile };

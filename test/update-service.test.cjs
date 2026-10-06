@@ -80,3 +80,65 @@ test('UpdateService checks electron-updater only after authenticating the publis
   assert.equal(status.latestVersion, '9.9.9');
   assert.equal(status.error, null);
 });
+
+const os = require('node:os');
+const { sha256, verifyDownloadedArtifact } = require('../src/main/services/update-service.cjs');
+function downloadFixture(t) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-updater-test-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filename = path.join(directory, 'candidate.AppImage');
+  const bytes = Buffer.from('authenticated installer'); fs.writeFileSync(filename, bytes);
+  const manifest = { artifacts: [{ name: 'candidate.AppImage', kind: 'appimage', size: bytes.length, sha256: sha256(bytes) }] };
+  const updater = new EventEmitter();
+  updater.downloadUpdate = async () => { updater.emit('update-downloaded', { version: '9.9.9' }); return [filename]; };
+  let installs = 0;
+  updater.quitAndInstall = () => { installs++; };
+  const app = { isPackaged: true, getVersion: () => '1.0.0', getAppPath: () => path.join(__dirname, '..') };
+  const service = new UpdateService(app, () => null, { updater });
+  service.verifiedRelease = { version: '9.9.9', manifest };
+  Object.assign(service.status, { authenticated: true, updateAvailable: true, latestVersion: '9.9.9' });
+  return { filename, manifest, updater, service, installs: () => installs };
+}
+
+test('installer verification rejects same-size tampering and unsigned artifacts', async (t) => {
+  const f = downloadFixture(t);
+  await verifyDownloadedArtifact(f.filename, f.manifest);
+  fs.writeFileSync(f.filename, 'tampered installer data');
+  assert.equal(fs.statSync(f.filename).size, f.manifest.artifacts[0].size);
+  await assert.rejects(() => verifyDownloadedArtifact(f.filename, f.manifest), /does not match/);
+  await assert.rejects(() => verifyDownloadedArtifact(f.filename, { artifacts: [] }), /not included/);
+});
+
+test('download event cannot bypass authentication and installation rechecks bytes', async (t) => {
+  const f = downloadFixture(t);
+  f.updater.emit('update-downloaded', { version: '9.9.9' });
+  assert.equal(f.service.getStatus().downloaded, false);
+  await assert.rejects(() => f.service.quitAndInstall(), /No authenticated/);
+  await f.service.download();
+  assert.equal(f.service.getStatus().downloaded, true);
+  fs.writeFileSync(f.filename, 'tampered installer data');
+  await assert.rejects(() => f.service.quitAndInstall(), /does not match/);
+  assert.equal(f.installs(), 0);
+  assert.equal(f.service.getStatus().downloaded, false);
+});
+
+test('authenticated installer completes download and installation handoff', async (t) => {
+  const f = downloadFixture(t);
+  await f.service.download();
+  assert.equal(await f.service.quitAndInstall(), true);
+  assert.equal(f.installs(), 1);
+});
+
+test('updater prevents overlapping checks and downloads and recovers from interrupted downloads', async (t) => {
+  const f = downloadFixture(t);
+  let rejectDownload;
+  f.updater.downloadUpdate = () => new Promise((resolve, reject) => { rejectDownload = reject; });
+  const download = f.service.download();
+  await assert.rejects(() => f.service.check(), /already in progress/);
+  rejectDownload(new Error('Connection interrupted'));
+  await assert.rejects(() => download, /interrupted/);
+  assert.equal(f.service.getStatus().downloaded, false);
+  f.updater.downloadUpdate = async () => [f.filename];
+  await f.service.download();
+  assert.equal(f.service.getStatus().downloaded, true);
+});
