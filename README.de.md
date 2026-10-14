@@ -4,51 +4,61 @@
 
 # Aux Command
 
-**Aux Command** ist Auxillos kostenlose, quelloffene, Linux-native Fernarbeitsstation: eine sichere Desktop-Konsole für Betreiber, die SSH-Terminals, SFTP, Tunnel, Remote-Desktop-Starter, Mosh, Telnet, serielle Konsolen, lokale Shells, Profile und betriebsreife operative Werkzeuge in einer einzigen Anwendung benötigen.
+**Aux Command** ist Auxillos kostenlose, quelloffene und Linux-native Workstation für den Remote-Betrieb: eine einzige sichere Desktop-Anwendung für SSH-Terminals, SFTP, FTP/FTPS, SSH-Tunnel, RDP- und VNC-Remote-Desktops, Mosh, Telnet, serielle Konsolen und lokale Shells.
 
-Entwickelt für technische Betreiber, Infrastrukturteams und Sicherheitsingenieure, die schnell auf lokalen und entfernten Systemen arbeiten müssen, ohne ihre Arbeit über viele unkoordinierte Werkzeuge zu verteilen.
+Sie richtet sich an technische Betreiber, Infrastrukturteams und Sicherheitsingenieure, die mit vielen lokalen und entfernten Systemen arbeiten und statt vieler einzelner Werkzeuge einen einheitlichen Arbeitsbereich wollen.
+
+> Aktuelle Version: **0.5.0** für Linux x86_64. Releases sind mit GPG signiert.
 
 ## Hauptfunktionen
 
-- **Terminal-Arbeitsbereich** - Registerkartenbasierter PTY-gestützter Terminal mit xterm.js, lokale Shell-Sitzungen, anpassbare Designs, geteilte Layouts, Befehlspalette, Makroaufzeichnung und gesendete Eingabe.
-- **SSH-Operationen** - Native OpenSSH-Sitzungen, SSH-Agent-Unterstützung, `~/.ssh/config`-Import, Identity-Dateien, ProxyJump, Kompression, Keepalive, X11-Weiterleitung und SCP-Fallback.
-- **SFTP** - Grafischer SFTP-Browser mit Host-Key-Fingerprint-Bestätigung, Upload/Download, Inline-Textbearbeitung und Ordnerverwaltung.
-- **SSH-Tunnel** - Lokale, Remote- und dynamische SOCKS-Weiterleitungen mit evidenzbasierter Bereitschaftserkennung.
-- **Protokoll-Starter und Brücken** - Mosh-, RDP- (FreeRDP), VNC- (TigerVNC), Telnet- und serielle Brücken sowie ein PTY-Helfer.
-- **FTP / FTPS** - Datei-Browser-Profile mit verschlüsseltem TLS-Transport (FTPS) und Warnung bei unverschlüsselten FTP-Verbindungen.
-- **Veröffentlichung und Diagnose** - GitHub-Releases-Update-Pfad, AppImage-, .deb- und .rpm-Pakete, SBOM-Generierung und SHA-256-Prüfsummenverifikation.
-- **Terminal-Assistent** - Passive Betriebssystem-Erkennung je Sitzung, Inline-Befehlsvorschläge (Ctrl+Leertaste), „Meinten Sie“-Korrekturen und ein Schutzdialog vor destruktiven Befehlen — alles einzeln abschaltbar.
-- **Produktivität** - Sitzungsübergreifende Verlaufssuche, ein Befehl auf mehreren Sitzungen mit gesammelter Ausgabe, Sitzungswiedergabe mit echter Zeitachse und Live-Systemwerte in der Statusleiste.
-- **Optionale KI-Hilfe** - Standardmäßig aus; eigener OpenAI-kompatibler Endpunkt (z. B. llama.cpp oder Ollama). Antworten werden nur eingefügt, nie ausgeführt.
-- **Oberfläche auf Deutsch** - Die Arbeitsoberfläche ist in 9 Sprachen direkt über die Statusleiste umschaltbar.
+- **Terminal-Arbeitsbereich** – Tabs, die du per Drag-and-drop beliebig anordnen und umbenennen kannst (Doppelklick oder F2), eine eigene Farbe pro Verbindung (zum Beispiel Rot für Produktion), Einzel- oder Kachelansicht, abtrennbare Terminalfenster, Terminal-Zoom (Ctrl+= / Ctrl+- / Ctrl+0), 14 Terminal-Designs, Suche, Makros und Broadcast-Eingabe.
+- **Kopieren und Einfügen wie in einem Linux-Terminal** – Markieren kopiert, Mittelklick fügt ein, Rechtsklick öffnet ein Menü (oder kopiert und fügt ein wie in PuTTY), dazu Ctrl+Shift+C / Ctrl+Shift+V und Ctrl+Insert / Shift+Insert. Ctrl+Klick öffnet Links.
+- **SSH** – Native OpenSSH-Sitzungen, SSH-Agent, Import von `~/.ssh/config`, Identitätsdateien, ProxyJump, Kompression, Keepalive und X11-Weiterleitung.
+- **SFTP und FTP/FTPS** – Zweispaltiger Dateimanager mit Übertragungen, die du vor dem Start prüfst, Ordnerübertragungen, Vergleichen und Synchronisieren, Inline-Textbearbeitung und einer Übertragungswarteschlange. SFTP berücksichtigt Schlüssel, die in der OpenSSH-Datei `known_hosts` bereits als vertrauenswürdig hinterlegt sind.
+- **SSH-Tunnel** – Lokale, entfernte und dynamische (SOCKS) Weiterleitungen, die erst dann als bereit gemeldet werden, wenn sie tatsächlich funktionieren.
+- **Remote-Desktops** – Eingebettete RDP- und VNC-Tabs, externe FreeRDP-/TigerVNC-Clients sowie RDP/VNC über ein SSH-Gateway.
+- **Arbeitsbereiche** – Benannte gespeicherte Arbeitsbereiche, Sitzungswiederherstellung, Verbindungsgruppen, Favoriten, Sicherungen der Arbeitsbereiche und lokale Wiederherstellungspunkte.
+- **Terminal-Assistent** – Betriebssystemerkennung pro Sitzung, Inline-Befehlsvorschläge (Ctrl+Space), „Meintest du …?“-Korrekturen und eine Sicherheitsabfrage vor gefährlichen Befehlen; jede dieser Funktionen lässt sich abschalten. Was an einer Passwortabfrage eingegeben wird, wird nie angezeigt, vorgeschlagen oder gespeichert.
+- **Produktivität** – Sitzungsübergreifende Verlaufssuche, ein Befehl auf vielen Sitzungen mit gesammelter Ausgabe, Sitzungswiedergabe, Live-Hoststatistiken und Netzwerkwerkzeuge.
+- **Optionale KI-Hilfe** – Standardmäßig deaktiviert; nutzt deinen eigenen OpenAI-kompatiblen Endpunkt (zum Beispiel llama.cpp oder Ollama). Antworten werden nur eingefügt, nie ausgeführt.
+- **Oberfläche auf Deutsch** – Die Oberfläche ist in 9 Sprachen verfügbar und lässt sich über die Statusleiste umschalten.
 
 ## Schnellinstallation
 
 ```bash
 # AppImage (portabel)
-chmod +x Aux-Command-0.1.0-x86_64.AppImage
-./Aux-Command-0.1.0-x86_64.AppImage
+chmod +x Aux-Command-0.5.0-x86_64.AppImage
+./Aux-Command-0.5.0-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Aux-Command-0.1.0-amd64.deb
+sudo apt install ./Aux-Command-0.5.0-amd64.deb
 aux-command
 
 # Fedora / RHEL / Rocky / AlmaLinux
-sudo dnf install ./Aux-Command-0.1.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
+aux-command
+
+# openSUSE
+sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
 aux-command
 ```
 
+Mosh, RDP (FreeRDP) und VNC (TigerVNC) verwenden die Clients der jeweiligen Distribution; `./scripts/install-runtime-tools.sh` installiert sie. Details findest du in [INSTALL.md](INSTALL.md).
+
 ## Sicherheit
 
-Aux Command setzt auf explizite Sicherheitsgrenzen statt auf unsichtbare Bequemlichkeit. Der Electron-Renderer-Sandbox, `contextIsolation` und die standardmäßige Verweigerung von Chromium-Berechtigungen sind aktiviert. Fremde Navigation und Popups werden standardmäßig blockiert. Bevorzugte IPC-Validierung, direkte Prozesserzeugung mit Argument-Arrays (keine Shell-Interpolation) und ein Linux-Death-Signal-Wächter für verwaltete Hilfsprozesse gewährleisten eine sichere Betriebsumgebung.
+Aux Command setzt auf klare Vertrauensgrenzen statt auf unsichtbaren Komfort. Der Electron-Renderer läuft in einer Sandbox mit `contextIsolation`, Chromium-Berechtigungen werden standardmäßig verweigert, und externe Navigation sowie Pop-ups werden blockiert. Prozesse werden direkt mit Argument-Arrays gestartet, nie über eine Shell. SSH-Hostschlüssel und RDP-Serverzertifikate werden bei der ersten Verwendung bestätigt, Änderungen werden gekennzeichnet; RDP wird an das bestätigte Zertifikat gebunden. Eingefügter Text wird von Steuerzeichen bereinigt, und mehrzeiliges Einfügen oder Einfügen per Broadcast muss zuerst bestätigt werden. Passwörter werden nur gespeichert, wenn verschlüsselter Desktop-Speicher verfügbar ist, und Exporte enthalten niemals Geheimnisse.
+
+Sicherheitslücken meldest du bitte vertraulich, wie in [SECURITY.md](SECURITY.md) beschrieben.
 
 ## Support
 
-Aux Command ist freie und quelloffene Software. Wenn sie dir bei der Arbeit hilft, kannst du mir einen [Kaffee ausgeben](https://www.buymeacoffee.com/auxillo).
+Aux Command ist freie und quelloffene Software. Wenn sie dir bei der Arbeit hilft, kannst du mir [einen Kaffee ausgeben](https://www.buymeacoffee.com/auxillo).
 
 ## Lizenz
 
-Aux Command ist freie und quelloffene Software unter der **AGPL-3.0-or-later**-Lizenz. Jede Funktion gehört zum öffentlichen Build; es gibt keine kostenpflichtigen Editionen oder Bezahlschranken.
+Aux Command ist freie und quelloffene Software unter der Lizenz **AGPL-3.0-or-later**. Jede Funktion ist Teil des öffentlichen Builds; es gibt keine kostenpflichtigen Editionen und keine Bezahlschranken.
 
 ---
 

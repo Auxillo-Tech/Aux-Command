@@ -1,6 +1,6 @@
 # Release validation status
 
-The latest published release is **v0.4.0**. The changes listed under *Unreleased* in [CHANGELOG.md](../CHANGELOG.md) are on the development branch and have not been published as a release yet; development builds do not update existing installations.
+The latest published release is **v0.4.0**. Version **0.5.0** (see [CHANGELOG.md](../CHANGELOG.md)) is prepared on the development branch and has not been published yet; development builds do not update existing installations.
 
 ## Import and recovery additions
 
