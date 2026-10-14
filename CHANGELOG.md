@@ -28,12 +28,14 @@
 - Linux deb/rpm packages declare the Electron runtime libraries they need.
 - FTP replacement keeps a backup and rolls back on failure. Partial downloads are private from creation, resumed files cannot keep stale bytes, cancelled queued transfers never start, and the inline editor respects its byte limit.
 - Dialog warnings keep their line breaks and scroll when long.
+- Dragging a tab one place to the right no longer leaves it where it was.
 
 ### Added
 
 - Linux-style copy and paste in workspace and detached terminals: highlighted text becomes the primary selection and is copied to the clipboard (copy on select, on by default), middle-click pastes the selection, and Ctrl+Insert / Shift+Insert copy and paste.
 - A terminal right-click menu with Copy, Paste, Paste selection, Select all, Find, Clear scrollback and a copy-on-select toggle. A PuTTY-style right-click (copy, or paste when nothing is selected) is available in Settings. Mouse-aware programs (tmux, vim, htop) keep their own clicks; Shift overrides.
 - Ctrl+click opens http/https links in terminal output in the browser.
+- Drag tabs to reorder them, with a drop marker; drop on the empty tab bar to move a tab to the end. Rename tabs in place with a double-click or F2. Remote desktop (RDP/VNC) tabs now support dragging, renaming and the tab menu too.
 - Profile JSON import preview with merge/update/copy choices; workspace backups include preferences and layout; local recovery points and a restore journal.
 - All/Favorites/Open connection views, multi-term search, Ctrl+Tab session cycling, Ctrl+Shift+E connection search, a wider command palette, density and sidebar preferences, and file-browser filtering, natural sorting and dotfile visibility.
 - Resizable panels, terminal maximize and full screen (F11), named saved workspaces, editable Ctrl+Shift shortcuts, and reviewed dual-pane batch transfers with conflict review.

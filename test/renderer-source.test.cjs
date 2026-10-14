@@ -568,3 +568,18 @@ test('the VNC viewer frame has no clipboard permissions and OSC 8 links need Ctr
   assert.match(renderer, /linkHandler: \{\s*allowNonHttpProtocols: false,/u);
   assert.match(indexHtml, /frame-src aux-vnc:;/u);
 });
+
+test('tabs reorder by drag with a drop marker and rename in place', () => {
+  // Dropping on the right half places the tab after the target, so a tab can
+  // move one place right; dropping on the empty tab bar moves it to the end.
+  assert.match(renderer, /return event\.clientX > rect\.left \+ rect\.width \/ 2;/u);
+  assert.match(renderer, /const index = target \? ordered\.indexOf\(target\) \+ \(after \? 1 : 0\) : ordered\.length;/u);
+  assert.match(renderer, /placeTab\(moved, null, true\)/u);
+  assert.match(renderer, /enableTabBarDrop\(\);/u);
+  assert.match(styles, /\.session-tab\.drop-before \{/u);
+  // Double-click and F2 rename in place on terminal and remote desktop tabs.
+  assert.equal((renderer.match(/addEventListener\('dblclick', \(event\) => \{ event\.preventDefault\(\); startTabRename\(/gu) || []).length, 2);
+  assert.match(renderer, /enableTabDragging\(desktopTab\);/u);
+  assert.match(renderer, /else \{ tab\.customTitle = false; tab\.title = tab\.autoTitle \|\| tab\.title; \}/u);
+  assert.match(renderer, /if \(document\.activeElement\?\.classList\.contains\('tab-rename-input'\)\) return;/u);
+});

@@ -482,6 +482,11 @@ h2 { margin-top: 3px; font-size: 16px; font-weight: 640; letter-spacing: -.01em;
 .session-tab .tab-close { align-self: center; display: grid; place-items: center; min-width: 24px; min-height: 24px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--faint); font-size: 15px; cursor: pointer; }
 .session-tab .tab-close:hover { background: rgba(255, 92, 119, .16); color: #ffb9c6; }
 .session-tab:focus-visible { outline: 2px solid rgba(94, 168, 255, .6); outline-offset: -2px; }
+.session-tab.dragging { opacity: .45; }
+.session-tab.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.session-tab.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+.session-tab .tab-rename-input { min-width: 0; margin: 7px 4px 7px 9px; padding: 0 8px; border: 1px solid rgba(69, 210, 255, .55); border-radius: 6px; background: rgba(6, 11, 19, .95); color: var(--text); font: inherit; font-size: 12px; font-weight: 540; outline: none; }
+.session-tab .tab-rename-input:focus { box-shadow: 0 0 0 2px rgba(69, 210, 255, .25); }
 
 .session-toolbar { min-width: 0; display: flex; align-items: center; gap: 7px; padding: 4px 8px; overflow-x: auto; border-top: 1px solid var(--line-faint); scrollbar-width: thin; scrollbar-color: rgba(120, 138, 178, .32) transparent; }
 .toolbar-group { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding-right: 8px; border-right: 1px solid var(--line-faint); }

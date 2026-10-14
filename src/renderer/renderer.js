@@ -2191,7 +2191,8 @@
       detached: Boolean(session.detached),
       resizeTimer: 0,
       cwd: saved.cwd || session.cwd || '',
-      customTitle: Boolean(saved.customTitle)
+      customTitle: Boolean(saved.customTitle),
+      autoTitle: session.title
     };
     if (saved.customTitle && saved.title) {
       tab.title = saved.title;
@@ -2225,9 +2226,10 @@
       }, 60);
     });
     terminal.onTitleChange((title) => {
-      if (tab.customTitle) return;
       const clean = String(title || '').trim().slice(0, 100);
       if (!clean) return;
+      tab.autoTitle = clean;
+      if (tab.customTitle) return;
       tab.title = clean;
       tab.tabElement.querySelector('.tab-title').textContent = clean;
       tab.tabButton.title = `${clean} · ${formatTarget(profile)}`;
@@ -2325,16 +2327,7 @@
 
     tabButton.title = `${session.title} · ${formatTarget(profile)}`;
     const sessionMenu = () => openContextMenu(tabButton, [
-      { label: uiText('Rename tab'), icon: '✎', run: async () => {
-        const name = await askText({ title: uiText('Rename session tab'), label: uiText('Tab name'), value: tab.title });
-        if (!name?.trim()) return;
-        tab.customTitle = true;
-        tab.title = name.trim().slice(0, 100);
-        tab.tabElement.querySelector('.tab-title').textContent = tab.title;
-        tab.tabButton.title = `${tab.title} · ${formatTarget(profile)}`;
-        if (state.activeTabId === tab.id) elements.activeSessionLabel.textContent = `${tab.title} · ${profile.protocol.toUpperCase()}`;
-        persistSessions();
-      } },
+      { label: uiText('Rename tab'), icon: '✎', hint: 'F2', run: () => startTabRename(tab) },
       { label: uiText('Working directory for restore'), icon: '⌂', disabled: !['local', 'ssh'].includes(profile.protocol), run: async () => {
         const cwd = await askText({ title: uiText('Restore working directory'), label: uiText('Absolute directory'), value: tab.cwd || '/', description: uiText('Used when this session is reopened. SSH directories are applied before the configured startup command.') });
         if (cwd === null) return;
@@ -2354,8 +2347,10 @@
     ], { title: tab.title });
     tabElement.addEventListener('contextmenu', (event) => { event.preventDefault(); sessionMenu(); });
     tabButton.addEventListener('click', () => activateTab(session.id));
+    tabButton.addEventListener('dblclick', (event) => { event.preventDefault(); startTabRename(tab); });
     tabButton.addEventListener('keydown', (event) => {
       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); sessionMenu(); return; }
+      if (event.key === 'F2') { event.preventDefault(); startTabRename(tab); return; }
       if (event.key === 'Delete') {
         event.preventDefault();
         requestCloseTab(session.id);
@@ -2442,17 +2437,120 @@
   }
 
   let draggedSessionId = '';
-  function enableTabDragging(tab) {
-    tab.tabButton.draggable=true;
-    tab.tabButton.addEventListener('dragstart',event=>{draggedSessionId=tab.id;event.dataTransfer.setData('text/x-aux-session',tab.id);event.dataTransfer.effectAllowed='move';});
-    tab.tabButton.addEventListener('dragend',()=>{draggedSessionId='';});
-    for(const target of [tab.tabElement,tab.view]){
-      target.addEventListener('dragover',event=>{if(draggedSessionId){event.preventDefault();event.dataTransfer.dropEffect='move';}});
-      target.addEventListener('drop',event=>{const moved=state.tabs.get(draggedSessionId);draggedSessionId='';if(!moved||moved===tab)return;event.preventDefault();event.stopPropagation();
-        const ordered=[...state.tabs.values()].filter(item=>item!==moved);ordered.splice(ordered.indexOf(tab),0,moved);state.tabs=new Map(ordered.map(item=>[item.id,item]));
-        for(const item of ordered){elements.tabbar.insertBefore(item.tabElement,elements.tabbarSpacer);elements.terminalStack.append(item.view);}persistSessions();activateTab(moved.id);
-      });
+  // Tabs reorder by drag and drop. The drop marker shows whether the tab
+  // lands before or after the one under the pointer; dropping on the empty
+  // part of the tab bar moves it to the end. Dropping on a tiled pane moves
+  // the dragged session next to that pane.
+  function placeTab(moved, target, after) {
+    if (!moved || moved === target) return;
+    const ordered = [...state.tabs.values()].filter((item) => item !== moved);
+    const index = target ? ordered.indexOf(target) + (after ? 1 : 0) : ordered.length;
+    ordered.splice(index, 0, moved);
+    state.tabs = new Map(ordered.map((item) => [item.id, item]));
+    for (const item of ordered) {
+      elements.tabbar.insertBefore(item.tabElement, elements.tabbarSpacer);
+      elements.terminalStack.append(item.view);
     }
+    persistSessions();
+    activateTab(moved.id);
+  }
+
+  function clearTabDropMarkers() {
+    for (const element of elements.tabbar.querySelectorAll('.drop-before, .drop-after, .dragging')) element.classList.remove('drop-before', 'drop-after', 'dragging');
+  }
+
+  function enableTabDragging(tab) {
+    tab.tabButton.draggable = true;
+    tab.tabButton.addEventListener('dragstart', (event) => {
+      draggedSessionId = tab.id;
+      event.dataTransfer.setData('text/x-aux-session', tab.id);
+      event.dataTransfer.effectAllowed = 'move';
+      tab.tabElement.classList.add('dragging');
+    });
+    tab.tabButton.addEventListener('dragend', () => { draggedSessionId = ''; clearTabDropMarkers(); });
+    const dropAfter = (event) => {
+      const rect = tab.tabElement.getBoundingClientRect();
+      return event.clientX > rect.left + rect.width / 2;
+    };
+    tab.tabElement.addEventListener('dragover', (event) => {
+      if (!draggedSessionId || draggedSessionId === tab.id) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const after = dropAfter(event);
+      tab.tabElement.classList.toggle('drop-after', after);
+      tab.tabElement.classList.toggle('drop-before', !after);
+    });
+    tab.tabElement.addEventListener('dragleave', () => tab.tabElement.classList.remove('drop-before', 'drop-after'));
+    tab.tabElement.addEventListener('drop', (event) => {
+      const moved = state.tabs.get(draggedSessionId);
+      if (!moved || moved === tab) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const after = dropAfter(event);
+      draggedSessionId = '';
+      clearTabDropMarkers();
+      placeTab(moved, tab, after);
+    });
+    tab.view.addEventListener('dragover', (event) => { if (draggedSessionId && draggedSessionId !== tab.id) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } });
+    tab.view.addEventListener('drop', (event) => {
+      const moved = state.tabs.get(draggedSessionId);
+      if (!moved || moved === tab) return;
+      event.preventDefault();
+      draggedSessionId = '';
+      clearTabDropMarkers();
+      placeTab(moved, tab, false);
+    });
+  }
+
+  function enableTabBarDrop() {
+    elements.tabbarSpacer.addEventListener('dragover', (event) => { if (draggedSessionId) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } });
+    elements.tabbarSpacer.addEventListener('drop', (event) => {
+      const moved = state.tabs.get(draggedSessionId);
+      if (!moved) return;
+      event.preventDefault();
+      draggedSessionId = '';
+      clearTabDropMarkers();
+      placeTab(moved, null, true);
+    });
+  }
+
+  function applyTabTitle(tab) {
+    tab.tabElement.querySelector('.tab-title').textContent = tab.title;
+    if (tab.profile) tab.tabButton.title = `${tab.title} · ${formatTarget(tab.profile)}`;
+    if (state.activeTabId === tab.id && tab.profile) elements.activeSessionLabel.textContent = `${tab.title} · ${tab.profile.protocol.toUpperCase()}`;
+  }
+
+  // Rename in place: Enter or leaving the field saves, Escape cancels, and an
+  // empty name returns the tab to its automatic title.
+  function startTabRename(tab) {
+    if (tab.tabElement.querySelector('.tab-rename-input')) return;
+    const input = node('input', { type: 'text', className: 'tab-rename-input', value: tab.title, attrs: { maxlength: 100, spellcheck: 'false', 'aria-label': uiText('Tab name') } });
+    tab.tabButton.hidden = true;
+    tab.tabElement.prepend(input);
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      const name = input.value.replace(/[\x00-\x1f\x7f]/gu, '').trim().slice(0, 100);
+      input.remove();
+      tab.tabButton.hidden = false;
+      if (save) {
+        if (name) { tab.customTitle = true; tab.title = name; }
+        else { tab.customTitle = false; tab.title = tab.autoTitle || tab.title; }
+        applyTabTitle(tab);
+        persistSessions();
+      }
+      tab.tabButton.focus();
+    };
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+      if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('dragstart', (event) => event.preventDefault());
+    input.focus();
+    input.select();
   }
 
   function moveSessionTab(tab, direction) {
@@ -3020,6 +3118,8 @@
       elements.activeSessionLabel.textContent = `${activeTab.title} · ${activeTab.profile.protocol.toUpperCase()}`;
       window.setTimeout(() => {
         fitVisibleTerminals();
+        // A double-click starts renaming; keep focus in the name field.
+        if (document.activeElement?.classList.contains('tab-rename-input')) return;
         if (activeTab.terminal) activeTab.terminal.focus();
         else activeTab.view.querySelector('iframe')?.focus();
       }, 0);
@@ -3101,7 +3201,8 @@
       view,
       tabElement,
       tabButton,
-      closed: false
+      closed: false,
+      autoTitle: `${kind}: ${profile.name}`
     };
     if (saved.customTitle && saved.title) {
       desktopTab.title = saved.title; desktopTab.customTitle = true;
@@ -3118,6 +3219,22 @@
     closeButton.addEventListener('click', (event) => {
       event.stopPropagation();
       requestCloseVncTab(sessionId);
+    });
+    // Remote desktop tabs move and rename like terminal tabs.
+    enableTabDragging(desktopTab);
+    const desktopMenu = () => openContextMenu(tabButton, [
+      { label: uiText('Rename tab'), icon: '✎', hint: 'F2', run: () => startTabRename(desktopTab) },
+      { label: uiText('Move tab left'), icon: '←', run: () => moveSessionTab(desktopTab, -1) },
+      { label: uiText('Move tab right'), icon: '→', run: () => moveSessionTab(desktopTab, 1) },
+      'separator',
+      { label: uiText('Close session'), icon: '×', danger: true, run: () => requestCloseVncTab(sessionId) }
+    ], { title: desktopTab.title });
+    tabElement.addEventListener('contextmenu', (event) => { event.preventDefault(); desktopMenu(); });
+    tabButton.addEventListener('dblclick', (event) => { event.preventDefault(); startTabRename(desktopTab); });
+    tabButton.addEventListener('keydown', (event) => {
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); desktopMenu(); }
+      else if (event.key === 'F2') { event.preventDefault(); startTabRename(desktopTab); }
+      else if (event.key === 'Delete') { event.preventDefault(); requestCloseVncTab(sessionId); }
     });
     activateTab(sessionId);
     persistSessions();
@@ -5898,6 +6015,7 @@
   async function initialize() {
     subscribeEvents();
     bindUi();
+    enableTabBarDrop();
     applyPaneSize();
     elements.appShell.setAttribute('aria-busy', 'true');
     elements.initializationError.hidden = true;

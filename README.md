@@ -201,7 +201,7 @@ Install optional runtime tools with:
 Connection views now include All, Favorites and Open, with multi-term search.
 Use Ctrl+Tab to switch sessions, Ctrl+Shift+E to find a connection, and
 Ctrl+Shift+P to search tools and open sessions. The Settings button controls
-interface density and sidebar visibility. Right-click a terminal tab for naming
+interface density and sidebar visibility. Drag tabs to reorder them, double-click or press F2 to rename, and right-click a tab for naming
 and text-size controls. The remote file browser supports filtering, sorting and
 dotfile visibility.
 
@@ -410,6 +410,7 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | `Ctrl+Shift+V` / `Shift+Insert` | Paste into terminal |
 | Middle-click | Paste the highlighted (primary selection) text |
 | `Ctrl`+click | Open an http/https link from terminal output in the browser |
+| `F2` / double-click a tab | Rename the tab (empty name restores the automatic title) |
 | `Ctrl+Space` | Accept inline command suggestion |
 | `Ctrl+Shift+Y` | Search command history across sessions |
 | `Ctrl+Shift+M` | Run a command on multiple sessions |
