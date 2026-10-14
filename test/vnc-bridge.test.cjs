@@ -94,7 +94,7 @@ test('VncBridgeService bridges binary data and closes connected clients on stop'
   let ws;
   try {
     const session = await bridge.start({ protocol: 'vnc', host: '127.0.0.1', port: tcpServer.address().port, name: 'Fixture' });
-    ws = new WebSocket(session.url, { origin: 'file://' });
+    ws = new WebSocket(session.url, { origin: 'aux-vnc://viewer' });
     await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
     const response = new Promise((resolve, reject) => { ws.once('message', resolve); ws.once('error', reject); });
     ws.send(Buffer.from('hello'));
@@ -133,15 +133,43 @@ test('VncBridgeService rejects cross-origin, missing-token and reused clients', 
     const session = await bridge.start({ protocol: 'vnc', host: '127.0.0.1', port: tcpServer.address().port, name: 'Protected' });
     const withoutToken = new URL(session.url);
     withoutToken.search = '';
-    await expectRejected(withoutToken.toString(), 'file://');
+    await expectRejected(withoutToken.toString(), 'aux-vnc://viewer');
     await expectRejected(session.url, 'https://evil.example');
-
-    accepted = new WebSocket(session.url, { origin: 'file://' });
-    await new Promise((resolve, reject) => { accepted.once('open', resolve); accepted.once('error', reject); });
+    // The workspace page and sandboxed frames are not the viewer origin.
     await expectRejected(session.url, 'file://');
+    await expectRejected(session.url, 'null');
+
+    accepted = new WebSocket(session.url, { origin: 'aux-vnc://viewer' });
+    await new Promise((resolve, reject) => { accepted.once('open', resolve); accepted.once('error', reject); });
+    await expectRejected(session.url, 'aux-vnc://viewer');
   } finally {
     try { accepted?.terminate(); } catch { /* already closed */ }
     bridge.stopAll();
     await new Promise((resolve) => tcpServer.close(resolve));
+  }
+});
+
+test('VNC bridge can serve a private Unix socket target for embedded RDP', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const net = require('node:net');
+  const { WebSocket } = require('ws');
+  const { VncBridgeService } = require('../src/main/services/vnc-bridge.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-vnc-sock-'));
+  const socketPath = path.join(directory, 'vnc.sock');
+  const server = net.createServer((socket) => socket.end('RFB 003.008\n'));
+  await new Promise((resolve) => server.listen(socketPath, resolve));
+  const bridge = new VncBridgeService();
+  try {
+    const session = await bridge.start({ protocol: 'vnc', host: '127.0.0.1', port: 5900 }, { socketPath });
+    const ws = new WebSocket(session.url, { origin: 'aux-vnc://viewer' });
+    const greeting = await new Promise((resolve, reject) => { ws.once('message', (data) => resolve(String(data))); ws.once('error', reject); });
+    assert.equal(greeting, 'RFB 003.008\n');
+    ws.terminate();
+  } finally {
+    bridge.stopAll();
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });

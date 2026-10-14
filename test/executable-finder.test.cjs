@@ -19,3 +19,21 @@ test('finds an executable in PATH without invoking a shell', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('findExecutable ignores relative PATH entries', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { findExecutable } = require('../src/main/lib/executable-finder.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-path-'));
+  const previous = process.cwd();
+  try {
+    fs.writeFileSync(path.join(directory, 'aux-planted-tool'), '#!/bin/sh\n', { mode: 0o755 });
+    process.chdir(directory);
+    assert.equal(findExecutable(['aux-planted-tool'], `.${path.delimiter}bin`), '');
+    assert.equal(findExecutable(['aux-planted-tool'], directory), path.join(directory, 'aux-planted-tool'));
+  } finally {
+    process.chdir(previous);
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

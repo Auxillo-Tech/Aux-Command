@@ -7,10 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only by default; only the attest job (tags and manual runs) gets the
+# OIDC and attestation permissions, never pull requests.
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   test-and-build:
@@ -77,21 +77,6 @@ jobs:
           npm run release:manifest -- --no-sign
           npm run release:verify -- --allow-unsigned
 
-      - name: Attest build provenance
-        if: github.event_name != 'pull_request' && github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
-        with:
-          subject-path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*-sbom.cdx.json
-            dist/*-source.tar.gz
-            dist/*-source.zip
-            dist/latest*.yml
-            dist/SHA256SUMS
-            dist/release-manifest.json
-
       # Full package artifacts are ~330MB each. Uploading on every main push exhausted
       # GitHub Actions artifact storage and failed otherwise-green builds. Keep build
       # verification on every push; only upload on tags or manual dispatch.
@@ -112,3 +97,31 @@ jobs:
             dist/SHA256SUMS
             dist/release-manifest.json
           if-no-files-found: error
+
+  attest:
+    needs: test-and-build
+    if: github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aux-command-linux-x64
+          path: dist
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*-sbom.cdx.json
+            dist/*-source.tar.gz
+            dist/*-source.zip
+            dist/latest*.yml
+            dist/SHA256SUMS
+            dist/release-manifest.json

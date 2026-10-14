@@ -177,6 +177,27 @@ test('local sshd fixture supports Aux Command SSH terminal and SFTP flows', { sk
     }));
 
     try {
+      const { FileBrowserService } = require('../src/main/services/file-browser-service.cjs');
+      const sourceTree = path.join(fixture.rootDir, 'source-tree');
+      const targetTree = path.join(fixture.rootDir, 'target-tree');
+      const downloadedTree = path.join(fixture.rootDir, 'downloaded-tree');
+      fs.mkdirSync(path.join(sourceTree, 'nested', 'empty'), { recursive: true });
+      fs.mkdirSync(targetTree); fs.mkdirSync(downloadedTree);
+      fs.writeFileSync(path.join(sourceTree, 'nested', 'file.txt'), 'TREE CONTENT');
+      const transfers = [];
+      const browser = new FileBrowserService(() => sftpService, { enqueue: (spec) => { transfers.push(spec); return spec; } });
+      const uploadTree = await browser.plan({ profile, direction: 'upload', paths: [sourceTree], directory: targetTree });
+      await browser.apply(uploadTree.token);
+      for (const item of transfers.splice(0)) await sftpService.upload(profile, item.localPath, item.remotePath);
+      assert.equal(fs.readFileSync(path.join(targetTree, 'source-tree', 'nested', 'file.txt'), 'utf8'), 'TREE CONTENT');
+      const downloadTree = await browser.plan({ profile, direction: 'download', paths: [path.join(targetTree, 'source-tree')], directory: downloadedTree });
+      await browser.apply(downloadTree.token);
+      for (const item of transfers.splice(0)) await sftpService.download(profile, item.remotePath, item.localPath);
+      assert.ok(fs.statSync(path.join(downloadedTree, 'source-tree', 'nested', 'empty')).isDirectory());
+      assert.equal(fs.readFileSync(path.join(downloadedTree, 'source-tree', 'nested', 'file.txt'), 'utf8'), 'TREE CONTENT');
+      const compared = await browser.compare({profile,localDirectory:sourceTree,remoteDirectory:path.join(targetTree,'source-tree'),verify:true});
+      assert.equal(compared.unchanged,1);
+      const found=await browser.search({profile,directory:targetTree,query:'file.txt'});assert.equal(found.results.length,1);
       fs.writeFileSync(path.join(fixture.rootDir, 'upload.txt'), 'AUX_SFTP_UPLOAD\n');
       await assert.doesNotReject(() => sftpService.mkdir(profile, path.join(fixture.rootDir, 'remote-dir')), 'mkdir remote-dir');
       await assert.doesNotReject(() => sftpService.upload(profile, path.join(fixture.rootDir, 'upload.txt'), path.join(fixture.rootDir, 'remote-dir', 'upload.txt')), 'upload fixture file');

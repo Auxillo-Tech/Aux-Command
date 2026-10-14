@@ -123,6 +123,24 @@ class ProfileStore {
     return normalized;
   }
 
+  moveGroup(from, to) {
+    if(typeof from!=='string'||!from||from==='Local'||typeof to!=='string'||!to.trim())throw new Error('Invalid folder move');
+    const updates=new Map(this.list().filter(p=>p.group===from||p.group.startsWith(from+' / ')).map(p=>[p.id,normalizeProfile({...p,group:to+p.group.slice(from.length)},p.id)]));
+    this.store.update(data=>({...data,profiles:data.profiles.map(p=>updates.get(p.id)||p)}));return updates.size;
+  }
+  bulkUpdate(ids, patch) {
+    if (!Array.isArray(ids) || !ids.length || ids.length > 2000 || new Set(ids).size !== ids.length) throw new Error('Select 1–2,000 distinct connections');
+    if (!patch || Object.keys(patch).some(key => !['group', 'tags', 'favorite', 'username', 'port', 'keepAliveSeconds'].includes(key))) throw new Error('Unsupported bulk field');
+    const currentProfiles = new Map(this.list().map(profile => [profile.id, profile]));
+    const updates = ids.map(id => {
+      const existing = currentProfiles.get(id);
+      if (!existing) throw new Error('A selected connection no longer exists');
+      return normalizeProfile({ ...existing, ...patch, updatedAt: new Date().toISOString() }, id);
+    });
+    const byId = new Map(updates.map(p => [p.id, p]));
+    this.store.update(data => ({ ...data, profiles: data.profiles.map(p => byId.get(p.id) || p) }));
+    return updates;
+  }
   delete(id) {
     if (id === 'local-shell') throw new Error('The default local shell profile cannot be deleted');
     const before = this.list().length;

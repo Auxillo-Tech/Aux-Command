@@ -24,13 +24,18 @@ async function main() {
   try {
     await delay(1500);
     assert.equal(shadow.exitCode, null, shadowLog);
-    const session = await service.start({ id: 'fixture', name: 'Fixture RDP', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' });
+    const session = await service.start({ id: 'fixture', name: 'Fixture RDP', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test', rdpWidth: 1280, rdpHeight: 720, rdpAudio: true });
     await delay(2000);
     assert.equal(service.list().length, 1, `RDP client exited: ${shadowLog}`);
     const desktop = service.list()[0];
-    const windows = spawnSync('xwininfo', ['-display', `:${desktop.display}`, '-root', '-tree'], { encoding: 'utf8' });
+    // The display needs the session cookie: other local users are refused.
+    const xauthority = service.sessions.get(session.id).xauthority;
+    const anonymous = spawnSync('xwininfo', ['-display', `:${desktop.display}`, '-root'], { encoding: 'utf8', env: { ...process.env, XAUTHORITY: '/dev/null' } });
+    assert.notEqual(anonymous.status, 0, 'RDP display must refuse clients without its cookie');
+    assert.equal(desktop.x11vncSocket.startsWith(service.sessions.get(session.id).workDir), true, 'x11vnc must listen only inside the private work directory');
+    const windows = spawnSync('xwininfo', ['-display', `:${desktop.display}`, '-root', '-tree'], { encoding: 'utf8', env: { ...process.env, XAUTHORITY: xauthority } });
     assert.match(windows.stdout, /FreeRDP/, 'RDP must have a rendered client window');
-    ws = new WebSocket(new URLSearchParams(session.vncUrl.split('?')[1]).get('url'), { origin: 'file://' });
+    ws = new WebSocket(new URLSearchParams(session.vncUrl.split('?')[1]).get('url'), { origin: 'aux-vnc://viewer' });
     let buffer = Buffer.alloc(0), failure = null;
     ws.on('message', (chunk) => { buffer = Buffer.concat([buffer, chunk]); }); ws.on('error', (error) => { failure = error; });
     const read = async (n) => {
@@ -44,10 +49,10 @@ async function main() {
     const securityCount = (await read(1))[0]; assert.ok((await read(securityCount)).includes(1));
     ws.send(Buffer.from([1])); assert.equal((await read(4)).readUInt32BE(), 0);
     ws.send(Buffer.from([1])); const init = await read(24); await read(init.readUInt32BE(20));
-    assert.equal(init.readUInt16BE(0), 1600); assert.equal(init.readUInt16BE(2), 900);
+    assert.equal(init.readUInt16BE(0), 1280); assert.equal(init.readUInt16BE(2), 720);
     ws.send(Buffer.from([3, 0, 0, 0, 0, 0, 0, 16, 0, 16]));
     const frame = await read(4); assert.equal(frame[0], 0); assert.ok(frame.readUInt16BE(2) > 0);
-    console.log('RDP_TLS_CONNECTION_AND_VNC_FRAMEBUFFER_PASSED');
+    console.log('RDP_TLS_CUSTOM_RESOLUTION_AUDIO_OPTION_AND_VNC_FRAMEBUFFER_PASSED');
     ws.close(); service.stop(session.id);
     assert.equal(service.list().length, 0); assert.equal(bridge.list().length, 0);
     console.log('RDP_VNC_CLEANUP_PASSED');

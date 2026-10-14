@@ -139,7 +139,19 @@ Install optional runtime tools with:
 - Local shell sessions.
 - Per-profile terminal theme, font, cursor, and scrollback settings.
 - Terminal tab lifecycle with close confirmations for live sessions.
-- Split/tiled multi-session layouts.
+- Split/tiled multi-session layouts, with resizable terminal panes. Choose Auto
+  tiles, Side by side or Stacked panes beside the layout toggle. Drag a terminal
+  tab onto another tab or pane to reorder it; order and arrangement are saved.
+- Right-click a terminal tab and choose Move to separate window to use another
+  monitor. Return to workspace (or close that window) reattaches the same live
+  session without reconnecting. Detached terminal IPC is limited to its session.
+- Drag the connections sidebar edge to resize it; use its collapse button to hide
+  it. Width and collapsed state persist. The file sidebar is also resizable.
+- Maximize the active terminal with its corner control or the workspace Maximize
+  button; Restore returns to the saved layout. F11 toggles application fullscreen.
+- Named workspaces retain session order, titles, working directories and pane
+  geometry. Opening a workspace adds its sessions without closing existing work.
+- Workspace settings include global terminal defaults and editable shortcuts.
 - Terminal search.
 - Active-session transcript export with local review/copy/save/print controls.
 - Session replay: every session records output with timing (bounded to recent
@@ -152,8 +164,13 @@ Install optional runtime tools with:
 - Command snippets.
 - Guarded macro recording that saves reviewed terminal input as replayable snippets.
 - Guarded broadcast input across terminal sessions.
-- Multi-session command runner: send one command to selected live sessions
-  and review per-session collected output side by side (`Ctrl+Shift+M`).
+- Reusable multi-host tasks (`Ctrl+Shift+M`) use selected authenticated local/SSH
+  terminals. Review commands and targets before execution, save non-sensitive
+  commands as reusable snippets, and see each host's completion/exit status.
+  Commands run in POSIX `sh` subprocesses; terminals must be at a shell prompt.
+  Timeout or Cancel sends Ctrl+C to pending tasks. Check the terminal when a
+  process ignores interrupts. Sensitive commands can be excluded from task
+  storage and suggestion history; existing terminal logging still applies.
 - Cross-session command history search overlay that inserts — never runs —
   the picked command (`Ctrl+Shift+Y`; history is memory-only).
 - Keyboard-first navigation and accessible tab/panel relationships.
@@ -174,13 +191,35 @@ Install optional runtime tools with:
   server; nothing is ever sent anywhere unless you ask, the API key is stored
   encrypted in the vault, and replies are inserted into the terminal, never
   executed.
-- Localized interface: the workspace chrome is available in English, Deutsch,
+- Localized interface: workspace controls and dialog catalogs are available in English, Deutsch,
   Español, Français, Italiano, 日本語, Português, Русский and 中文, switchable
-  live from the status bar.
+  live from the status bar. Dialog translations are machine-assisted with manual
+  corrections; server/backend errors may retain their original language.
+
+### Workspace navigation and file browsing
+
+Connection views now include All, Favorites and Open, with multi-term search.
+Use Ctrl+Tab to switch sessions, Ctrl+Shift+E to find a connection, and
+Ctrl+Shift+P to search tools and open sessions. The Settings button controls
+interface density and sidebar visibility. Right-click a terminal tab for naming
+and text-size controls. The remote file browser supports filtering, sorting and
+dotfile visibility.
+
+### Connection organization
+
+Manage connections below the search box provides search, multi-selection, bulk
+folder/tag/favorite editing and possible duplicate detection. Changes are reviewed
+and create a recovery point. Credentials are preserved; duplicate candidates are
+never automatically merged or removed. Folder names such as
+`Production / Europe / Databases` create nested groups. Parent rename/move includes
+its descendants. Searches cover all profiles, including rows not rendered yet.
 
 ### SSH operations
 
 - Native OpenSSH sessions.
+- The terminal tab menu includes a Connection timeline with observed process,
+  output and shell-directory events, plus detected DNS/network/authentication
+  errors. Unreported phases are not marked successful.
 - SSH agent support through the user's existing environment.
 - `~/.ssh/config` import and refresh support. Reimport resolves current OpenSSH settings, updates connection fields and preserves profile names, groups, saved credentials and appearance. Explicitly consolidated aliases remain consolidated on reimport.
 - Connection status uses the effective SSH destination. ProxyJump/ProxyCommand routes show an unknown status with an explanation; a direct TCP failure is not treated as proof that a routed server is offline.
@@ -189,6 +228,10 @@ Install optional runtime tools with:
 - ProxyJump support.
 - Compression, keepalive, X11 forwarding, and agent forwarding controls.
 - Literal remote startup commands passed safely as OpenSSH arguments.
+- Optional SSH working-directory tracking in the profile editor uses Bash 5.1+
+  prompt integration without changing remote files. Explicit startup commands
+  take precedence. Directory reports follow `cd` and feed workspace restore;
+  the tab menu also supports an explicit directory override.
 - No local shell interpolation of profile values.
 - Explicit SCP fallback transfer mode for legacy SSH servers that do not expose SFTP; SFTP remains the default and SCP is limited to upload/download style file transfer.
 
@@ -197,6 +240,21 @@ Install optional runtime tools with:
 - Graphical SFTP browser backed by `ssh2`.
 - Explicit host-key fingerprint confirmation.
 - Upload, drag-and-drop upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
+- Two-pane local/remote browsing supports selected files and recursive folders,
+  including empty folders, with review before upload/download. Existing folders
+  merge; conflicting files can be skipped, kept under new names or replaced.
+  Select a folder's checkbox to transfer it, or its open button to browse it.
+  The review limit is 4,096 entries and 32 levels; symlinks are not followed.
+  These folder operations also work with FTP/FTPS.
+- Compare / sync folders reviews a one-way update from the current local or
+  remote folder. Destination-only files remain. Optional SHA-256 comparison reads
+  both copies; otherwise comparison uses file size and modification time.
+- Verify selected file pair compares one local and one remote file with SHA-256.
+  Remote filename search walks subfolders without executing remote commands;
+  it stops at 10,000 examined entries, 500 matches or a 30-second traversal budget.
+- Pause all and Resume / retry all operate on the managed transfer queue,
+  including folder batches. Partial-file resume is within the running app;
+  pending queues are not persisted across application restarts.
 - Inline remote editing uses a temporary upload plus OpenSSH POSIX rename where supported, with a 1 MB safety limit for in-app edits.
 - Separate treatment for account passwords and private-key passphrases.
 - Persistent SFTP secrets only when Linux desktop safe storage is encrypted.
@@ -230,7 +288,11 @@ Install optional runtime tools with:
 ### Protocol launchers and bridges
 
 - Mosh launcher with safely constructed SSH transport options.
-- RDP launcher through FreeRDP.
+- RDP launcher through FreeRDP. Profiles include an opt-in audio setting and
+  bounded initial embedded desktop resolution (800–3840 × 600–2160).
+- Embedded RDP/VNC controls include fit/actual size, view-only mode,
+  Ctrl+Alt+Delete, and an explicit clipboard panel. Ctrl+Alt+Shift releases
+  keyboard focus. Clipboard contents are not automatically copied locally.
 - VNC launcher through TigerVNC.
 - Bundled Python Telnet bridge.
 - Bundled Python raw serial bridge.
@@ -320,9 +382,9 @@ On Debian 12, use Clang 16 or newer to compile the native SSH dependency against
 
 ## Verification status
 
-Validation on 6 October 2026: **280 tests passed, zero failed or skipped**; the full dependency audit reported zero vulnerabilities. Controlled local tests also passed for FTP/implicit FTPS, Mosh, local/remote/SOCKS tunnels, and embedded RDP/VNC, including changed-certificate rejection.
+Every change runs `npm run check` (syntax checks plus the full automated suite), the desktop UI qualification under Xvfb (`scripts/run-ui-qualification.py`), and protocol qualification against disposable loopback servers (`scripts/qualify-linux.sh`): FTP/implicit FTPS, Mosh, local/remote/SOCKS tunnels, and embedded RDP/VNC including changed-certificate rejection. The full dependency audit reports zero known vulnerabilities.
 
-The live updater authenticated the published **v0.4.0** release, downloaded its AppImage, verified the installer against the signed manifest, and installed it into an isolated temporary location. The current source fixes are prepared as an **unpublished 0.4.1 candidate**, not a published release. Debian/RPM upgrades and encrypted credential preservation were tested separately.
+The live updater has been tested against the published **v0.4.0** release: it authenticated the signed manifest, downloaded the AppImage, verified it, and installed it into an isolated location. Debian/RPM upgrades and encrypted credential preservation are tested separately.
 
 Still open for broader product qualification:
 
@@ -344,8 +406,10 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | `Ctrl+Shift+T` | Open local terminal |
 | `Ctrl+Shift+F` | Toggle SFTP |
 | `Ctrl+W` | Close active tab |
-| `Ctrl+Shift+C` | Copy terminal selection |
-| `Ctrl+Shift+V` | Paste into terminal |
+| `Ctrl+Shift+C` / `Ctrl+Insert` | Copy terminal selection |
+| `Ctrl+Shift+V` / `Shift+Insert` | Paste into terminal |
+| Middle-click | Paste the highlighted (primary selection) text |
+| `Ctrl`+click | Open an http/https link from terminal output in the browser |
 | `Ctrl+Space` | Accept inline command suggestion |
 | `Ctrl+Shift+Y` | Search command history across sessions |
 | `Ctrl+Shift+M` | Run a command on multiple sessions |
@@ -353,7 +417,13 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 
 Tiled/single-session layout and tiled pane-size toolbar choices are persisted locally and restored on restart.
 
-Right-click copies selected terminal text; with no selection it pastes clipboard text.
+Copy and paste work like other Linux terminals. Highlighting text with the mouse
+copies it (turn this off with **Copy on select** in Settings or the terminal's
+right-click menu), and a middle-click pastes it. Right-click opens a menu with
+Copy, Paste, Paste selection, Select all, Find and Clear scrollback. In Settings
+you can switch right-click to the PuTTY style instead: it copies the selection,
+or pastes when nothing is selected. Inside tmux, vim, htop and other apps that
+use the mouse, hold Shift while you select or right-click.
 
 ---
 

@@ -10,11 +10,43 @@ const MAX_PROMPT_CHARS = 4000;
 const MAX_CONTEXT_CHARS = 6000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const KEY_VAULT_ID = 'ai-assist';
+const MAX_RESPONSE_BYTES = 1_000_000;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+// The API key and terminal output travel with every request, so remote
+// endpoints must use HTTPS. Plain HTTP is accepted only for a model server on
+// this computer (llama.cpp, Ollama) or one reached through an SSH tunnel.
+function assertEndpoint(endpoint) {
+  let url;
+  try { url = new URL(endpoint); } catch { throw new Error('AI endpoint must be an http(s) URL'); }
+  if (url.protocol === 'https:') return;
+  if (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)) return;
+  if (url.protocol === 'http:') throw new Error('AI endpoints on other machines must use HTTPS (plain HTTP is allowed only for localhost; an SSH tunnel also works)');
+  throw new Error('AI endpoint must be an http(s) URL');
+}
+
+async function readLimited(response, limit) {
+  const reader = response.body?.getReader();
+  if (!reader) return '';
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel().catch(() => {});
+      throw new Error('AI endpoint reply is too large');
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+}
 
 function normalizeAiConfig(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const endpoint = String(source.endpoint || '').trim().slice(0, 500);
-  if (endpoint && !/^https?:\/\//iu.test(endpoint)) throw new Error('AI endpoint must be an http(s) URL');
+  if (endpoint) assertEndpoint(endpoint);
   return {
     enabled: Boolean(source.enabled) && Boolean(endpoint),
     endpoint,
@@ -43,7 +75,9 @@ function cleanCommandReply(text) {
   const fenced = reply.match(/^```[a-z]*\n([\s\S]*?)```$/u);
   if (fenced) reply = fenced[1].trim();
   if (reply.startsWith('$ ')) reply = reply.slice(2);
-  return reply;
+  // A command reply is inserted into a terminal, so control characters that
+  // would act as keypresses (Enter, Ctrl chords, escapes) are removed.
+  return reply.replace(/\r\n?/gu, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/gu, '');
 }
 
 class AiAssistService {
@@ -70,6 +104,7 @@ class AiAssistService {
   async ask(request = {}) {
     const config = this.settingsStore.get().ai;
     if (!config.enabled || !config.endpoint) throw new Error('AI assist is not enabled');
+    assertEndpoint(config.endpoint);
     const kind = request.kind === 'explain' ? 'explain' : 'command';
     const prompt = String(request.prompt || '').slice(0, MAX_PROMPT_CHARS);
     if (kind === 'command' && !prompt.trim()) throw new Error('Describe what the command should do');
@@ -82,29 +117,37 @@ class AiAssistService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     let response;
+    let payload;
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: config.model || 'default',
-          messages: buildMessages(kind, prompt, request.context),
-          temperature: kind === 'command' ? 0.2 : 0.4,
-          max_tokens: 700,
-          stream: false
-        })
-      });
-    } catch (error) {
-      throw new Error(error?.name === 'AbortError' ? 'AI endpoint timed out after 60 s' : `AI endpoint unreachable: ${error?.message || error}`);
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          signal: controller.signal,
+          redirect: 'error',
+          body: JSON.stringify({
+            model: config.model || 'default',
+            messages: buildMessages(kind, prompt, request.context),
+            temperature: kind === 'command' ? 0.2 : 0.4,
+            max_tokens: 700,
+            stream: false
+          })
+        });
+      } catch (error) {
+        throw new Error(error?.name === 'AbortError' ? 'AI endpoint timed out after 60 s' : `AI endpoint unreachable: ${error?.message || error}`);
+      }
+      if (!response.ok) {
+        const body = await readLimited(response, 16_384).catch(() => '');
+        throw new Error(`AI endpoint returned ${response.status}: ${body.slice(0, 300)}`);
+      }
+      // The timeout also covers reading the body, and the body is capped.
+      let body;
+      try { body = await readLimited(response, MAX_RESPONSE_BYTES); }
+      catch (error) { throw new Error(error?.name === 'AbortError' ? 'AI endpoint timed out after 60 s' : error.message); }
+      try { payload = JSON.parse(body); } catch { throw new Error('AI endpoint returned invalid JSON'); }
     } finally {
       clearTimeout(timer);
     }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`AI endpoint returned ${response.status}: ${body.slice(0, 300)}`);
-    }
-    const payload = await response.json();
     const text = payload?.choices?.[0]?.message?.content;
     if (typeof text !== 'string' || !text.trim()) throw new Error('AI endpoint returned an empty reply');
     return {

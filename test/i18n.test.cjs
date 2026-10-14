@@ -87,9 +87,38 @@ test('index.html chrome is instrumented and i18n is wired end to end', () => {
 
 test('ui settings normalize to the supported language whitelist', () => {
   const { normalizeUiSettings } = require('../src/main/lib/settings-store.cjs');
-  assert.deepEqual(normalizeUiSettings(undefined), { language: 'en' });
-  assert.deepEqual(normalizeUiSettings({ language: 'de' }), { language: 'de' });
-  assert.deepEqual(normalizeUiSettings({ language: 'xx' }), { language: 'en' });
+  const base = normalizeUiSettings(undefined);
+  assert.equal(base.language, 'en');
+  assert.equal(base.density, 'comfortable');
+  assert.equal(base.sidebarHidden, false);
+  assert.deepEqual(normalizeUiSettings({ language: 'de' }), { ...base, language: 'de' });
+  assert.deepEqual(normalizeUiSettings({ language: 'xx' }), base);
   const codes = LANGUAGES.map(([code]) => code);
   for (const code of codes) assert.equal(normalizeUiSettings({ language: code }).language, code);
+});
+
+test('dialog messages translate every supplied message in all supported languages', () => {
+ assert.ok(Object.keys(AuxI18n.MESSAGES).length>70);
+ for(const [source,catalog] of Object.entries(AuxI18n.MESSAGES)) {
+  assert.equal(catalog.en,source);
+  for(const [language] of LANGUAGES) {assert.equal(typeof catalog[language],'string');assert.ok(catalog[language].trim());}
+ }
+ setLanguage('pt');assert.equal(AuxI18n.message('Save current workspace'),'Guardar área de trabalho atual');
+ setLanguage('ja');assert.equal(AuxI18n.message('Folder'),'フォルダー');
+ assert.equal(AuxI18n.message('/tmp/untouched user data'),'/tmp/untouched user data');setLanguage('en');
+});
+
+test('dialog interpolation preserves data and supports numbered placeholders', () => {
+ setLanguage('en');
+ assert.equal(AuxI18n.message('Connect to {p0}', {p0:'production <server>'}),'Connect to production <server>');
+ assert.equal(AuxI18n.message('Path {p0}, count {count}', {p0:'/tmp/{count}',count:2}),'Path /tmp/{count}, count 2');
+});
+
+test('registered UI messages preserve substitutions in every language',()=>{
+ const sources=require('../scripts/ui-message-sources.json');
+ for(const source of sources){
+  const entry=AuxI18n.MESSAGES[source]; assert.ok(entry,source);
+  const placeholders=s=>(s.match(/\{[a-zA-Z][a-zA-Z0-9]*\}/gu)||[]).sort();
+  for(const [language] of LANGUAGES){assert.deepEqual(placeholders(entry[language]),placeholders(source),language+': '+source);assert.doesNotMatch(entry[language],/▁|ZQX\d+ZQX/u);}
+ }
 });

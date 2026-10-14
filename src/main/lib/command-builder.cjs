@@ -1,6 +1,7 @@
 'use strict';
 
 const os = require('node:os');
+const { BASH_DIRECTORY_HOOK } = require('./terminal-directory.cjs');
 const path = require('node:path');
 const { expandHome, normalizeProfile, normalizeTunnel } = require('./validation.cjs');
 
@@ -43,7 +44,7 @@ function quotePosixShellArgument(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
-function buildTerminalCommand(profileInput) {
+function buildTerminalCommand(profileInput, { remoteCwd = '' } = {}) {
   const profile = normalizeProfile(profileInput, profileInput?.id);
   const env = {
     ...process.env,
@@ -63,8 +64,16 @@ function buildTerminalCommand(profileInput) {
     }
     case 'ssh': {
       const args = sshBaseArgs(profile, { tty: true });
-      args.push(target(profile));
-      if (profile.startupCommand) args.push(profile.startupCommand);
+      // `--` ends option parsing: OpenSSH keeps reading options after the
+      // host, so a startup command such as -oProxyCommand=… would otherwise
+      // run locally instead of on the server.
+      args.push('--', target(profile));
+      const integratedShell = profile.trackRemoteCwd && !profile.startupCommand
+        ? `exec bash -c ${quotePosixShellArgument(`exec bash --rcfile <(printf '%s\n' ${quotePosixShellArgument(BASH_DIRECTORY_HOOK)}) -i`)}`
+        : '';
+      const remoteCommand = profile.startupCommand || integratedShell;
+      if (remoteCwd) args.push(`cd ${quotePosixShellArgument(remoteCwd)} && ${remoteCommand || 'exec "${SHELL:-/bin/sh}" -l'}`);
+      else if (remoteCommand) args.push(remoteCommand);
       return { command: 'ssh', args, env, title: profile.name };
     }
     case 'mosh': {
@@ -83,7 +92,9 @@ function buildTerminalCommand(profileInput) {
       const hostTarget = target(profile);
       const destination = profile.username ? `${profile.username}@${hostTarget}` : hostTarget;
       const sshCommand = sshParts.map(quotePosixShellArgument).join(' ');
-      const args = [`--ssh=${sshCommand}`, destination];
+      // Mosh also accepts options after the destination; `--` stops a later
+      // --ssh= in the startup command from replacing the SSH client.
+      const args = [`--ssh=${sshCommand}`, '--', destination];
       if (profile.startupCommand) args.push(profile.startupCommand);
       return { command: 'mosh', args, env, title: profile.name };
     }
@@ -109,7 +120,7 @@ function buildTunnelCommand(tunnelInput, profileInput) {
     const spec = `${tunnel.bindHost}:${tunnel.bindPort}:${tunnel.targetHost}:${tunnel.targetPort}`;
     args.push(tunnel.type === 'local' ? '-L' : '-R', spec);
   }
-  args.push(target(profile));
+  args.push('--', target(profile));
   return { command: 'ssh', args, env: { ...process.env }, title: tunnel.name };
 }
 
@@ -125,6 +136,7 @@ function buildExternalCommand(profileInput) {
     ];
     if (profile.username) args.push(`/u:${profile.username}`);
     if (profile.rdpDomain) args.push(`/d:${profile.rdpDomain}`);
+    if (profile.rdpAudio) args.push('/sound');
     return { candidates: ['xfreerdp3', 'xfreerdp'], args };
   }
   if (profile.protocol === 'vnc') {

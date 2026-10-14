@@ -72,6 +72,26 @@ test('production package locks Electron runtime fuses', () => {
     enableEmbeddedAsarIntegrityValidation: true,
     onlyLoadAppFromAsar: true,
     loadBrowserProcessSpecificV8Snapshot: false,
-    grantFileProtocolExtraPrivileges: true
+    grantFileProtocolExtraPrivileges: false
   });
+});
+
+test('main process hardening from the pre-release security review stays in place', () => {
+  const sftpSource = fs.readFileSync(path.join(root, 'src/main/services/sftp-service.cjs'), 'utf8');
+  const windowsSource = fs.readFileSync(path.join(root, 'src/main/services/terminal-windows.cjs'), 'utf8');
+  const rdpSource = fs.readFileSync(path.join(root, 'src/main/services/rdp-embed.cjs'), 'utf8');
+  // Identity files are checked before reading so /dev/zero or a FIFO cannot hang the app.
+  assert.match(sftpSource, /if \(!stat\.isFile\(\)\) throw new Error\('not a regular file'\);\s*if \(stat\.size > 65_536\)/u);
+  // Workspace backups list their startup commands before a restore.
+  assert.match(ipcSource, /startupCommands \};/u);
+  // Static and detached windows expose no developer tools in normal use; print has no script.
+  assert.match(ipcSource, /javascript: false,\s*devTools: false/u);
+  assert.match(windowsSource, /devTools:this\.devTools/u);
+  // Subframes may only navigate to the isolated VNC viewer.
+  assert.match(mainSource, /will-frame-navigate/u);
+  assert.match(mainSource, /registerAppSchemes\(protocol\);/u);
+  // Embedded RDP: cookie-protected display and a socket-only VNC server.
+  assert.match(rdpSource, /'-auth', session\.xauthority\]/u);
+  assert.match(rdpSource, /'-rfbport', '0',\s*'-rfbportv6', '-1',\s*'-unixsock', session\.x11vncSocket/u);
+  assert.doesNotMatch(rdpSource, /'-rfbport', String\(/u);
 });

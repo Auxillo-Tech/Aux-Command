@@ -10,6 +10,21 @@ const { expandHome, normalizeProfile } = require('../lib/validation.cjs');
 
 const MAX_SYNC_BYTES = 5_000_000;
 const MAX_SYNC_PROFILES = 1000;
+// Sync shares the connection list (names, hosts, ports, users, groups, tags).
+// Settings that run commands or change what a connection trusts or exposes
+// stay under local control: a sync source must not be able to plant a
+// startup command, enable agent/X11 forwarding or swap keys and jump hosts.
+const LOCAL_ONLY_FIELDS = ['startupCommand', 'proxyJump', 'identityFile', 'knownHostsFile', 'agentForwarding', 'x11Forwarding', 'useSshConfig', 'sshAlias', 'trackRemoteCwd'];
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+function assertSyncUrl(url, type) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== `${type}:`) throw new Error(`Sync URL must use ${type}`);
+  // Plain HTTP can be read and rewritten by anyone on the network path, so
+  // it is only allowed for a sync service on this machine.
+  if (type === 'http' && !LOOPBACK_HOSTS.has(parsed.hostname)) throw new Error('HTTP sync is only allowed for localhost; use HTTPS for remote sources');
+  return parsed;
+}
 
 class ProfileSync {
   constructor(profileStore, getWindow, options = {}) {
@@ -52,8 +67,8 @@ class ProfileSync {
     } else {
       const source = String(config.url || '').trim();
       let parsed;
-      try { parsed = new URL(source); } catch { throw new Error('HTTP sync requires a valid URL'); }
-      if (parsed.protocol !== `${config.type}:`) throw new Error(`Sync URL must use ${config.type}`);
+      try { new URL(source); } catch { throw new Error('HTTP sync requires a valid URL'); }
+      parsed = assertSyncUrl(source, config.type);
       if (parsed.username || parsed.password) throw new Error('Sync URL must not contain credentials');
       this.syncConfig = { type: config.type, url: parsed.toString(), intervalMinutes };
     }
@@ -117,8 +132,11 @@ class ProfileSync {
         const remoteName = String(cleanRemote.name || '').trim();
         const remoteHost = String(cleanRemote.host || '').trim();
         const remoteProtocol = String(cleanRemote.protocol || '').trim();
+        if (remoteProtocol === 'local') throw new Error(`Sync profile entry ${index + 1} is a local shell; local shells are never synchronized`);
+        for (const field of LOCAL_ONLY_FIELDS) delete cleanRemote[field];
         const existing = localProfiles.find((profile) =>
-          profile.name === remoteName
+          profile.id !== 'local-shell'
+          && profile.name === remoteName
           && profile.host === remoteHost
           && profile.protocol === remoteProtocol
         );
@@ -191,7 +209,8 @@ class ProfileSync {
       const filename = path.resolve(expandHome(config.url));
       try { text = fs.readFileSync(filename, 'utf8'); } catch (error) { throw new Error(`Cannot read sync file: ${error.message}`); }
     } else if (config.type === 'http' || config.type === 'https') {
-      text = await this.#fetchHttp(config.url);
+      assertSyncUrl(config.url, config.type);
+      text = await this.#fetchHttp(config.url, config.type);
     } else if (config.type === 'ssh') {
       if (!this.sftpService) throw new Error('SSH sync service is unavailable');
       const profile = this.profileStore.get?.(config.profileId) || this.profileStore.list().find((item) => item.id === config.profileId);
@@ -214,7 +233,7 @@ class ProfileSync {
     return profiles;
   }
 
-  #fetchHttp(url, redirects = 0) {
+  #fetchHttp(url, type, redirects = 0) {
     if (redirects > 3) return Promise.reject(new Error('Sync HTTP redirect limit exceeded'));
     return new Promise((resolve, reject) => {
       const parsed = new URL(url);
@@ -222,8 +241,11 @@ class ProfileSync {
       const request = client.get(parsed, { timeout: 15_000 }, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           response.resume();
-          const next = new URL(response.headers.location, parsed).toString();
-          this.#fetchHttp(next, redirects + 1).then(resolve, reject);
+          // Redirects keep the configured scheme, so HTTPS can never be
+          // downgraded to plain HTTP.
+          let next;
+          try { next = assertSyncUrl(new URL(response.headers.location, parsed).toString(), type).toString(); } catch (error) { reject(new Error(`Sync redirect refused: ${error.message}`)); return; }
+          this.#fetchHttp(next, type, redirects + 1).then(resolve, reject);
           return;
         }
         if (response.statusCode !== 200) {

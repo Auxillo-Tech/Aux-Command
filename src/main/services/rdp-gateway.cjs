@@ -49,7 +49,7 @@ class RemoteDesktopGateway {
     const target = gatewayProfile.useSshConfig && gatewayProfile.sshAlias ? gatewayProfile.sshAlias : gatewayProfile.host;
     const sshArgs = [
       ...sshBaseArgs(gatewayProfile, { batchMode: true, exitOnForwardFailure: true }),
-      '-v', '-N', '-L', `127.0.0.1:${localPort}:${targetHost}:${targetPort}`, target
+      '-v', '-N', '-L', `127.0.0.1:${localPort}:${targetHost}:${targetPort}`, '--', target
     ];
     const launch = this.#guardedCommand(sshExecutable, sshArgs);
     const tunnel = spawn(launch.command, launch.args, {

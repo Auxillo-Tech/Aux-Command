@@ -89,6 +89,17 @@ jobs:
       - name: Test import/export, recovery, keyboard access and session soak
         run: /tmp/aux-protocol-venv/bin/python scripts/run-ui-qualification.py
 
+      - name: Build AppImage, deb and rpm
+        run: CC=clang CXX=clang++ npm run dist:x64 -- --publish never
+
+      - name: Verify installers on Debian, Ubuntu and Fedora
+        run: bash scripts/test-installers.sh dist
+
+      - name: Build corresponding source archives
+        run: bash scripts/source-archives.sh
+
+      # The private key is imported only after dependencies are installed and
+      # packages are built and tested, so build tooling never runs with it.
       - name: Import and verify release signing key
         id: signing
         shell: bash
@@ -111,15 +122,6 @@ jobs:
           [[ -n "$expected" && "$actual" == "$expected" ]] || { echo "Release signing key does not match SIGNING_KEY.asc" >&2; exit 1; }
           echo "signed=true" >> "$GITHUB_OUTPUT"
           echo "fingerprint=$actual" >> "$GITHUB_OUTPUT"
-
-      - name: Build AppImage, deb and rpm
-        run: CC=clang CXX=clang++ npm run dist:x64 -- --publish never
-
-      - name: Verify installers on Debian, Ubuntu and Fedora
-        run: bash scripts/test-installers.sh dist
-
-      - name: Build corresponding source archives
-        run: bash scripts/source-archives.sh
 
       - name: Generate release metadata
         shell: bash
@@ -154,7 +156,7 @@ jobs:
       - name: Attest release artifacts
         if: github.event.repository.private == false
         continue-on-error: true
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: |
             dist/Aux-Command-${{ steps.version.outputs.version }}-*.AppImage
@@ -224,3 +226,8 @@ jobs:
           done
           [ "${#assets[@]}" -gt 0 ] || { echo "No release assets were produced" >&2; exit 1; }
           gh release upload "$tag" "${assets[@]}" --clobber
+
+      - name: Remove release signing key
+        if: always()
+        shell: bash
+        run: rm -rf "${GNUPGHOME:-$HOME/.gnupg}"

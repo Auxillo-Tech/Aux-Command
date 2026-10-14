@@ -1,14 +1,21 @@
 # Release validation status
 
-Validated: **6 October 2026**, Linux x86_64.
-
-The published release used in the updater test is **v0.4.0**. Current fixes are on a development branch and packaged as an **unpublished 0.4.1 test candidate**. A candidate build does not publish a release or update existing installations.
+The latest published release is **v0.4.0**. The changes listed under *Unreleased* in [CHANGELOG.md](../CHANGELOG.md) are on the development branch and have not been published as a release yet; development builds do not update existing installations.
 
 ## Import and recovery additions
 
 SSH imports now show progress, completion counts and errors in dialogs. Profile JSON imports preview explicit merge/update/copy choices. Workspace backups include preferences and layout; local recovery points and a restore journal protect against accidental imports and interrupted restores. Update recovery keeps a checksum-verified previous AppImage and attempts restoration after a synchronous installer failure. Connection exits now include stage-specific guidance without copying terminal contents into diagnostic messages.
 
-The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI and session-soak checks, plus installer checks in Debian 12, Ubuntu 24.04 and Fedora 44 containers. Tagged release publication requires the signing secret. Workflow configuration has been checked locally; GitHub-hosted results require pushing the branch.
+The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI and session-soak checks, plus installer checks in Debian 12, Ubuntu 24.04 and Fedora 44 containers. Tagged release publication requires the signing secret. Workflow configuration has been checked locally; GitHub-hosted runs confirm it once the branch is pushed.
+
+## Security hardening (pre-release review)
+
+- SSH and Mosh startup commands can no longer be interpreted as local client options.
+- Profile sync no longer carries startup commands, keys, jump hosts or forwarding settings, never touches local shells, and refuses plain HTTP to other machines and scheme-changing redirects.
+- Pasted text is stripped of escape/control characters, and multi-line or broadcast pastes are confirmed.
+- The embedded VNC/RDP viewer runs on its own origin; embedded RDP's X display needs a private cookie and its VNC server listens only on a private Unix socket.
+- AI endpoints on other machines require HTTPS; replies are size-limited and cannot inject keypresses.
+- Workspace backups list startup commands before restoring; identity files must be regular files under 64 KB; executables resolve only from absolute PATH entries.
 
 ## Confirmed fixes
 
@@ -24,7 +31,7 @@ The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI 
 
 ## Evidence
 
-- `npm run check`: **280 passed, 0 failed, 0 skipped**.
+- `npm run check`: the full automated suite passes with no failures or skips.
 - Full `npm audit`: **0 reported vulnerabilities**.
 - Actual signed public-release check, AppImage download and installer replacement in an isolated directory using the real electron-updater implementation. Installation handoff is intercepted to avoid opening a normal desktop session; packaged launch is tested separately.
 - FTP and implicit FTPS: listing, upload/download, editing, rename/remove, reconnect, cancellation and TLS hostname rejection against disposable loopback servers.
@@ -44,4 +51,4 @@ Controlled fixtures do not establish universal interoperability. Still needed: W
 
 See [VALIDATION.md](VALIDATION.md) for commands and [LIVE_QUALIFICATION.md](LIVE_QUALIFICATION.md) for field coverage. Test fixtures use temporary profiles, keys and loopback servers; personal infrastructure is not part of application defaults or installer contents.
 
-Before publication, use the existing [GitHub release runbook](GITHUB_RELEASES.md), set the intended release version, build and sign the final artifacts, and verify them with the pinned release signing fingerprint. The development candidates are not signed public releases.
+Before publication, use the existing [GitHub release runbook](GITHUB_RELEASES.md), set the intended release version, build and sign the final artifacts, and verify them with the pinned release signing fingerprint. Development builds are not signed public releases.

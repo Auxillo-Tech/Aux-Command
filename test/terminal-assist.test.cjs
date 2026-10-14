@@ -290,7 +290,7 @@ test('history search overlay is wired with shortcut and palette entry', () => {
   assert.match(rendererSource, /function openHistorySearch\(\)/u);
   assert.match(rendererSource, /function historySearchEntries\(\)/u);
   assert.match(rendererSource, /window\.AuxAssist\.searchHistory\(input\.value, historySearchEntries\(\)\)/u);
-  assert.match(rendererSource, /event\.key\.toLowerCase\(\) === 'y'\) run\(\(\) => openHistorySearch\(\)\)/u);
+  assert.match(rendererSource, /shortcut\('history'\)\) run\(\(\) => openHistorySearch\(\)\)/u);
   assert.match(rendererSource, /Search session history/u);
   assert.match(stylesCss, /\.history-search-row/u);
 });
@@ -309,9 +309,9 @@ test('multi-session runner is wired with capture tap, guard and shortcut', () =>
   assert.match(rendererSource, /function multiRunCaptureTap\(id, data\)/u);
   assert.match(rendererSource, /multiRunCaptureTap\(id, data\);/u);
   assert.match(rendererSource, /window\.AuxAssist\.dangerCheck\(command\)/u);
-  assert.match(rendererSource, /Run dangerous command on every selected session\?/u);
-  assert.match(rendererSource, /event\.key\.toLowerCase\(\) === 'm'\) run\(\(\) => openMultiRunModal\(\)\)/u);
-  assert.match(rendererSource, /Run on multiple sessions/u);
+  assert.match(rendererSource, /Review dangerous multi-host task/u);
+  assert.match(rendererSource, /shortcut\('multiRun'\)\) run\(\(\) => openMultiRunModal\(\)\)/u);
+  assert.match(rendererSource, /Reusable multi-host tasks/u);
   assert.match(stylesCss, /\.multi-run-output/u);
 });
 
@@ -341,7 +341,7 @@ test('recording chunks keep timing and are bounded from the front', () => {
 test('replay and host stats are wired end to end', () => {
   assert.match(rendererSource, /async function openSessionReplay\(tab\)/u);
   assert.match(rendererSource, /await api\.terminal\.recording\(tab\.id\)/u);
-  assert.match(rendererSource, /label: 'Replay session'/u);
+  assert.match(rendererSource, /label: uiText\('Replay session'\)/u);
   assert.match(rendererSource, /function startHostStats\(\)/u);
   assert.match(rendererSource, /startHostStats\(\);/u);
   assert.match(preloadSource, /recording: \(id\) => invoke\('terminal:recording', id\)/u);

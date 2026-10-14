@@ -5,7 +5,8 @@ const os = require('node:os');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { randomUUID } = require('node:crypto');
+const { randomBytes, randomUUID } = require('node:crypto');
+const { vncViewerUrl } = require('../lib/app-protocol.cjs');
 const { normalizeProfile } = require('../lib/validation.cjs');
 const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
@@ -24,6 +25,19 @@ const REQUIRED_TOOLS = {
   x11vnc: ['x11vnc'],
   xfreerdp: ['xfreerdp3', 'xfreerdp']
 };
+
+// An Xauthority file holding one MIT-MAGIC-COOKIE-1 for any address
+// (FamilyWild), so only processes given this file can open the display.
+function xauthorityEntry(display, cookie) {
+  const field = (value) => {
+    const length = Buffer.alloc(2);
+    length.writeUInt16BE(value.length);
+    return Buffer.concat([length, value]);
+  };
+  const family = Buffer.alloc(2);
+  family.writeUInt16BE(0xffff);
+  return Buffer.concat([family, field(Buffer.alloc(0)), field(Buffer.from(String(display))), field(Buffer.from('MIT-MAGIC-COOKIE-1')), field(cookie)]);
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,12 +92,13 @@ class RdpEmbedService {
       host,
       port,
       display: null,
-      width: 1600,
-      height: 900,
+      width: Math.max(800,Math.min(3840,Math.round(Number(profile.rdpWidth)||1600))),
+      height: Math.max(600,Math.min(2160,Math.round(Number(profile.rdpHeight)||900))),
       xvfb: null,
       xfreerdp: null,
       x11vnc: null,
-      x11vncPort: null,
+      x11vncSocket: null,
+      xauthority: null,
       bridgeId: null,
       workDir: fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-rdp-')),
       stopping: false,
@@ -96,18 +111,14 @@ class RdpEmbedService {
       await this.#startXfreerdp(session, rdpBin, profile);
       await this.#startX11vnc(session, x11vncBin);
       if (session.stopping) throw new Error('RDP connection closed before its display was ready');
-      const bridge = await this.vncBridge.start({
-        protocol: 'vnc',
-        host: '127.0.0.1',
-        port: session.x11vncPort
-      });
+      const bridge = await this.vncBridge.start({ protocol: 'vnc', host: '127.0.0.1', port: 5900 }, { socketPath: session.x11vncSocket });
       session.bridgeId = bridge.id;
       return {
         id,
         bridgeId: bridge.id,
         host,
         port,
-        vncUrl: `vnc.html?url=${encodeURIComponent(bridge.url)}&host=${encodeURIComponent(host)}&port=${port}`
+        vncUrl: vncViewerUrl(`url=${encodeURIComponent(bridge.url)}&host=${encodeURIComponent(host)}&port=${port}`)
       };
     } catch (error) {
       this.stop(id);
@@ -118,7 +129,11 @@ class RdpEmbedService {
   async #startXvfb(session, xvfbBin) {
     const display = await this.#reserveDisplay();
     session.display = display;
-    const args = [`:${display}`, '-screen', '0', `${session.width}x${session.height}x24`, '-nolisten', 'tcp', '-noreset'];
+    // The display is shared through /tmp/.X11-unix, which every local user
+    // can reach, so it requires a cookie kept in the private work directory.
+    session.xauthority = path.join(session.workDir, 'Xauthority');
+    fs.writeFileSync(session.xauthority, xauthorityEntry(display, randomBytes(16)), { mode: 0o600, flag: 'wx' });
+    const args = [`:${display}`, '-screen', '0', `${session.width}x${session.height}x24`, '-nolisten', 'tcp', '-noreset', '-auth', session.xauthority];
     session.xvfb = this.#spawnGuarded(xvfbBin, args, session);
     session.xvfb.once('exit', () => { if (!session.stopping) this.stop(session.id); });
 
@@ -145,41 +160,43 @@ class RdpEmbedService {
     ];
     if (profile.username) args.push(`/u:${profile.username}`);
     if (profile.rdpDomain) args.push(`/d:${profile.rdpDomain}`);
+    if (profile.rdpAudio) args.push('/sound');
     if (this.vaultService && profile.credentialId && this.vaultService.has(profile.credentialId)) {
       const secret = await this.vaultService.get(profile.credentialId);
       // FreeRDP reads the password from standard input so it never
       // appears in the process argument list.
       session.xfreerdp = this.#spawnGuarded(rdpBin, [...args, '/from-stdin'], session, {
         DISPLAY: `:${session.display}`,
+        XAUTHORITY: session.xauthority,
         FREERDP_ASKPASS: '0'
       });
       try { session.xfreerdp.stdin.write(`${secret}\n`); session.xfreerdp.stdin.end(); }
       catch { /* xfreerdp reads credentials interactively if stdin is unavailable */ }
     } else {
-      session.xfreerdp = this.#spawnGuarded(rdpBin, args, session, { DISPLAY: `:${session.display}` });
+      session.xfreerdp = this.#spawnGuarded(rdpBin, args, session, { DISPLAY: `:${session.display}`, XAUTHORITY: session.xauthority });
     }
     session.xfreerdp.once('exit', () => { if (!session.stopping) this.stop(session.id); });
   }
 
   async #startX11vnc(session, x11vncBin) {
-    const x11vncPort = await this.#freePort();
-    session.x11vncPort = x11vncPort;
-    // No VNC password: the server binds to loopback on an ephemeral port and is
-    // reachable only through the noVNC bridge, which enforces a single-use
-    // 32-byte token and a file:// origin. Adding a VNC password here would break
-    // the noVNC handshake because the operator never sees that password.
+    // No VNC password and no network port: x11vnc listens only on a Unix
+    // socket inside the 0700 work directory, so other local users cannot
+    // reach it. The noVNC bridge connects to that socket and enforces its own
+    // single-use token and viewer origin.
+    session.x11vncSocket = path.join(session.workDir, 'vnc.sock');
     const args = [
       '-display', `:${session.display}`,
-      '-rfbport', String(x11vncPort),
+      '-auth', session.xauthority,
+      '-rfbport', '0',
       '-rfbportv6', '-1',
-      '-localhost',
+      '-unixsock', session.x11vncSocket,
       '-forever',
       '-shared',
       '-noxdamage',
       '-nopw',
       '-quiet'
     ];
-    session.x11vnc = this.#spawnGuarded(x11vncBin, args, session, { DISPLAY: `:${session.display}` });
+    session.x11vnc = this.#spawnGuarded(x11vncBin, args, session, { DISPLAY: `:${session.display}`, XAUTHORITY: session.xauthority });
     session.x11vnc.once('exit', () => { if (!session.stopping) this.stop(session.id); });
 
     const deadline = Date.now() + X11VNC_SETTLE_TIMEOUT;
@@ -188,15 +205,16 @@ class RdpEmbedService {
       if (session.x11vnc.exitCode !== null && session.x11vnc.exitCode !== 0) {
         throw new Error('x11vnc exited before it could serve the RDP display');
       }
-      if (await this.#portAccepting(x11vncPort)) return;
+      if (await this.#socketAccepting(session.x11vncSocket)) return;
       await delay(150);
     }
     throw new Error('x11vnc did not start serving the RDP display in time');
   }
 
-  #portAccepting(port) {
+  #socketAccepting(socketPath) {
+    if (!fs.existsSync(socketPath)) return Promise.resolve(false);
     return new Promise((resolve) => {
-      const socket = net.createConnection({ host: '127.0.0.1', port });
+      const socket = net.createConnection({ path: socketPath });
       const done = (ok) => { socket.destroy(); resolve(ok); };
       socket.setTimeout(600);
       socket.once('connect', () => done(true));
@@ -221,18 +239,6 @@ class RdpEmbedService {
       if (session.display === display) return true;
     }
     return false;
-  }
-
-  #freePort() {
-    return new Promise((resolve, reject) => {
-      const server = net.createServer();
-      server.unref();
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        const port = server.address().port;
-        server.close((error) => error ? reject(error) : resolve(port));
-      });
-    });
   }
 
   #spawnGuarded(executable, args, session, extraEnv = {}) {
@@ -271,7 +277,7 @@ class RdpEmbedService {
       host: session.host,
       port: session.port,
       display: session.display,
-      x11vncPort: session.x11vncPort,
+      x11vncSocket: session.x11vncSocket,
       startedAt: session.startedAt
     }));
   }

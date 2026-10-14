@@ -3,6 +3,7 @@
 const net = require('node:net');
 const { randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const { WebSocket, WebSocketServer } = require('ws');
+const { ORIGIN: VIEWER_ORIGIN } = require('../lib/app-protocol.cjs');
 
 function validateVncTarget(profile) {
   if (profile?.protocol !== 'vnc') throw new Error('VNC bridge requires a VNC profile');
@@ -18,7 +19,9 @@ class VncBridgeService {
     this.sessions = new Map();
   }
 
-  async start(profile) {
+  // `socketPath` is internal (embedded RDP's private x11vnc socket); the IPC
+  // handler only ever passes a profile, so renderers cannot choose a path.
+  async start(profile, { socketPath = '' } = {}) {
     const { host, port } = validateVncTarget(profile);
     const id = randomUUID();
     const token = randomBytes(32).toString('hex');
@@ -30,7 +33,8 @@ class VncBridgeService {
       maxPayload: 16 * 1024 * 1024,
       verifyClient: (info, accept) => {
         const origin = String(info.origin || info.req.headers.origin || '');
-        const allowedOrigin = origin === 'file://' || origin === 'null';
+        // Only the isolated aux-vnc://viewer page may open the bridge.
+        const allowedOrigin = origin === VIEWER_ORIGIN;
         let supplied = '';
         try { supplied = new URL(info.req.url, 'ws://127.0.0.1').searchParams.get('token') || ''; }
         catch { /* rejected below */ }
@@ -49,7 +53,7 @@ class VncBridgeService {
       wss.once('listening', () => resolve(wss.address().port));
       wss.once('error', reject);
     });
-    session = { id, profile: structuredClone(profile), wss, wsPort, host, port, sockets: new Set(), claimed: false };
+    session = { id, profile: structuredClone(profile), wss, wsPort, host, port, socketPath, sockets: new Set(), claimed: false };
     this.sessions.set(id, session);
 
     wss.on('connection', (ws) => this.#bridgeClient(session, ws));
@@ -58,7 +62,7 @@ class VncBridgeService {
   }
 
   #bridgeClient(session, ws) {
-    const tcp = net.createConnection({ host: session.host, port: session.port });
+    const tcp = session.socketPath ? net.createConnection({ path: session.socketPath }) : net.createConnection({ host: session.host, port: session.port });
     session.sockets.add(tcp);
     tcp.setTimeout(10_000, () => tcp.destroy(new Error('VNC target connection timed out')));
     tcp.once('connect', () => tcp.setTimeout(0));

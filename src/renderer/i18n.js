@@ -10,6 +10,19 @@
 })(typeof self !== 'undefined' ? self : this, function () {
 
   const en = {
+    "rail.workspaces": "Workspaces",
+    "rail.settings": "Settings",
+    "sidebar.collapse": "Collapse connections",
+    "sidebar.all": "All",
+    "sidebar.favorites": "★ Favorites",
+    "sidebar.open": "Open",
+    "toolbar.maximize": "Maximize",
+    "toolbar.restore": "Restore",
+    "toolbar.fullscreen": "Full screen (F11)",
+    "toolbar.exitFullscreen": "Exit full screen (F11)",
+    "sftp.fileManager": "File manager",
+    "sftp.selectAll": "Select all files",
+
     'brand.subtitle': 'Remote operations workstation',
     'sidebar.secureTransfer': 'Secure transfer',
     'quick.connect': 'Connect',
@@ -88,6 +101,19 @@
   };
 
   const de = {
+    "rail.workspaces": "Arbeitsbereiche",
+    "rail.settings": "Einstellungen",
+    "sidebar.collapse": "Verbindungen einklappen",
+    "sidebar.all": "Alle",
+    "sidebar.favorites": "★ Favoriten",
+    "sidebar.open": "Offen",
+    "toolbar.maximize": "Maximieren",
+    "toolbar.restore": "Wiederherstellen",
+    "toolbar.fullscreen": "Vollbild (F11)",
+    "toolbar.exitFullscreen": "Vollbild verlassen (F11)",
+    "sftp.fileManager": "Dateimanager",
+    "sftp.selectAll": "Alle Dateien auswählen",
+
     'brand.subtitle': 'Remote-Operations-Arbeitsplatz',
     'sidebar.secureTransfer': 'Sichere Übertragung',
     'quick.connect': 'Verbinden',
@@ -166,6 +192,19 @@
   };
 
   const es = {
+    "rail.workspaces": "Espacios de trabajo",
+    "rail.settings": "Ajustes",
+    "sidebar.collapse": "Contraer conexiones",
+    "sidebar.all": "Todas",
+    "sidebar.favorites": "★ Favoritas",
+    "sidebar.open": "Abiertas",
+    "toolbar.maximize": "Maximizar",
+    "toolbar.restore": "Restaurar",
+    "toolbar.fullscreen": "Pantalla completa (F11)",
+    "toolbar.exitFullscreen": "Salir de pantalla completa (F11)",
+    "sftp.fileManager": "Gestor de archivos",
+    "sftp.selectAll": "Seleccionar todos los archivos",
+
     'brand.subtitle': 'Estación de operaciones remotas',
     'sidebar.secureTransfer': 'Transferencia segura',
     'quick.connect': 'Conectar',
@@ -244,6 +283,19 @@
   };
 
   const fr = {
+    "rail.workspaces": "Espaces de travail",
+    "rail.settings": "Paramètres",
+    "sidebar.collapse": "Réduire les connexions",
+    "sidebar.all": "Toutes",
+    "sidebar.favorites": "★ Favoris",
+    "sidebar.open": "Ouvertes",
+    "toolbar.maximize": "Agrandir",
+    "toolbar.restore": "Restaurer",
+    "toolbar.fullscreen": "Plein écran (F11)",
+    "toolbar.exitFullscreen": "Quitter le plein écran (F11)",
+    "sftp.fileManager": "Gestionnaire de fichiers",
+    "sftp.selectAll": "Sélectionner tous les fichiers",
+
     'brand.subtitle': "Poste d'opérations à distance",
     'sidebar.secureTransfer': 'Transfert sécurisé',
     'quick.connect': 'Connecter',
@@ -322,6 +374,19 @@
   };
 
   const it = {
+    "rail.workspaces": "Spazi di lavoro",
+    "rail.settings": "Impostazioni",
+    "sidebar.collapse": "Comprimi connessioni",
+    "sidebar.all": "Tutte",
+    "sidebar.favorites": "★ Preferite",
+    "sidebar.open": "Aperte",
+    "toolbar.maximize": "Massimizza",
+    "toolbar.restore": "Ripristina",
+    "toolbar.fullscreen": "Schermo intero (F11)",
+    "toolbar.exitFullscreen": "Esci da schermo intero (F11)",
+    "sftp.fileManager": "Gestore file",
+    "sftp.selectAll": "Seleziona tutti i file",
+
     'brand.subtitle': 'Postazione per operazioni remote',
     'sidebar.secureTransfer': 'Trasferimento sicuro',
     'quick.connect': 'Connetti',
@@ -400,6 +465,19 @@
   };
 
   const pt = {
+    "rail.workspaces": "Áreas de trabalho",
+    "rail.settings": "Definições",
+    "sidebar.collapse": "Recolher ligações",
+    "sidebar.all": "Todas",
+    "sidebar.favorites": "★ Favoritas",
+    "sidebar.open": "Abertas",
+    "toolbar.maximize": "Maximizar",
+    "toolbar.restore": "Restaurar",
+    "toolbar.fullscreen": "Ecrã inteiro (F11)",
+    "toolbar.exitFullscreen": "Sair do ecrã inteiro (F11)",
+    "sftp.fileManager": "Gestor de ficheiros",
+    "sftp.selectAll": "Selecionar todos os ficheiros",
+
     'brand.subtitle': 'Estação de operações remotas',
     'sidebar.secureTransfer': 'Transferência segura',
     'quick.connect': 'Conectar',
@@ -478,6 +556,19 @@
   };
 
   const ru = {
+    "rail.workspaces": "Рабочие пространства",
+    "rail.settings": "Настройки",
+    "sidebar.collapse": "Свернуть подключения",
+    "sidebar.all": "Все",
+    "sidebar.favorites": "★ Избранные",
+    "sidebar.open": "Открытые",
+    "toolbar.maximize": "Развернуть",
+    "toolbar.restore": "Восстановить",
+    "toolbar.fullscreen": "Полный экран (F11)",
+    "toolbar.exitFullscreen": "Выйти из полного экрана (F11)",
+    "sftp.fileManager": "Файловый менеджер",
+    "sftp.selectAll": "Выбрать все файлы",
+
     'brand.subtitle': 'Рабочая станция удалённых операций',
     'sidebar.secureTransfer': 'Защищённая передача',
     'quick.connect': 'Подключить',
@@ -556,6 +647,19 @@
   };
 
   const ja = {
+    "rail.workspaces": "ワークスペース",
+    "rail.settings": "設定",
+    "sidebar.collapse": "接続パネルを折りたたむ",
+    "sidebar.all": "すべて",
+    "sidebar.favorites": "★ お気に入り",
+    "sidebar.open": "接続中",
+    "toolbar.maximize": "最大化",
+    "toolbar.restore": "元に戻す",
+    "toolbar.fullscreen": "全画面表示 (F11)",
+    "toolbar.exitFullscreen": "全画面表示を終了 (F11)",
+    "sftp.fileManager": "ファイルマネージャー",
+    "sftp.selectAll": "すべてのファイルを選択",
+
     'brand.subtitle': 'リモート運用ワークステーション',
     'sidebar.secureTransfer': '安全な転送',
     'quick.connect': '接続',
@@ -634,6 +738,19 @@
   };
 
   const zh = {
+    "rail.workspaces": "工作区",
+    "rail.settings": "设置",
+    "sidebar.collapse": "折叠连接面板",
+    "sidebar.all": "全部",
+    "sidebar.favorites": "★ 收藏",
+    "sidebar.open": "已打开",
+    "toolbar.maximize": "最大化",
+    "toolbar.restore": "还原",
+    "toolbar.fullscreen": "全屏 (F11)",
+    "toolbar.exitFullscreen": "退出全屏 (F11)",
+    "sftp.fileManager": "文件管理器",
+    "sftp.selectAll": "选择所有文件",
+
     'brand.subtitle': '远程运维工作站',
     'sidebar.secureTransfer': '安全传输',
     'quick.connect': '连接',
@@ -711,6 +828,7 @@
     'lang.label': '语言'
   };
 
+  const MESSAGES = typeof module === 'object' && module.exports ? require('./dialog-i18n.js') : globalThis.AuxDialogMessages;
   const CATALOGS = { en, de, es, fr, it, ja, pt, ru, zh };
   const LANGUAGES = [
     ['en', 'English'], ['de', 'Deutsch'], ['es', 'Español'], ['fr', 'Français'],
@@ -726,6 +844,12 @@
 
   function getLanguage() {
     return current;
+  }
+
+  function message(source, values = {}) {
+    const key = Object.keys(CATALOGS.en).find((key) => CATALOGS.en[key] === source);
+    const template = MESSAGES?.[source]?.[current] || (key ? t(key) : source);
+    return String(template).replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/gu, (token, name) => Object.hasOwn(values, name) ? String(values[name]) : token);
   }
 
   function t(key) {
@@ -756,11 +880,16 @@
   function apply(rootElement) {
     const scope = rootElement || (typeof document !== 'undefined' ? document : null);
     if (!scope) return;
+    for (const element of scope.querySelectorAll('[data-ui-message]')) element.textContent = message(element.dataset.uiMessage);
+    for (const [key, attribute] of [['uiTitle', 'title'], ['uiAria', 'aria-label'], ['uiPlaceholder', 'placeholder']]) {
+      const selector = '[data-' + key.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase()) + ']';
+      for (const element of scope.querySelectorAll(selector)) element.setAttribute(attribute, message(element.dataset[key]));
+    }
     for (const element of scope.querySelectorAll('[data-i18n]')) element.textContent = t(element.dataset.i18n);
     for (const element of scope.querySelectorAll('[data-i18n-title]')) element.title = t(element.dataset.i18nTitle);
     for (const element of scope.querySelectorAll('[data-i18n-placeholder]')) element.placeholder = t(element.dataset.i18nPlaceholder);
     for (const element of scope.querySelectorAll('[data-i18n-aria]')) element.setAttribute('aria-label', t(element.dataset.i18nAria));
   }
 
-  return { t, setLanguage, getLanguage, apply, profileCount, CATALOGS, LANGUAGES };
+  return { t, message, MESSAGES, setLanguage, getLanguage, apply, profileCount, CATALOGS, LANGUAGES };
 });

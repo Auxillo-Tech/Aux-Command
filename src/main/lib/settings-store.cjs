@@ -1,6 +1,9 @@
 'use strict';
 
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { shortcuts } = require('../../shared/preferences.js');
+const { TERMINAL_THEMES } = require('./validation.cjs');
 const { JsonStore } = require('./json-store.cjs');
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -33,8 +36,11 @@ const DEFAULT_SETTINGS = Object.freeze({
     model: ''
   }),
   ui: Object.freeze({
-    language: 'en'
+    language: 'en',
+    density: 'comfortable',
+    sidebarHidden: false
   }),
+  namedWorkspaces: [],
   sessions: []
 });
 
@@ -93,7 +99,21 @@ const UI_LANGUAGES = new Set(['en', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'z
 
 function normalizeUiSettings(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
-  return { language: UI_LANGUAGES.has(source.language) ? source.language : 'en' };
+  return { language: UI_LANGUAGES.has(source.language) ? source.language : 'en',
+    density: source.density === 'compact' ? 'compact' : 'comfortable',
+    sidebarHidden: source.sidebarHidden === true,
+    sidebarWidth: Math.max(240, Math.min(500, Number(source.sidebarWidth) || 280)),
+    filesWidth: Math.max(320, Math.min(700, Number(source.filesWidth) || 384)),
+    shortcuts: shortcuts(source.shortcuts),
+    terminalCopyOnSelect: source.terminalCopyOnSelect !== false,
+    terminalPasteWarning: source.terminalPasteWarning !== false,
+    terminalRightClick: source.terminalRightClick === 'paste' ? 'paste' : 'menu',
+    terminalDefaults: {
+      terminalTheme: TERMINAL_THEMES.has(source.terminalDefaults?.terminalTheme) ? source.terminalDefaults.terminalTheme : 'aux-dark',
+      terminalFontSize: Math.max(8, Math.min(32, Math.round(Number(source.terminalDefaults?.terminalFontSize) || 13))),
+      terminalFontFamily: String(source.terminalDefaults?.terminalFontFamily || 'JetBrains Mono, monospace').slice(0, 240),
+      terminalScrollback: Math.max(1000, Math.min(200000, Math.round(Number(source.terminalDefaults?.terminalScrollback) || 20000)))
+    } };
 }
 
 function normalizeWorkspaceSettings(input = {}) {
@@ -103,6 +123,7 @@ function normalizeWorkspaceSettings(input = {}) {
   const height = Number(source.paneMinHeight);
   return {
     layout,
+    paneFlow: ['rows','columns'].includes(source.paneFlow) ? source.paneFlow : 'auto',
     paneMinWidth: Number.isFinite(width) ? Math.max(240, Math.min(720, Math.round(width))) : DEFAULT_SETTINGS.workspace.paneMinWidth,
     paneMinHeight: Number.isFinite(height) ? Math.max(160, Math.min(520, Math.round(height))) : DEFAULT_SETTINGS.workspace.paneMinHeight
   };
@@ -128,9 +149,26 @@ function normalizeSession(input = {}) {
   return {
     profileId: String(source.profileId || ''),
     protocol: String(source.protocol || ''),
-    title: String(source.title || 'Unknown'),
-    startedAt: String(source.startedAt || new Date().toISOString())
+    title: String(source.title || 'Unknown').slice(0, 100),
+    startedAt: String(source.startedAt || new Date().toISOString()).slice(0, 100),
+    customTitle: source.customTitle === true,
+    cwd: typeof source.cwd === 'string' && source.cwd.startsWith('/') && !/[\x00-\x1f]/u.test(source.cwd) ? source.cwd.slice(0, 4096) : '',
+    fontSize: source.fontSize != null && Number.isFinite(Number(source.fontSize)) ? Math.max(8, Math.min(32, Number(source.fontSize))) : null,
+    active: source.active === true,
+    paneWidth: Math.max(0, Math.min(4000, Number(source.paneWidth) || 0)),
+    paneHeight: Math.max(0, Math.min(3000, Number(source.paneHeight) || 0))
   };
+}
+
+function normalizeNamedWorkspaces(input) {
+  const seen = new Set();
+  return (Array.isArray(input) ? input : []).slice(0, 30).flatMap((item) => {
+    if (!item || typeof item !== 'object' || !item.id || !item.name || seen.has(item.id)) return [];
+    const id = String(item.id).slice(0, 100); seen.add(id);
+    return [{ id, name: String(item.name).trim().slice(0, 80),
+      workspace: normalizeWorkspaceSettings(item.workspace),
+      sessions: (Array.isArray(item.sessions) ? item.sessions : []).slice(0, 50).map(normalizeSession).filter(Boolean) }];
+  });
 }
 
 function normalizeSettings(input = {}) {
@@ -144,7 +182,8 @@ function normalizeSettings(input = {}) {
     assist: normalizeAssistSettings(source.assist),
     ai: normalizeAiSettings(source.ai),
     ui: normalizeUiSettings(source.ui),
-    sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : []
+    namedWorkspaces: normalizeNamedWorkspaces(source.namedWorkspaces),
+    sessions: Array.isArray(source.sessions) ? source.sessions.slice(0, 50).map(normalizeSession).filter(Boolean) : []
   };
 }
 
@@ -194,14 +233,34 @@ class SettingsStore {
   }
 
   saveUi(input) {
-    const ui = normalizeUiSettings(input);
+    if (input?.shortcuts) shortcuts(input.shortcuts, true);
+    const ui = normalizeUiSettings({ ...this.get().ui, ...(input && typeof input === 'object' && !Array.isArray(input) ? input : {}) });
     this.store.update((data) => ({ ...normalizeSettings(data), ui }));
     return this.get();
   }
 
+  saveNamedWorkspace(input) {
+    if (!input || typeof input.name !== 'string' || !input.name.trim()) throw new Error('Workspace name is required');
+    const current = this.get();
+    if (!input.id && current.namedWorkspaces.length >= 30) throw new Error('A maximum of 30 named workspaces is supported');
+    const id = input.id && current.namedWorkspaces.some((item) => item.id === input.id) ? input.id : randomUUID();
+    const [workspace] = normalizeNamedWorkspaces([{ ...input, id }]);
+    if (!workspace) throw new Error('Invalid workspace');
+    current.namedWorkspaces = [...current.namedWorkspaces.filter((item) => item.id !== id), workspace];
+    this.store.replace(current);
+    return current.namedWorkspaces;
+  }
+
+  deleteNamedWorkspace(id) {
+    const current = this.get();
+    current.namedWorkspaces = current.namedWorkspaces.filter((item) => item.id !== id);
+    this.store.replace(current);
+    return current.namedWorkspaces;
+  }
+
   saveSessions(sessions) {
     const normalized = Array.isArray(sessions) ? sessions.map(normalizeSession).filter(Boolean) : [];
-    this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 32) }));
+    this.store.update((data) => ({ ...normalizeSettings(data), sessions: normalized.slice(0, 50) }));
     return normalized;
   }
 

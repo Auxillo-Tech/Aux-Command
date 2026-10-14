@@ -96,7 +96,7 @@ function normalizeProfile(input = {}, existingId = '') {
     id: cleanString(existingId || input.id || randomUUID(), 'id', { required: true, max: 128 }),
     name: cleanString(input.name || (protocol === 'local' ? 'Local shell' : input.host), 'name', { required: true, max: 120 }),
     protocol,
-    group: cleanString(input.group || 'Connections', 'group', { max: 80 }) || 'Connections',
+    group: cleanString(cleanString(input.group || 'Connections', 'group', { max: 80 }).split('/').map(part => part.trim()).filter(Boolean).join(' / ') || 'Connections', 'group', { max: 80 }),
     host: rejectOptionLike(cleanString(input.host, 'host', { required: !['local', 'serial'].includes(protocol), max: 255 }), 'host', { rejectWhitespace: true }),
     port: protocol === 'local' ? 0 : cleanPort(input.port, 'port', protocol === 'rdp' ? 3389 : protocol === 'vnc' ? 5900 : protocol === 'telnet' ? 23 : protocol === 'ftp' ? 21 : protocol === 'ftps' ? 990 : 22),
     username: rejectOptionLike(cleanString(input.username, 'username', { max: 128 }), 'username'),
@@ -110,8 +110,9 @@ function normalizeProfile(input = {}, existingId = '') {
     tags: cleanTags(input.tags),
     favorite: cleanBoolean(input.favorite),
     useSshConfig: cleanBoolean(input.useSshConfig, true),
-    startupCommand: cleanString(input.startupCommand, 'startupCommand', { max: 2048, allowNewlines: true }),
+    startupCommand: rejectOptionLike(cleanString(input.startupCommand, 'startupCommand', { max: 2048, allowNewlines: true }).trimStart(), 'startupCommand'),
     proxyJump: rejectOptionLike(cleanString(input.proxyJump, 'proxyJump', { max: 512 }), 'proxyJump', { rejectWhitespace: true }),
+    trackRemoteCwd: cleanBoolean(input.trackRemoteCwd, false),
     keepAliveSeconds: Math.min(600, Math.max(0, Number.isInteger(Number(input.keepAliveSeconds)) ? Number(input.keepAliveSeconds) : 30)),
     compression: cleanBoolean(input.compression),
     agentForwarding: cleanBoolean(input.agentForwarding),
@@ -119,7 +120,11 @@ function normalizeProfile(input = {}, existingId = '') {
     sftpRoot: cleanString(input.sftpRoot || '/', 'sftpRoot', { max: 4096 }) || '/',
     device: cleanString(input.device, 'device', { required: protocol === 'serial', max: 4096 }),
     baudRate: Math.min(4_000_000, Math.max(50, Number.isInteger(Number(input.baudRate)) ? Number(input.baudRate) : 115200)),
+    rdpAudio: cleanBoolean(input.rdpAudio, false),
+    rdpWidth: Math.max(800, Math.min(3840, Math.round(Number(input.rdpWidth) || 1600))),
+    rdpHeight: Math.max(600, Math.min(2160, Math.round(Number(input.rdpHeight) || 900))),
     rdpDomain: cleanString(input.rdpDomain, 'rdpDomain', { max: 128 }),
+    inheritTerminalDefaults: cleanBoolean(input.inheritTerminalDefaults, false),
     terminalTheme,
     terminalFontFamily: cleanString(input.terminalFontFamily || 'JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, monospace', 'terminalFontFamily', { max: 240 }),
     terminalFontSize: cleanBoundedInteger(input.terminalFontSize, 'terminalFontSize', 13, 8, 32),
@@ -147,7 +152,8 @@ function normalizeTerminalRequest(input = {}) {
     profile: normalizeProfile(input.profile || {}),
     cols: Math.min(500, Math.max(20, Number.isInteger(Number(input.cols)) ? Number(input.cols) : 100)),
     rows: Math.min(300, Math.max(5, Number.isInteger(Number(input.rows)) ? Number(input.rows) : 30)),
-    cwd: expandHome(input.cwd || os.homedir())
+    cwd: expandHome(input.cwd || os.homedir()),
+    remoteCwd: input.remoteCwd && String(input.remoteCwd).startsWith('/') ? cleanString(input.remoteCwd, 'remoteCwd', { max: 4096 }) : ''
   };
 }
 

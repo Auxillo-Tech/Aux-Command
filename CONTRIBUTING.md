@@ -17,7 +17,7 @@ Aux Command is free, open-source software under AGPL-3.0-or-later. Contributions
    npm ci
    npm run check
    ```
-3. Ensure 127 tests pass and no syntax errors in JS, Python, or shell files.
+3. Run `npm run check` and make sure every test passes with no syntax errors in JS, Python, or shell files.
 4. Open a pull request against `main` with a clear description of the change and any security or compatibility implications.
 5. CI must pass before merge.
 

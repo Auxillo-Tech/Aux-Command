@@ -63,7 +63,7 @@
       "enableEmbeddedAsarIntegrityValidation": true,
       "onlyLoadAppFromAsar": true,
       "loadBrowserProcessSpecificV8Snapshot": false,
-      "grantFileProtocolExtraPrivileges": true
+      "grantFileProtocolExtraPrivileges": false
     },
     "appId": "tech.auxillo.command",
     "productName": "Aux Command",

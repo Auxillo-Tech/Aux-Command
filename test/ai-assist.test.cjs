@@ -117,12 +117,22 @@ test('AI assist is wired renderer → preload → ipc and off by default', () =>
   const ipc = fs.readFileSync(path.join(root, 'src/main/ipc.cjs'), 'utf8');
   const mainIndex = fs.readFileSync(path.join(root, 'src/main/index.cjs'), 'utf8');
   assert.match(renderer, /async function openAiAssistModal\(\)/u);
-  assert.match(renderer, /event\.key\.toLowerCase\(\) === 'a'\) run\(\(\) => openAiAssistModal\(\)\)/u);
-  assert.match(renderer, /label: 'Ask AI'/u);
+  assert.match(renderer, /shortcut\('ai'\)\) run\(\(\) => openAiAssistModal\(\)\)/u);
+  assert.match(renderer, /label: uiText\('Ask AI'\)/u);
   assert.match(renderer, /Replies are inserted, never executed/u);
   assert.match(preload, /ask: \(request\) => invoke\('ai:ask', request\)/u);
   assert.match(ipc, /handle\('ai:ask', \(request\) => aiAssist\.ask\(request\)\)/u);
   assert.match(ipc, /aiAssist,/u);
   assert.match(mainIndex, /new AiAssistService\(settingsStore, vaultService\)/u);
   assert.match(mainIndex, /aiAssist\s*\}/u);
+});
+
+test('AI assist refuses plain HTTP to other machines so keys and output stay encrypted', async () => {
+  const { AiAssistService } = require('../src/main/services/ai-assist.cjs');
+  const { settingsStore, vaultService } = fakeStores({ enabled: false, endpoint: '' });
+  const service = new AiAssistService(settingsStore, vaultService);
+  await assert.rejects(service.configure({ enabled: true, endpoint: 'http://192.168.1.20:11434' }), /must use HTTPS/u);
+  await assert.rejects(service.configure({ enabled: true, endpoint: 'file:///etc/passwd' }), /http\(s\) URL/u);
+  assert.equal((await service.configure({ enabled: true, endpoint: 'http://localhost:11434' })).enabled, true);
+  assert.equal((await service.configure({ enabled: true, endpoint: 'https://ai.example.com' })).enabled, true);
 });

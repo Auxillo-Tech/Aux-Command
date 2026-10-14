@@ -88,3 +88,13 @@ window.addEventListener('beforeunload', () => {
   try { rfb?.disconnect(); } catch { /* already disconnected */ }
   rfb = null;
 });
+
+const clipboardText=document.getElementById('clipboard-text');
+document.getElementById('desktop-fit').onclick=event=>{if(!rfb)return;rfb.scaleViewport=!rfb.scaleViewport;screen.classList.toggle('actual-size',!rfb.scaleViewport);event.target.textContent=rfb.scaleViewport?'Actual size':'Fit to pane';};
+document.getElementById('desktop-cad').onclick=()=>rfb?.sendCtrlAltDel();
+document.getElementById('desktop-clipboard').onclick=()=>{document.getElementById('clipboard-panel').hidden=false;clipboardText.focus();};
+document.getElementById('clipboard-close').onclick=()=>{document.getElementById('clipboard-panel').hidden=true;rfb?.focus();};
+document.getElementById('clipboard-send').onclick=()=>{rfb?.clipboardPasteFrom(clipboardText.value.slice(0,1048576));};
+document.getElementById('desktop-viewonly').onclick=event=>{if(!rfb)return;rfb.viewOnly=!rfb.viewOnly;event.target.textContent=rfb.viewOnly?'Enable control':'View only';};
+rfb?.addEventListener('clipboard',event=>{clipboardText.value=String(event.detail.text||'').slice(0,1048576);});
+window.addEventListener('keydown',event=>{if(event.ctrlKey&&event.altKey&&event.shiftKey){rfb?.blur();document.getElementById('desktop-viewonly').focus();event.preventDefault();}},true);

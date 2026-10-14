@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src aux-vnc:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <title>Aux Command</title>
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="./styles.css">
@@ -11,41 +11,42 @@
 <body>
   <div id="app-shell" class="no-sessions">
     <header class="topbar">
-      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle connections sidebar" aria-expanded="false">☰</button>
-      <button id="brand-button" class="brand" type="button" title="Aux Command home">
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle connections sidebar" aria-expanded="false" data-ui-aria="Toggle connections sidebar">☰</button>
+      <button id="brand-button" class="brand" type="button" title="Aux Command home" data-ui-title="Aux Command home">
         <img class="brand-mark" src="./assets/aux-command-logo.png" alt="">
         <span class="brand-copy">
-          <span class="product-name">Aux Command</span>
+          <span class="product-name" data-ui-message="Aux Command">Aux Command</span>
           <span class="product-tagline" data-i18n="brand.subtitle">Remote operations workstation</span>
         </span>
       </button>
       <div class="quick-connect workspace-commandbar">
         <span class="quick-prefix">›_</span>
-        <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22, user@host, or /dev/ttyUSB0">
-        <select id="quick-protocol" aria-label="Quick connect protocol">
-          <option value="ssh">SSH</option>
-          <option value="mosh">Mosh</option>
-          <option value="telnet">Telnet</option>
-          <option value="ftp">FTP</option>
-          <option value="ftps">FTPS</option>
-          <option value="serial">Serial</option>
-          <option value="rdp">RDP</option>
-          <option value="vnc">VNC</option>
+        <input id="quick-input" type="text" autocomplete="off" spellcheck="false" aria-label="Quick connect target" placeholder="ssh://user@host:22, user@host, or /dev/ttyUSB0" data-ui-aria="Quick connect target" data-ui-placeholder="ssh://user@host:22, user@host, or /dev/ttyUSB0">
+        <select id="quick-protocol" aria-label="Quick connect protocol" data-ui-aria="Quick connect protocol">
+          <option value="ssh" data-ui-message="SSH">SSH</option>
+          <option value="mosh" data-ui-message="Mosh">Mosh</option>
+          <option value="telnet" data-ui-message="Telnet">Telnet</option>
+          <option value="ftp" data-ui-message="FTP">FTP</option>
+          <option value="ftps" data-ui-message="FTPS">FTPS</option>
+          <option value="serial" data-ui-message="Serial">Serial</option>
+          <option value="rdp" data-ui-message="RDP">RDP</option>
+          <option value="vnc" data-ui-message="VNC">VNC</option>
         </select>
         <button id="quick-button" class="button primary" type="button" data-i18n="quick.connect">Connect</button>
       </div>
       <div class="topbar-right">
+        <button id="fullscreen-button" class="ghost-button" type="button" title="Full screen (F11)" data-i18n-title="toolbar.fullscreen" aria-pressed="false">⛶</button>
         <button id="palette-button" class="ghost-button" type="button" title="Command palette (Ctrl+Shift+P)" data-i18n-title="title.palette">
           <span aria-hidden="true">⌘</span><span class="ghost-label" data-i18n="palette.label">Palette</span>
         </button>
-        <button id="website-button" class="brand-link" type="button" title="Visit auxillo.tech">
+        <button id="website-button" class="brand-link" type="button" title="Visit auxillo.tech" data-ui-title="Visit auxillo.tech">
           <img src="./assets/auxillo-wordmark.png" alt="Auxillo">
           <span aria-hidden="true" class="external-arrow">↗</span>
         </button>
       </div>
     </header>
 
-    <nav class="tool-rail top-actions" aria-label="Application actions">
+    <nav class="tool-rail top-actions" aria-label="Application actions" data-ui-aria="Application actions">
       <button id="local-button" class="top-action" type="button" title="New local shell (Ctrl+Shift+T)" data-i18n-title="title.localShell">
         <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="16" height="13" rx="2.4"/><path d="m5.5 8 2.6 2.2L5.5 12.4"/><path d="M10.5 13h4"/></svg></span>
         <span class="action-label" data-i18n="rail.localShell">Local shell</span>
@@ -85,6 +86,10 @@
         <span class="action-label" data-i18n="rail.assist">Assist</span>
       </button>
       <span class="rail-spacer" aria-hidden="true"></span>
+      <button id="workspaces-button" class="top-action" type="button" title="Named workspaces" data-ui-title="Named workspaces"><span class="action-icon" aria-hidden="true">▦</span><span class="action-label" data-i18n="rail.workspaces">Workspaces</span></button>
+      <button id="preferences-button" class="top-action" type="button" title="Appearance and workspace preferences" data-ui-title="Appearance and workspace preferences">
+        <span class="action-icon" aria-hidden="true">⚙</span><span class="action-label" data-i18n="rail.settings">Settings</span>
+      </button>
       <button id="diagnostics-button" class="top-action" type="button" title="System diagnostics" data-i18n-title="title.diagnostics">
         <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2.2M10 15.2v2.2M2.6 10h2.2M15.2 10h2.2"/></svg></span>
         <span class="action-label" data-i18n="rail.diagnostics">Diagnostics</span>
@@ -96,65 +101,74 @@
     </nav>
 
     <aside class="sidebar">
+      <div id="sidebar-resizer" class="panel-resizer" role="separator" tabindex="0" aria-label="Resize connections panel" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="500" aria-valuenow="280" data-ui-aria="Resize connections panel"></div>
       <div class="sidebar-heading">
         <div><span class="eyebrow" data-i18n="sidebar.workspace">Workspace</span><h2 data-i18n="sidebar.connections">Connections</h2></div>
         <div class="sidebar-heading-actions">
-          <button id="new-group-button" class="icon-button small" type="button" title="New group" aria-label="New group"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 4.6a1.6 1.6 0 0 1 1.6-1.6h3l1.4 1.6h4.8a1.6 1.6 0 0 1 1.6 1.6v6.2a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M8 7.4v3.6M6.2 9.2h3.6"/></svg></button>
-          <button id="new-profile-button" class="icon-button small" type="button" title="New connection" aria-label="New connection">＋</button>
+          <button id="collapse-sidebar" class="icon-button small" type="button" title="Collapse connections" aria-label="Collapse connections" data-i18n-title="sidebar.collapse" data-i18n-aria="sidebar.collapse">‹</button>
+          <button id="new-group-button" class="icon-button small" type="button" title="New group" aria-label="New group" data-ui-title="New group" data-ui-aria="New group"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 4.6a1.6 1.6 0 0 1 1.6-1.6h3l1.4 1.6h4.8a1.6 1.6 0 0 1 1.6 1.6v6.2a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M8 7.4v3.6M6.2 9.2h3.6"/></svg></button>
+          <button id="new-profile-button" class="icon-button small" type="button" title="New connection" aria-label="New connection" data-ui-title="New connection" data-ui-aria="New connection">＋</button>
         </div>
       </div>
       <label class="search-box">
         <span>⌕</span>
-        <input id="profile-search" type="search" autocomplete="off" aria-label="Filter connections" placeholder="Filter connections" data-i18n-placeholder="sidebar.filter">
+        <input id="profile-search" type="search" autocomplete="off" aria-label="Filter connections" placeholder="Filter connections" data-i18n-placeholder="sidebar.filter" data-ui-aria="Filter connections">
       </label>
+      <div class="connection-filters" role="group" aria-label="Connection view" data-ui-aria="Connection view">
+        <button data-i18n="sidebar.all" id="profiles-all" type="button" aria-pressed="true">All</button>
+        <button data-i18n="sidebar.favorites" id="profiles-favorites" type="button" aria-pressed="false">★ Favorites</button>
+        <button data-i18n="sidebar.open" id="profiles-active" type="button" aria-pressed="false">Open</button>
+      </div>
       <div class="sidebar-tools">
         <button id="import-ssh-button" type="button" data-i18n="sidebar.importSsh">Import ~/.ssh/config</button>
         <button id="profile-menu-button" type="button" data-i18n="sidebar.importExport">Import / Export</button>
       </div>
       <div id="profile-list" class="profile-list" role="list"></div>
       <div class="sidebar-footer">
-        <span id="connection-count">0 profiles</span>
+        <span id="connection-count" data-ui-message="0 profiles">0 profiles</span>
         <span id="agent-status" class="status-chip" data-i18n="sidebar.agentUnknown">Agent unknown</span>
       </div>
     </aside>
 
     <main class="workspace">
       <div id="tabbar" class="tabbar">
-        <div id="session-tabs" class="session-tabs" role="tablist" aria-label="Terminal sessions">
+        <div id="session-tabs" class="session-tabs" role="tablist" aria-label="Terminal sessions" data-ui-aria="Terminal sessions">
           <div class="tabbar-spacer"></div>
         </div>
-        <div class="session-toolbar" role="toolbar" aria-label="Active session controls">
-          <div class="toolbar-group" aria-label="View">
-            <button id="layout-toggle" class="tab-action" type="button" title="Switch to tiled-session view (Ctrl+Shift+L)" disabled data-i18n="toolbar.single">Single</button>
-            <button id="pane-shrink-button" class="tab-action compact-action" type="button" title="Decrease tiled pane size (Ctrl+Shift+-)" aria-label="Decrease tiled pane size" disabled>−</button>
-            <button id="pane-grow-button" class="tab-action compact-action" type="button" title="Increase tiled pane size (Ctrl+Shift+=)" aria-label="Increase tiled pane size" disabled>+</button>
+        <div class="session-toolbar" role="toolbar" aria-label="Active session controls" data-ui-aria="Active session controls">
+          <div class="toolbar-group" aria-label="View" data-ui-aria="View">
+            <button id="maximize-terminal" class="tab-action" type="button" aria-pressed="false" disabled data-i18n="toolbar.maximize">Maximize</button>
+            <button id="session-fullscreen" class="tab-action" type="button" data-i18n="toolbar.fullscreen">Full screen (F11)</button>
+            <button id="layout-toggle" class="tab-action" type="button" title="Switch to tiled-session view (Ctrl+Shift+L)" disabled data-i18n="toolbar.single" data-ui-title="Switch to tiled-session view (Ctrl+Shift+L)">Single</button>
+            <button id="pane-shrink-button" class="tab-action compact-action" type="button" title="Decrease tiled pane size (Ctrl+Shift+-)" aria-label="Decrease tiled pane size" disabled data-ui-title="Decrease tiled pane size (Ctrl+Shift+-)" data-ui-aria="Decrease tiled pane size">−</button>
+            <button id="pane-grow-button" class="tab-action compact-action" type="button" title="Increase tiled pane size (Ctrl+Shift+=)" aria-label="Increase tiled pane size" disabled data-ui-title="Increase tiled pane size (Ctrl+Shift+=)" data-ui-aria="Increase tiled pane size">+</button>
           </div>
-          <div class="toolbar-group" aria-label="Session">
-            <button id="terminal-search-toggle" class="tab-action" type="button" title="Find in active terminal (Ctrl+F)" disabled data-i18n="toolbar.find">Find</button>
-            <button id="highlight-toggle" class="tab-action" type="button" title="Log keyword highlighting (Ctrl+Shift+H)" data-i18n="toolbar.highlight">Highlight</button>
-            <button id="export-transcript-button" class="tab-action" type="button" title="Export active terminal transcript" disabled data-i18n="toolbar.export">Export</button>
-            <button id="terminal-log-button" class="tab-action" type="button" title="Start or stop logging active terminal output" disabled data-i18n="toolbar.log">Log</button>
-            <button id="macro-record-button" class="tab-action" type="button" title="Record terminal input as a replayable snippet" disabled data-i18n="toolbar.macro">Macro</button>
-            <button id="duplicate-session-button" class="tab-action" type="button" title="Duplicate active session (Ctrl+Shift+D)" disabled data-i18n="toolbar.duplicate">Duplicate</button>
-            <button id="reconnect-session-button" class="tab-action" type="button" title="Reconnect active session (Ctrl+Shift+R)" disabled data-i18n="toolbar.reconnect">Reconnect</button>
-            <button id="sftp-toggle" class="tab-action" type="button" title="SFTP requires an active SSH session" disabled>SFTP</button>
+          <div class="toolbar-group" aria-label="Session" data-ui-aria="Session">
+            <button id="terminal-search-toggle" class="tab-action" type="button" title="Find in active terminal (Ctrl+F)" disabled data-i18n="toolbar.find" data-ui-title="Find in active terminal (Ctrl+F)">Find</button>
+            <button id="highlight-toggle" class="tab-action" type="button" title="Log keyword highlighting (Ctrl+Shift+H)" data-i18n="toolbar.highlight" data-ui-title="Log keyword highlighting (Ctrl+Shift+H)">Highlight</button>
+            <button id="export-transcript-button" class="tab-action" type="button" title="Export active terminal transcript" disabled data-i18n="toolbar.export" data-ui-title="Export active terminal transcript">Export</button>
+            <button id="terminal-log-button" class="tab-action" type="button" title="Start or stop logging active terminal output" disabled data-i18n="toolbar.log" data-ui-title="Start or stop logging active terminal output">Log</button>
+            <button id="macro-record-button" class="tab-action" type="button" title="Record terminal input as a replayable snippet" disabled data-i18n="toolbar.macro" data-ui-title="Record terminal input as a replayable snippet">Macro</button>
+            <button id="duplicate-session-button" class="tab-action" type="button" title="Duplicate active session (Ctrl+Shift+D)" disabled data-i18n="toolbar.duplicate" data-ui-title="Duplicate active session (Ctrl+Shift+D)">Duplicate</button>
+            <button id="reconnect-session-button" class="tab-action" type="button" title="Reconnect active session (Ctrl+Shift+R)" disabled data-i18n="toolbar.reconnect" data-ui-title="Reconnect active session (Ctrl+Shift+R)">Reconnect</button>
+            <button id="sftp-toggle" class="tab-action" type="button" title="SFTP requires an active SSH session" disabled data-ui-title="SFTP requires an active SSH session" data-ui-message="SFTP">SFTP</button>
           </div>
           <div id="terminal-search-host" class="terminal-search-host"></div>
-          <div class="toolbar-group danger-group" aria-label="Multi-session input">
-            <button id="broadcast-toggle" class="tab-action" type="button" title="Broadcast keyboard input to every open terminal (Ctrl+Shift+B)" disabled data-i18n="toolbar.broadcast">Broadcast</button>
+          <div class="toolbar-group danger-group" aria-label="Multi-session input" data-ui-aria="Multi-session input">
+            <button id="broadcast-toggle" class="tab-action" type="button" title="Broadcast keyboard input to every open terminal (Ctrl+Shift+B)" disabled data-i18n="toolbar.broadcast" data-ui-title="Broadcast keyboard input to every open terminal (Ctrl+Shift+B)">Broadcast</button>
           </div>
         </div>
       </div>
       <div id="broadcast-warning" class="broadcast-warning" role="alert" hidden>
-        <strong>Broadcast input active</strong>
-        <span>Keyboard input is being sent to every open terminal.</span>
+        <strong data-ui-message="Broadcast input active">Broadcast input active</strong>
+        <span data-ui-message="Keyboard input is being sent to every open terminal.">Keyboard input is being sent to every open terminal.</span>
       </div>
       <section id="welcome" class="welcome">
         <div class="welcome-mark"><img src="./assets/aux-command-logo.png" alt=""></div>
         <img class="eyebrow-logo" src="./assets/eyebrow-logo.png" alt="Auxillo">
         <h1 data-i18n="welcome.title">Control every remote system from one Linux workspace.</h1>
         <p data-i18n="welcome.subtitle">Native OpenSSH sessions, file transfer, tunnels and remote desktop launchers without hiding the Linux tools you already trust.</p>
-        <div class="welcome-capabilities" aria-label="Available connection capabilities">
+        <div class="welcome-capabilities" aria-label="Available connection capabilities" data-ui-aria="Available connection capabilities">
           <span><i class="capability-dot secure"></i>SSH &amp; SFTP</span>
           <span><i class="capability-dot transfer"></i>FTP &amp; FTPS</span>
           <span><i class="capability-dot route"></i>Tunnels</span>
@@ -181,36 +195,43 @@
           <span><kbd>Ctrl</kbd><kbd>W</kbd> Close tab</span>
         </div>
       </section>
-      <section id="terminal-stack" class="terminal-stack" aria-label="Terminal sessions"></section>
+      <section id="terminal-stack" class="terminal-stack" aria-label="Terminal sessions" data-ui-aria="Terminal sessions"></section>
       <section id="initialization-error" class="initialization-error" role="alert" hidden>
-        <span class="eyebrow">Startup failure</span>
-        <h1>Aux Command could not initialize.</h1>
-        <p id="initialization-error-detail">The application state could not be loaded.</p>
+        <span class="eyebrow" data-ui-message="Startup failure">Startup failure</span>
+        <h1 data-ui-message="Aux Command could not initialize.">Aux Command could not initialize.</h1>
+        <p id="initialization-error-detail" data-ui-message="The application state could not be loaded.">The application state could not be loaded.</p>
         <div class="welcome-actions compact-actions">
-          <button id="retry-initialization" class="action-card" type="button"><span>↻</span><strong>Reload application</strong><small>Retry initialization from a clean renderer state</small></button>
-          <button id="error-diagnostics" class="action-card" type="button"><span>◉</span><strong>Open diagnostics</strong><small>Inspect runtime tools and environment</small></button>
+          <button id="retry-initialization" class="action-card" type="button"><span>↻</span><strong data-ui-message="Reload application">Reload application</strong><small>Retry initialization from a clean renderer state</small></button>
+          <button id="error-diagnostics" class="action-card" type="button"><span>◉</span><strong data-ui-message="Open diagnostics">Open diagnostics</strong><small>Inspect runtime tools and environment</small></button>
         </div>
       </section>
     </main>
 
     <aside id="sftp-panel" class="sftp-panel" aria-hidden="true">
+      <div id="files-resizer" class="panel-resizer left" role="separator" tabindex="0" aria-label="Resize file panel" aria-orientation="vertical" aria-valuemin="320" aria-valuemax="700" aria-valuenow="384" data-ui-aria="Resize file panel"></div>
       <div class="panel-heading">
-        <div><span class="eyebrow" data-i18n="sidebar.secureTransfer">Secure transfer</span><h2 id="sftp-title">SFTP</h2></div>
-        <button id="sftp-close" class="icon-button small" type="button" title="Close SFTP" aria-label="Close SFTP">×</button>
+        <div><span class="eyebrow" data-i18n="sidebar.secureTransfer">Secure transfer</span><h2 id="sftp-title" data-ui-message="SFTP">SFTP</h2></div>
+        <button id="sftp-close" class="icon-button small" type="button" title="Close SFTP" aria-label="Close SFTP" data-ui-title="Close SFTP" data-ui-aria="Close SFTP">×</button>
       </div>
       <div class="pathbar">
-        <button id="sftp-up" type="button" title="Parent directory">↑</button>
-        <input id="sftp-path" type="text" value="/" spellcheck="false" aria-label="Remote path">
-        <button id="sftp-refresh" type="button" title="Refresh">↻</button>
+        <button id="sftp-up" type="button" title="Parent directory" data-ui-title="Parent directory">↑</button>
+        <input id="sftp-path" type="text" value="/" spellcheck="false" aria-label="Remote path" data-ui-aria="Remote path">
+        <button id="sftp-refresh" type="button" title="Refresh" data-ui-title="Refresh">↻</button>
       </div>
       <div class="sftp-actions">
         <button id="sftp-upload" type="button" data-i18n="sftp.upload">Upload</button>
         <button id="sftp-download" type="button" disabled data-i18n="sftp.download">Download</button>
         <button id="sftp-edit" type="button" disabled data-i18n="sftp.edit">Edit</button>
         <button id="sftp-mkdir" type="button" data-i18n="sftp.newFolder">New folder</button>
+        <button id="file-manager-button" type="button" disabled data-i18n="sftp.fileManager">File manager</button>
         <button id="sftp-more" type="button" disabled data-i18n="sftp.more">More</button>
       </div>
-      <div class="file-header"><span data-i18n="sftp.name">Name</span><span data-i18n="sftp.size">Size</span></div>
+      <div class="file-filters">
+        <input id="file-search" type="search" placeholder="Filter files…" aria-label="Filter remote files" autocomplete="off" data-ui-aria="Filter remote files" data-ui-placeholder="Filter files…">
+        <select id="file-sort" aria-label="Sort remote files" data-ui-aria="Sort remote files"><option value="name" data-ui-message="Name A–Z">Name A–Z</option><option value="modified" data-ui-message="Newest first">Newest first</option><option value="size" data-ui-message="Largest first">Largest first</option></select>
+        <button id="file-hidden" type="button" aria-pressed="true" title="Show or hide dotfiles" data-ui-title="Show or hide dotfiles" data-ui-message="Dotfiles">Dotfiles</button>
+      </div>
+      <div class="file-header"><span id="file-selection-count" role="status"></span><button id="file-select-all" type="button" data-i18n="sftp.selectAll">Select all files</button><span data-i18n="sftp.name">Name</span><span data-i18n="sftp.size">Size</span></div>
       <div id="file-list" class="file-list" aria-busy="false"></div>
       <div id="sftp-empty" class="panel-empty" data-i18n="sftp.empty">Open an SSH session, then enable SFTP.</div>
       <div id="transfer-status" class="transfer-status" role="status" aria-live="polite"><span data-i18n="sftp.noActive">No active transfer</span></div>
@@ -224,18 +245,18 @@
     </aside>
 
     <footer class="statusbar">
-      <div><span id="global-status-dot" class="status-dot"></span><span id="global-status" role="status" aria-live="polite">Ready</span></div>
-      <button id="tunnel-status-cluster" class="statusbar-cluster" type="button" title="SSH tunnels" hidden aria-label="Active SSH tunnels">
+      <div><span id="global-status-dot" class="status-dot"></span><span id="global-status" role="status" aria-live="polite" data-ui-message="Ready">Ready</span></div>
+      <button id="tunnel-status-cluster" class="statusbar-cluster" type="button" title="SSH tunnels" hidden aria-label="Active SSH tunnels" data-ui-title="SSH tunnels" data-ui-aria="Active SSH tunnels">
         <span class="cluster-icon" aria-hidden="true">⇄</span>
-        <span id="tunnel-status-summary" class="cluster-summary">0 tunnels</span>
+        <span id="tunnel-status-summary" class="cluster-summary" data-ui-message="0 tunnels">0 tunnels</span>
         <span id="tunnel-status-dots" class="cluster-dots"></span>
       </button>
       <div class="statusbar-right">
-        <span id="host-stats" class="host-stats" title="Local host: load, memory, root disk" hidden></span>
+        <span id="host-stats" class="host-stats" title="Local host: load, memory, root disk" hidden data-ui-title="Local host: load, memory, root disk"></span>
         <span id="active-session-label" data-i18n="status.noSession">No active session</span>
-        <select id="language-select" class="language-select" aria-label="Language" title="Language"></select>
+        <select id="language-select" class="language-select" aria-label="Language" title="Language" data-ui-title="Language" data-ui-aria="Language"></select>
         <span id="app-version"></span>
-        <button id="statusbar-website" class="statusbar-link" type="button" title="Visit auxillo.tech">auxillo.tech</button>
+        <button id="statusbar-website" class="statusbar-link" type="button" title="Visit auxillo.tech" data-ui-title="Visit auxillo.tech" data-ui-message="auxillo.tech">auxillo.tech</button>
       </div>
     </footer>
   </div>
@@ -262,8 +283,11 @@
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+  <script src="./dialog-i18n.js"></script>
   <script src="./i18n.js"></script>
   <script src="./assist.js"></script>
+  <script src="../shared/preferences.js"></script>
+  <script src="./workspace-utils.js"></script>
   <script src="./renderer.js"></script>
 </body>
 </html>

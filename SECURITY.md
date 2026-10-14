@@ -6,7 +6,8 @@ Aux Command is security-sensitive remote-operations software. Do not publish vul
 
 | Version | Status |
 |---|---|
-| 0.2.x | Active |
+| 0.4.x | Active |
+| < 0.4 | Not supported; upgrade to the latest release |
 
 ## Reporting a vulnerability
 

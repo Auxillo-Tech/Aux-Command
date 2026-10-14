@@ -1,5 +1,68 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- SSH and Mosh arguments now end option parsing before the host, and startup commands may not start with `-`; previously a crafted startup command such as `-oProxyCommand=…` could run on the local machine.
+- Profile sync no longer applies startup commands, identity files, jump hosts, known-hosts files, SSH-config aliases or agent/X11 forwarding from the sync source, never modifies local-shell profiles, allows plain HTTP only for localhost, and refuses redirects that change the scheme.
+- Pasted text is stripped of escape and control characters so an embedded end-of-paste marker cannot run commands; multi-line and broadcast pastes are confirmed first (Settings → Copy and paste).
+- AI assist refuses replies containing control characters, requires HTTPS for endpoints on other machines, caps reply size and covers the whole request with its timeout.
+- The dangerous-command guard checks every committed line, recognises long options and `${HOME}`, no longer flags `rm -rf /tmp/…`, and also confirms dangerous or multi-line snippets. Automatic terminal replies stay out of the guard, macros and broadcast.
+- Macro recording captures only the tab being recorded.
+- App windows load from a private `app://aux` origin with a file allowlist instead of `file://`, and the `grantFileProtocolExtraPrivileges` fuse is turned off.
+- The embedded VNC/RDP viewer is served from an isolated `aux-vnc://viewer` origin and the bridge accepts only that origin. Embedded RDP protects its X display with a private cookie and serves VNC only on a private Unix socket.
+- OSC 8 hyperlinks use the same Ctrl+click, http/https-only rule as plain links.
+- Workspace backup restores list every startup command first. SSH identity files must be regular files under 64 KB. Executables resolve only from absolute `PATH` entries. The print window runs without JavaScript, and detached windows have no developer tools outside `--dev`.
+- The updater verifies downloaded AppImage bytes against the GPG-signed manifest, rechecks them immediately before installation, prevents overlapping update operations, ignores unsolicited download events and bounds authentication response sizes. A checksum-verified previous AppImage is kept for rollback.
+- Embedded RDP remembers server certificates and rejects changed ones.
+
+### Fixed
+
+- Right-click in a terminal no longer selects the word under the pointer and copies it over the clipboard, which made right-click paste impossible over text.
+- Ctrl+Shift+V can no longer paste twice: Chromium's native plain-text paste is now suppressed.
+- Process cleanup reaps adopted descendants and terminates guarded process trees.
+- SSH import refreshes effective OpenSSH settings, preserves personal profile settings, recognizes consolidated aliases, and shows progress, counts and errors.
+- Proxied SSH reachability no longer reports a misleading direct TCP failure.
+- Asynchronous credential decryption returns the actual password string.
+- Linux deb/rpm packages declare the Electron runtime libraries they need.
+- FTP replacement keeps a backup and rolls back on failure. Partial downloads are private from creation, resumed files cannot keep stale bytes, cancelled queued transfers never start, and the inline editor respects its byte limit.
+- Dialog warnings keep their line breaks and scroll when long.
+
+### Added
+
+- Linux-style copy and paste in workspace and detached terminals: highlighted text becomes the primary selection and is copied to the clipboard (copy on select, on by default), middle-click pastes the selection, and Ctrl+Insert / Shift+Insert copy and paste.
+- A terminal right-click menu with Copy, Paste, Paste selection, Select all, Find, Clear scrollback and a copy-on-select toggle. A PuTTY-style right-click (copy, or paste when nothing is selected) is available in Settings. Mouse-aware programs (tmux, vim, htop) keep their own clicks; Shift overrides.
+- Ctrl+click opens http/https links in terminal output in the browser.
+- Profile JSON import preview with merge/update/copy choices; workspace backups include preferences and layout; local recovery points and a restore journal.
+- All/Favorites/Open connection views, multi-term search, Ctrl+Tab session cycling, Ctrl+Shift+E connection search, a wider command palette, density and sidebar preferences, and file-browser filtering, natural sorting and dotfile visibility.
+- Resizable panels, terminal maximize and full screen (F11), named saved workspaces, editable Ctrl+Shift shortcuts, and reviewed dual-pane batch transfers with conflict review.
+- Recursive folder transfers, SSH working-directory tracking, and translated dialogs.
+- File compare and sync reviews, connection organization, movable and detached terminal windows, connection timelines, reusable tasks and remote desktop controls.
+
+### Changed
+
+- CI runs protocol qualification, UI/recovery/soak checks and Debian/Ubuntu/Fedora installer tests; tagged releases refuse to publish without the signing key.
+- Dependencies: Electron 43.7.7, basic-ftp 6.2.2, brace-expansion 5.0.12 and a global-agent 4.1.3 override.
+
+## 0.4.0 - 2026-08-20
+
+### Added
+
+- Smart Terminal Assist: passive OS/distro detection with a tab badge, inline command suggestions (Ctrl+Space) from in-memory history and a per-OS dictionary, "did you mean" autocorrect for `command not found`, and a dangerous-command guard that confirms before Enter.
+- Cross-session history search (Ctrl+Shift+Y) and a multi-session command runner (Ctrl+Shift+M) with per-session output.
+- Session recording and replay with 1×/2×/4×/8×/instant speeds, and live local-host load/memory/disk stats in the status bar.
+- Optional bring-your-own-endpoint AI assist (Ctrl+Shift+A), off by default, with the API key stored in the encrypted vault; replies are inserted, never executed.
+- Localized interface chrome in nine languages, switchable from the status bar.
+
+### Fixed
+
+- SFTP no longer crashes on late host-trust answers, and trust prompts no longer stack.
+
+### Changed
+
+- Dependency updates to clear npm audit findings (js-yaml 4.3.1, brace-expansion override).
+
 ## 0.3.0 - 2026-08-01
 
 ### Changed

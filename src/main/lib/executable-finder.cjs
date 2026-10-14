@@ -16,7 +16,9 @@ function isExecutable(filename) {
 
 function findExecutable(candidates, pathValue = process.env.PATH || '') {
   if (!Array.isArray(candidates)) throw new TypeError('candidates must be an array');
-  const directories = pathValue.split(path.delimiter).filter(Boolean);
+  // Relative PATH entries ('.', 'bin') would resolve against whatever the
+  // current directory is, letting a planted file stand in for ssh or xfreerdp.
+  const directories = pathValue.split(path.delimiter).filter((directory) => directory && path.isAbsolute(directory));
   for (const candidate of candidates) {
     if (typeof candidate !== 'string' || !candidate) continue;
     if (candidate.includes(path.sep)) {

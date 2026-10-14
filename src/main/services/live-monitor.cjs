@@ -29,7 +29,7 @@ class LiveMonitorService {
     if (profile.protocol !== 'ssh') return Promise.reject(new Error('Live monitoring requires an SSH profile'));
     const id = randomUUID();
     const target = profile.useSshConfig && profile.sshAlias ? profile.sshAlias : profile.host;
-    const args = [...sshBaseArgs(profile, { batchMode: true, connectTimeout: 10 }), target, SNAPSHOT_COMMAND];
+    const args = [...sshBaseArgs(profile, { batchMode: true, connectTimeout: 10 }), '--', target, SNAPSHOT_COMMAND];
 
     return new Promise((resolve, reject) => {
       const launch = this.#guardedCommand(args);

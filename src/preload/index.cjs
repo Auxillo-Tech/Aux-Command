@@ -15,17 +15,24 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   app: Object.freeze({
+    focus: () => invoke('app:focus'),
     getState: () => invoke('app:get-state'),
+    setFullscreen: (enabled) => invoke('app:set-fullscreen', enabled),
+    onFullscreen: (callback) => subscribe('app:fullscreen', callback),
     saveWorkspaceSettings: (workspace) => invoke('app:save-workspace-settings', workspace),
     saveSidebarSettings: (sidebar) => invoke('app:save-sidebar-settings', sidebar),
     saveHighlightSettings: (highlight) => invoke('app:save-highlight-settings', highlight),
     saveOnboardingSettings: (onboarding) => invoke('app:save-onboarding-settings', onboarding),
     saveAssistSettings: (assist) => invoke('app:save-assist-settings', assist),
     saveUiSettings: (ui) => invoke('app:save-ui-settings', ui),
+    saveNamedWorkspace: (workspace) => invoke('app:save-named-workspace', workspace),
+    deleteNamedWorkspace: (id) => invoke('app:delete-named-workspace', id),
     saveSessions: (sessions) => invoke('app:save-sessions', sessions),
     getSessions: () => invoke('app:get-sessions')
   }),
   profiles: Object.freeze({
+    moveGroup: (from,to) => invoke('profiles:move-group',from,to),
+    bulkUpdate: (ids, patch) => invoke('profiles:bulk-update', ids, patch),
     list: () => invoke('profiles:list'),
     save: (profile) => invoke('profiles:save', profile),
     delete: (id) => invoke('profiles:delete', id),
@@ -42,7 +49,15 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     restoreLocal: (id) => invoke('recovery:restore-local', id)
   }),
   terminal: Object.freeze({
+    onDetachedInput: (callback) => subscribe('terminal:detached-input', callback),
+    timeline: (id) => invoke('terminal:timeline', id),
+    detach: (id) => invoke('terminal:detach', id),
+    onDetached: (callback) => subscribe('terminal:detached', callback),
     create: (request) => invoke('terminal:create', request),
+    list: () => invoke('terminal:list'),
+    onLogError: (callback) => subscribe('terminal:log-error', callback),
+    onDirectory: (callback) => subscribe('terminal:directory', callback),
+    onPower: (callback) => subscribe('system:power', callback),
     write: (id, data) => invoke('terminal:write', id, data),
     resize: (id, cols, rows) => invoke('terminal:resize', id, cols, rows),
     exportTranscript: (id) => invoke('terminal:export-transcript', id),
@@ -82,6 +97,13 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
     onStatus: (callback) => subscribe('tunnel:status', callback)
   }),
   sftp: Object.freeze({
+    compare: (request) => invoke('sftp:compare', request),
+    search: (request) => invoke('sftp:search', request),
+    checksum: (request) => invoke('sftp:checksum', request),
+    localList: (directory) => invoke('sftp:local-list', directory),
+    planBatch: (request) => invoke('sftp:plan-batch', request),
+    applyBatch: (token, policy) => invoke('sftp:apply-batch', token, policy),
+    chooseDirectory: () => invoke('sftp:choose-directory'),
     list: (profile, remotePath) => invoke('sftp:list', profile, remotePath),
     mkdir: (profile, remotePath) => invoke('sftp:mkdir', profile, remotePath),
     rename: (profile, oldPath, newPath) => invoke('sftp:rename', profile, oldPath, newPath),
@@ -127,9 +149,10 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   system: Object.freeze({
     diagnostics: () => invoke('system:diagnostics'),
     filePath: (file) => webUtils.getPathForFile(file),
-    clipboardRead: () => invoke('clipboard:read-text'),
-    clipboardWrite: (text) => invoke('clipboard:write-text', text),
+    clipboardRead: (type) => invoke('clipboard:read-text', type),
+    clipboardWrite: (text, type) => invoke('clipboard:write-text', text, type),
     openWebsite: () => invoke('system:open-website'),
+    openUrl: (url) => invoke('system:open-url', url),
     osInfo: () => invoke('system:os-info'),
     stats: () => invoke('system:stats')
   }),

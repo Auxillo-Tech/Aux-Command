@@ -66,7 +66,7 @@ test('settings store rejects invalid session entries', () => {
   }
 });
 
-test('settings store caps saved sessions at 32', () => {
+test('settings store caps saved sessions at 50', () => {
   const { SettingsStore } = require('../src/main/lib/settings-store.cjs');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-settings-test-'));
   try {
@@ -76,7 +76,7 @@ test('settings store caps saved sessions at 32', () => {
     }));
     store.saveSessions(many);
     const retrieved = store.getSessions();
-    assert.ok(retrieved.length <= 32, `capped at 32, got ${retrieved.length}`);
+    assert.ok(retrieved.length === 50, `capped at 50, got ${retrieved.length}`);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

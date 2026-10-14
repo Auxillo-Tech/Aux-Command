@@ -2,6 +2,8 @@
 
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { vncViewerUrl } = require('./lib/app-protocol.cjs');
+const { FileBrowserService } = require('./services/file-browser-service.cjs');
 
 function registerIpc({
   ipcMain,
@@ -14,6 +16,7 @@ function registerIpc({
   recoveryService,
   settingsStore,
   terminalService,
+  terminalWindows,
   externalService,
   tunnelService,
   sftpService,
@@ -34,6 +37,7 @@ function registerIpc({
   aiAssist,
   getWindow
 }) {
+  const fileBrowser = new FileBrowserService((profile) => fileTransferServiceFor(profile, sftpService, ftpService), transferQueue);
   const handle = (channel, handler) => {
     ipcMain.handle(channel, async (event, ...args) => {
       const window = getWindow();
@@ -47,6 +51,7 @@ function registerIpc({
   };
 
   handle('app:get-state', () => ({
+    fullscreen: Boolean(getWindow().isFullScreen?.()),
     version: app.getVersion(),
     name: app.getName(),
     profiles: profileStore.list(),
@@ -59,6 +64,15 @@ function registerIpc({
     diagnostics: systemService.diagnostics()
   }));
 
+  handle('app:focus', () => {const window=getWindow();if(window.isMinimized())window.restore();window.show();window.focus();});
+  handle('app:set-fullscreen', (enabled) => {
+    if (typeof enabled !== 'boolean') throw new TypeError('Fullscreen must be a boolean');
+    getWindow().setFullScreen(enabled);
+    return enabled;
+  });
+
+  handle('profiles:move-group', (from,to) => {recoveryService.snapshot('Before folder move');return profileStore.moveGroup(from,to);});
+  handle('profiles:bulk-update', (ids, patch) => { recoveryService.snapshot('Before bulk connection edit'); return profileStore.bulkUpdate(ids, patch); });
   handle('profiles:list', () => profileStore.list());
   handle('profiles:save', (profile) => profileStore.save(profile));
   handle('profiles:delete', (id) => profileStore.delete(id));
@@ -120,7 +134,8 @@ function registerIpc({
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
     const payload = readImport(result.filePaths[0]);
     const validated = recoveryService.validateWorkspace(payload);
-    return { canceled: false, token: rememberImport('workspace', payload), profiles: validated.profiles.profiles.length, snippets: validated.profiles.snippets.length };
+    const startupCommands = validated.profiles.profiles.filter((profile) => profile.startupCommand).map((profile) => ({ name: profile.name, protocol: profile.protocol, command: profile.startupCommand }));
+    return { canceled: false, token: rememberImport('workspace', payload), profiles: validated.profiles.profiles.length, snippets: validated.profiles.snippets.length, startupCommands };
   });
   handle('recovery:restore', (token) => recoveryService.restoreWorkspace(takeImport(token, 'workspace')));
 
@@ -135,6 +150,8 @@ function registerIpc({
   handle('ai:status', () => aiAssist.status());
   handle('ai:configure', (config) => aiAssist.configure(config));
   handle('ai:ask', (request) => aiAssist.ask(request));
+  handle('app:save-named-workspace', (workspace) => settingsStore.saveNamedWorkspace(workspace));
+  handle('app:delete-named-workspace', (id) => settingsStore.deleteNamedWorkspace(id));
   handle('app:save-sessions', (sessions) => settingsStore.saveSessions(sessions));
   handle('app:get-sessions', () => settingsStore.getSessions());
 
@@ -142,6 +159,9 @@ function registerIpc({
   handle('snippets:save', (snippet) => profileStore.saveSnippet(snippet));
   handle('snippets:delete', (id) => profileStore.deleteSnippet(id));
 
+  handle('terminal:list', () => terminalService.list());
+  handle('terminal:timeline', (id) => terminalService.connectionTimeline(id));
+  handle('terminal:detach', (id) => terminalWindows.open(id));
   handle('terminal:create', (request) => terminalService.create(request));
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
@@ -167,7 +187,10 @@ function registerIpc({
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        // The page is static, HTML-escaped text; it needs no script.
+        javascript: false,
+        devTools: false
       }
     });
     try {
@@ -199,7 +222,7 @@ function registerIpc({
     const result = await vncBridge.start(profile);
     return {
       ...result,
-      vncUrl: `vnc.html?url=${encodeURIComponent(result.url)}&host=${encodeURIComponent(result.host)}&port=${result.port}`
+      vncUrl: vncViewerUrl(`url=${encodeURIComponent(result.url)}&host=${encodeURIComponent(result.host)}&port=${result.port}`)
     };
   });
   handle('vnc:stop', (id) => vncBridge.stop(id));
@@ -222,25 +245,22 @@ function registerIpc({
   handle('sftp:remove', (profile, remotePath, directory) => fileTransferServiceFor(profile, sftpService, ftpService).remove(profile, remotePath, directory));
   handle('sftp:read-text', (profile, remotePath) => fileTransferServiceFor(profile, sftpService, ftpService).readText(profile, remotePath));
   handle('sftp:write-text', (profile, remotePath, content) => fileTransferServiceFor(profile, sftpService, ftpService).writeText(profile, remotePath, content));
+  handle('sftp:compare', (request) => fileBrowser.compare(request));
+  handle('sftp:search', (request) => fileBrowser.search(request));
+  handle('sftp:checksum', (request) => fileBrowser.checksum(request));
+  handle('sftp:local-list', (directory) => fileBrowser.localList(directory));
+  handle('sftp:plan-batch', (request) => fileBrowser.plan(request));
+  handle('sftp:apply-batch', (token, policy) => fileBrowser.apply(token, policy));
+  handle('sftp:choose-directory', async () => {
+    const result = await dialog.showOpenDialog(getWindow(), { title: 'Choose download directory', properties: ['openDirectory'] });
+    return result.canceled ? null : result.filePaths[0];
+  });
   handle('sftp:upload', async (profile, remoteDirectory) => {
-    const result = await dialog.showOpenDialog(getWindow(), { title: 'Select file to upload', properties: ['openFile'] });
-    if (result.canceled || !result.filePaths[0]) return { canceled: true };
-    const localPath = result.filePaths[0];
-    const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-    const transfer = transferQueue.enqueue({ profile, direction: 'upload', localPath, remotePath });
-    return { canceled: false, localPath, remotePath, transfer };
+    const result = await dialog.showOpenDialog(getWindow(), { title: 'Select files to upload', properties: ['openFile', 'multiSelections'] });
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    return fileBrowser.plan({ profile, direction: 'upload', paths: result.filePaths, directory: remoteDirectory });
   });
-  handle('sftp:upload-paths', async (profile, remoteDirectory, localPaths) => {
-    if (!Array.isArray(localPaths) || !localPaths.length) return { uploaded: [] };
-    const uploaded = [];
-    for (const localPath of localPaths.slice(0, 32)) {
-      if (typeof localPath !== 'string' || !path.isAbsolute(localPath)) throw new Error('Dropped upload paths must be absolute local files');
-      const remotePath = path.posix.join(remoteDirectory || '/', path.basename(localPath));
-      const transfer = transferQueue.enqueue({ profile, direction: 'upload', localPath, remotePath });
-      uploaded.push({ localPath, remotePath, transferId: transfer.id });
-    }
-    return { uploaded };
-  });
+  handle('sftp:upload-paths', (profile, remoteDirectory, localPaths) => fileBrowser.plan({ profile, direction: 'upload', paths: localPaths, directory: remoteDirectory }));
   handle('sftp:download', async (profile, remotePath) => {
     const result = await dialog.showSaveDialog(getWindow(), {
       title: 'Save remote file',
@@ -300,13 +320,24 @@ function registerIpc({
   handle('updates:quit-and-install', () => updateService.quitAndInstall());
   handle('updates:restore-previous', () => updateService.restorePrevious());
 
-  handle('clipboard:read-text', () => clipboard.readText());
-  handle('clipboard:write-text', (text) => {
+  // 'selection' is the Linux primary selection: highlighted text that a
+  // middle-click pastes. Everything else uses the regular clipboard.
+  const clipboardType = (type) => (type === 'selection' && process.platform === 'linux' ? 'selection' : 'clipboard');
+  handle('clipboard:read-text', (type) => clipboard.readText(clipboardType(type)));
+  handle('clipboard:write-text', (text, type) => {
     if (typeof text !== 'string' || text.length > 10_000_000) throw new Error('Invalid clipboard text');
-    clipboard.writeText(text);
+    clipboard.writeText(text, clipboardType(type));
     return true;
   });
   handle('system:open-website', () => shell.openExternal('https://auxillo.tech'));
+  // Ctrl+click on a link in terminal output. Only web links are opened so
+  // remote output cannot launch file://, custom-scheme or shell handlers.
+  handle('system:open-url', (input) => {
+    let url;
+    try { url = new URL(String(input || '')); } catch { throw new Error('Invalid link'); }
+    if (!['http:', 'https:'].includes(url.protocol) || url.href.length > 2048) throw new Error('Only http and https links can be opened');
+    return shell.openExternal(url.href);
+  });
 }
 
 function fileTransferServiceFor(profile, sftpService, ftpService) {

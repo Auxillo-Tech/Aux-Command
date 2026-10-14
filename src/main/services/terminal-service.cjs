@@ -1,5 +1,7 @@
 'use strict';
 
+const { ConnectionTimeline } = require('../lib/connection-timeline.cjs');
+const { TerminalDirectoryTracker } = require('../lib/terminal-directory.cjs');
 const { diagnoseConnection } = require('../lib/connection-diagnostics.cjs');
 
 const os = require('node:os');
@@ -35,10 +37,18 @@ function appendTranscript(session, data) {
   if (!text) return;
   session.transcript = `${session.transcript}${text}`;
   if (Buffer.byteLength(session.transcript, 'utf8') > MAX_TRANSCRIPT_BYTES) {
-    session.transcript = session.transcript.slice(-MAX_TRANSCRIPT_BYTES);
+    const bytes = Buffer.from(session.transcript, 'utf8');
+    let offset = bytes.length - MAX_TRANSCRIPT_BYTES;
+    while ((bytes[offset] & 0xc0) === 0x80) offset += 1;
+    session.transcript = bytes.subarray(offset).toString('utf8');
     session.transcriptTruncated = true;
   }
-  if (session.logging?.stream) session.logging.stream.write(text);
+  if (session.logging?.stream && !session.logging.stream.destroyed) {
+    // Bound queued log data if the destination disk cannot keep up.
+    if (session.logging.stream.writableLength > 4 * MAX_TRANSCRIPT_BYTES) {
+      session.logging.stream.destroy(new Error('Logging stopped because the destination is too slow'));
+    } else session.logging.stream.write(text);
+  }
 }
 
 function safeLogPath(filePath) {
@@ -68,7 +78,7 @@ class TerminalService {
 
   create(input) {
     const request = normalizeTerminalRequest(input);
-    const spec = buildTerminalCommand(request.profile);
+    const spec = buildTerminalCommand(request.profile, { remoteCwd: request.remoteCwd });
     const id = randomUUID();
     const terminal = new PythonPty({
       command: spec.command,
@@ -84,8 +94,12 @@ class TerminalService {
       profileId: request.profile.id,
       title: spec.title,
       protocol: request.profile.protocol,
+      cwd: request.profile.protocol === 'local' ? request.cwd : request.remoteCwd,
       terminal,
       startedAt: new Date().toISOString(),
+      cwdTracker: new TerminalDirectoryTracker(),
+      outputSequence: 0,
+      timeline: new ConnectionTimeline(request.profile.protocol),
       transcript: '',
       transcriptTruncated: false,
       logging: null,
@@ -94,11 +108,16 @@ class TerminalService {
     this.sessions.set(id, session);
 
     terminal.onData((data) => {
+      session.timeline.feed(data);
+      const cwd = session.cwdTracker.feed(data);
+      if(cwd)session.timeline.directory();
+      if (cwd && session.cwd !== cwd) { session.cwd = cwd; this.#send('terminal:directory', { id, cwd }); }
       appendTranscript(session, data);
       appendRecordingChunk(session.recording, data, Date.now() - session.recording.startedAtMs);
-      this.#send('terminal:data', { id, data });
+      this.#send('terminal:data', { id, data, sequence: ++session.outputSequence });
     });
     terminal.onExit(({ exitCode, signal }) => {
+      session.timeline.exit(exitCode);
       // A user-initiated close already discarded this session; re-adding the
       // transcript here would leak it until app quit.
       if (!session.userClosed) {
@@ -109,6 +128,7 @@ class TerminalService {
           profileId: session.profileId,
           startedAt: session.startedAt,
           transcript: session.transcript,
+          timeline: session.timeline,
           transcriptTruncated: session.transcriptTruncated,
           logging: session.logging ? { filePath: session.logging.filePath, active: false } : null,
           recording: session.recording
@@ -139,6 +159,12 @@ class TerminalService {
     return true;
   }
 
+  connectionTimeline(id) {
+    const session=this.sessions.get(id)||this.closedTranscripts.get(id);
+    if(!session)throw new Error('Terminal session not found');
+    return structuredClone(session.timeline?.events || []);
+  }
+
   exportTranscript(id) {
     const session = this.sessions.get(id) || this.closedTranscripts.get(id);
     if (!session) throw new Error('Terminal session not found');
@@ -150,6 +176,7 @@ class TerminalService {
       startedAt: session.startedAt,
       exportedAt: new Date().toISOString(),
       truncated: Boolean(session.transcriptTruncated),
+      sequence: session.outputSequence || 0,
       text: session.transcript
     };
   }
@@ -177,6 +204,10 @@ class TerminalService {
     fs.writeFileSync(target, session.transcript || '', { mode: 0o600 });
     const stream = fs.createWriteStream(target, { flags: 'a', mode: 0o600 });
     session.logging = { filePath: target, stream };
+    stream.on('error', (error) => {
+      if (session.logging?.stream === stream) session.logging = { filePath: target, active: false };
+      this.#send('terminal:log-error', { id, filePath: target, message: error.message });
+    });
     return { id, filePath: target, active: true };
   }
 
@@ -212,9 +243,10 @@ class TerminalService {
   }
 
   list() {
-    return [...this.sessions.values()].map(({ terminal, transcript, logging, recording, ...metadata }) => ({
+    return [...this.sessions.values()].map(({ terminal, transcript, logging, recording, cwdTracker, timeline, ...metadata }) => ({
       ...metadata,
-      logging: logging ? { filePath: logging.filePath, active: true } : null
+      cwd: metadata.protocol === 'local' ? (terminal.currentDirectory?.() || metadata.cwd) : metadata.cwd,
+      logging: logging ? { filePath: logging.filePath, active: Boolean(logging.stream && !logging.stream.destroyed) } : null
     }));
   }
 
@@ -226,9 +258,10 @@ class TerminalService {
   }
 
   #send(channel, payload) {
+    this.onEvent?.(channel, payload);
     const window = this.getWindow();
     if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
   }
 }
 
-module.exports = { TerminalService, appendRecordingChunk };
+module.exports = { TerminalService, appendRecordingChunk, appendTranscript };

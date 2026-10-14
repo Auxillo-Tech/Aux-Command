@@ -1,7 +1,6 @@
 'use strict';
 
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 const {
   app,
   BrowserWindow,
@@ -9,6 +8,8 @@ const {
   clipboard,
   dialog,
   ipcMain,
+  powerMonitor,
+  protocol,
   safeStorage,
   shell
 } = require('electron');
@@ -22,6 +23,7 @@ const { KnownHostService } = require('./services/known-host-service.cjs');
 const { SftpService } = require('./services/sftp-service.cjs');
 const { SystemService } = require('./services/system-service.cjs');
 const { TerminalService } = require('./services/terminal-service.cjs');
+const { TerminalWindows } = require('./services/terminal-windows.cjs');
 const { TransferQueue } = require('./services/transfer-queue.cjs');
 const { TunnelService } = require('./services/tunnel-service.cjs');
 const { UpdateService } = require('./services/update-service.cjs');
@@ -36,6 +38,10 @@ const { LiveMonitorService } = require('./services/live-monitor.cjs');
 const { AiAssistService } = require('./services/ai-assist.cjs');
 const { RemoteDesktopGateway } = require('./services/rdp-gateway.cjs');
 const { registerIpc } = require('./ipc.cjs');
+const { ORIGIN: VNC_ORIGIN, appUrl, registerAppSchemes, handleAppProtocols } = require('./lib/app-protocol.cjs');
+
+// Custom schemes must be registered before the app is ready.
+registerAppSchemes(protocol);
 
 app.setName('Aux Command');
 app.setAppUserModelId('tech.auxillo.command');
@@ -91,13 +97,21 @@ function createWindow() {
     }
   });
 
-  const indexFile = path.join(__dirname, '../renderer/index.html');
-  const indexUrl = pathToFileURL(indexFile).toString();
+  for (const event of ['enter-full-screen', 'leave-full-screen']) {
+    mainWindow.on(event, () => mainWindow?.webContents.send('app:fullscreen', mainWindow.isFullScreen()));
+  }
+  // Served from the private app://aux origin, not file:// (see app-protocol.cjs).
+  const indexUrl = appUrl('src/renderer/index.html');
   mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   mainWindow.webContents.session.setPermissionCheckHandler(() => false);
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url !== indexUrl) event.preventDefault();
+  });
+  // Subframes may only show the isolated VNC viewer.
+  mainWindow.webContents.on('will-frame-navigate', (event) => {
+    if (event.isMainFrame) return;
+    if (!event.url.startsWith(`${VNC_ORIGIN}/vnc.html?`)) event.preventDefault();
   });
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     recoverRenderer('render-process-gone', { reason: details.reason, exitCode: details.exitCode });
@@ -117,17 +131,21 @@ function createWindow() {
     mainWindow.once('ready-to-show', () => mainWindow?.show());
   }
   mainWindow.on('closed', () => {
+    services?.terminalWindows.closeAll();
     if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer);
     rendererRecoveryTimer = null;
     rendererRecoveryInFlight = false;
     mainWindow = null;
   });
-  mainWindow.loadFile(indexFile);
+  mainWindow.loadURL(indexUrl);
 
   if (development) mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 function initializeServices() {
+  for (const event of ['suspend', 'resume']) powerMonitor.on(event, () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('system:power', { event });
+  });
   const dataDir = path.join(app.getPath('userData'), 'aux-command-data');
   const profileStore = new ProfileStore(dataDir);
   const settingsStore = new SettingsStore(dataDir);
@@ -136,6 +154,7 @@ function initializeServices() {
   const vaultService = new VaultService(dataDir, safeStorage);
   const knownHostService = new KnownHostService(dataDir, promptBroker);
   const terminalService = new TerminalService(getWindow);
+  const terminalWindows = new TerminalWindows({ BrowserWindow, ipcMain, terminalService, getWindow, clipboard, settingsStore, devTools: process.argv.includes('--dev') });
   const tunnelService = new TunnelService(profileStore, getWindow);
   const sftpService = new SftpService(vaultService, knownHostService, promptBroker, getWindow);
   const ftpService = new FtpService(vaultService, getWindow);
@@ -169,6 +188,7 @@ function initializeServices() {
     vaultService,
     knownHostService,
     terminalService,
+    terminalWindows,
     tunnelService,
     sftpService,
     ftpService,
@@ -212,6 +232,7 @@ if (!singleInstance) {
 
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    handleAppProtocols(protocol, app.getAppPath());
     initializeServices();
     createWindow();
   });

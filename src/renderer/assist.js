@@ -180,7 +180,9 @@
   }
 
   const DANGER_RULES = [
-    { pattern: /\brm\s+(-[a-z]*[rf][a-z]*\s+)+(-[a-z]*\s+)*("?\/"?|\/\*|~\/?\s*$|~\/\*|"?\$HOME"?\/?\s*$|--no-preserve-root)/iu, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
+    // Targets must be the whole root or home path (`rm -rf /tmp/x` is fine);
+    // short, combined and long options are all recognised.
+    { pattern: /\brm\s+((?:-[a-z]*[rf][a-z]*|--[a-z-]+)\s+)+(?:-\S*\s+)*(?:"?\/"?\*?(?=\s|$)|~\/?\*?(?=\s|$)|"?\$\{?HOME\}?"?\/?\*?(?=\s|$)|--no-preserve-root)/iu, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
     { pattern: /\bdd\b[^|;&]*\bof=\/dev\//iu, reason: 'Writes raw data directly over a block device.' },
     { pattern: /\bmkfs(\.[a-z0-9]+)?\b/iu, reason: 'Creates a new filesystem, destroying everything on the target device.' },
     { pattern: /(^|[|;&]\s*)>(\s*)\/dev\/sd[a-z]/iu, reason: 'Truncates a raw disk device.' },

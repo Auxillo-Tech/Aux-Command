@@ -207,3 +207,14 @@ test('reimport preserves explicitly consolidated aliases without duplicating pro
     assert.equal((await reopened.importSshConfig()).added, 0);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('bulk edits validate all connections before writing and preserve credentials',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'aux-bulk-'));
+ try{const store=new ProfileStore(directory);const a=store.save({name:'a',host:'a.invalid',credentialId:'vault-a'}),b=store.save({name:'b',host:'b.invalid',credentialId:'vault-b'});
+ assert.throws(()=>store.bulkUpdate([a.id,'missing'],{group:'changed'}),/no longer exists/);assert.equal(store.get(a.id).group,'Connections');
+ assert.throws(()=>store.bulkUpdate([a.id],{credentialId:'wrong'}),/Unsupported/);
+ assert.throws(()=>store.bulkUpdate([a.id,b.id],{group:Array(40).fill('a').join('/')}),/group/);
+ store.bulkUpdate([a.id,b.id],{group:'Production/ Europe /DB',tags:['db'],favorite:true});
+ for(const p of [a,b]){const updated=store.get(p.id);assert.equal(updated.credentialId,p.credentialId);assert.equal(updated.group,'Production / Europe / DB');assert.deepEqual(updated.tags,['db']);assert.equal(updated.favorite,true);}
+ }finally{fs.rmSync(directory,{recursive:true,force:true});}
+});

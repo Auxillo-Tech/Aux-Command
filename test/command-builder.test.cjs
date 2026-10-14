@@ -95,10 +95,25 @@ test('builds Mosh destinations with usernames and safely quoted SSH options', ()
     proxyJump: 'jump-host'
   });
   assert.equal(spec.command, 'mosh');
-  assert.equal(spec.args[1], 'deploy@prod');
+  assert.equal(spec.args[1], '--');
+  assert.equal(spec.args[2], 'deploy@prod');
   assert.match(spec.args[0], /^--ssh='ssh' /u);
   assert.equal(spec.args[0], "--ssh='ssh' '-p' '2222' '-i' '/home/jd/.ssh/key with '\\''quote'\\''' '-J' 'jump-host' '-C' '-A' '-X' '-o' 'ServerAliveInterval=30' '-o' 'ServerAliveCountMax=3'");
   assert.ok(spec.args[0].includes("'jump-host'"));
   assert.ok(spec.args[0].includes("'-A'"));
   assert.ok(spec.args[0].includes("'-X'"));
+});
+
+test('startup commands can never become local ssh or mosh options', () => {
+  for (const protocol of ['ssh', 'mosh']) {
+    for (const startupCommand of ['-oProxyCommand=touch /tmp/pwned', '--ssh=sh -c "touch /tmp/pwned"', '  -oLocalCommand=id']) {
+      assert.throws(() => buildTerminalCommand({ ...sshProfile, protocol, startupCommand }), /startupCommand cannot start with a hyphen/u);
+    }
+  }
+  const ssh = buildTerminalCommand({ ...sshProfile, startupCommand: 'uptime' });
+  const hostIndex = ssh.args.indexOf('prod');
+  assert.equal(ssh.args[hostIndex - 1], '--', 'option parsing must end before the host');
+  assert.equal(ssh.args.at(-1), 'uptime');
+  const mosh = buildTerminalCommand({ ...sshProfile, protocol: 'mosh', startupCommand: 'tmux attach' });
+  assert.deepEqual(mosh.args.slice(1), ['--', 'deploy@prod', 'tmux attach']);
 });

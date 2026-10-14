@@ -124,6 +124,17 @@ class FtpService {
     });
   }
 
+  async checksum(profile, remotePath) {
+    return this.#withConnection(profile, async ({ client }) => {
+      const target = normalizeRemotePath(remotePath);
+      const entry = (await client.list(path.posix.dirname(target))).find(row => row.name === path.posix.basename(target));
+      if (!entry?.isFile || entry.isSymbolicLink) throw new Error('Checksum requires a regular remote file');
+      const hash = require('node:crypto').createHash('sha256');
+      const sink = new Writable({ write(chunk, _encoding, done) { hash.update(chunk); done(); } });
+      await client.downloadTo(sink, target);
+      return hash.digest('hex');
+    });
+  }
   async list(profileInput, remotePath = '/') {
     return this.#withConnection(profileInput, async (connection) => {
       const target = normalizeRemotePath(remotePath);
@@ -138,6 +149,7 @@ class FtpService {
           modifiedAt: safeDateToIso(entry.modifiedAt),
           permissions: modeToString(mode),
           directory: entry.isDirectory,
+          symlink: entry.isSymbolicLink,
           mode
         };
       }).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));

@@ -288,8 +288,15 @@ class SftpService {
     }
 
     if (profile.identityFile) {
-      try { config.privateKey = fs.readFileSync(expandHome(profile.identityFile)); }
-      catch (error) { throw new Error(`Could not read SSH identity file: ${error.message}`); }
+      // Profiles can be imported, so the key path is checked before reading:
+      // a device or FIFO (/dev/zero, a pipe) would hang or exhaust the app.
+      try {
+        const keyPath = expandHome(profile.identityFile);
+        const stat = fs.statSync(keyPath);
+        if (!stat.isFile()) throw new Error('not a regular file');
+        if (stat.size > 65_536) throw new Error('file is larger than 64 KB');
+        config.privateKey = fs.readFileSync(keyPath);
+      } catch (error) { throw new Error(`Could not read SSH identity file: ${error.message}`); }
     }
     if (profile.credentialId && this.vaultService.has(profile.credentialId)) {
       const secret = await this.vaultService.get(profile.credentialId);
@@ -367,11 +374,23 @@ class SftpService {
         modifiedAt: safeTimestampToIso(entry.attrs?.mtime),
         permissions: modeToString(entry.attrs?.mode || 0),
         directory: isDirectory(entry.attrs),
+        symlink: ((Number(entry.attrs?.mode) || 0) & 0o170000) === 0o120000,
         mode: Number(entry.attrs?.mode || 0)
       }))
       .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
   }
 
+  async checksum(profile, remotePath) {
+    const connection = await this.connect(profile);
+    const source = normalizeRemotePath(remotePath);
+    const stat = await callSftp(connection.sftp, 'lstat', source);
+    if (((stat.mode || 0) & 0o170000) !== 0o100000) throw new Error('Checksum requires a regular remote file');
+    const hash = require('node:crypto').createHash('sha256');
+    const stream = connection.sftp.createReadStream(source);
+    const timer = setTimeout(() => stream.destroy(new Error('Checksum timed out after 120 seconds')), 120000);
+    try { for await (const chunk of stream) hash.update(chunk); return hash.digest('hex'); }
+    finally { clearTimeout(timer); stream.destroy(); }
+  }
   async mkdir(profile, remotePath) {
     const connection = await this.connect(profile);
     await callSftp(connection.sftp, 'mkdir', normalizeRemotePath(remotePath));

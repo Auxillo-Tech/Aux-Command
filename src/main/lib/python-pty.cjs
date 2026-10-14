@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
 const { EventEmitter } = require('node:events');
 const { StringDecoder } = require('node:string_decoder');
 const { spawn } = require('node:child_process');
@@ -126,6 +127,19 @@ class PythonPty {
       handler(result);
     }
     return { dispose: () => this.events.off('exit', handler) };
+  }
+
+  currentDirectory() {
+    // Guard -> PTY bridge -> shell. Read the shell, not a foreground child's cwd.
+    try {
+      let pid = this.child.pid;
+      for (let depth = 0; depth < 2; depth += 1) {
+        const children = fs.readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8').trim().split(/\s+/u);
+        if (!/^\d+$/u.test(children[0])) return '';
+        pid = Number(children[0]);
+      }
+      return fs.readlinkSync(`/proc/${pid}/cwd`);
+    } catch { return ''; }
   }
 
   write(data) {
