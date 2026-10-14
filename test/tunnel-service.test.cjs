@@ -130,3 +130,32 @@ test('does not mark a delayed SSH tunnel failure as running before exit', async 
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('a forward that fails after ssh reports listening is never shown as ready', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-tunnel-'));
+  const originalPath = process.env.PATH;
+  try {
+    const python = findExecutable(['python3'], originalPath);
+    fs.symlinkSync(python, path.join(directory, 'python3'));
+    const harness = eventHarness();
+    const service = new TunnelService(profileStore(), () => harness.window);
+    process.env.PATH = directory;
+    const fakeSsh = path.join(directory, 'ssh');
+    fs.writeFileSync(fakeSsh, "#!/bin/sh\nprintf '%s\\n' 'debug1: Entering interactive session.' 'debug1: Local forwarding listening on ::1 port 80.' >&2\nsleep 0.3\nprintf '%s\\n' 'bind [127.0.0.1]:80: Permission denied' 'debug1: channel_setup_fwd_listener_tcpip: cannot listen to port: 80' 'Could not request local forwarding.' >&2\nexit 255\n", { mode: 0o755 });
+    fs.chmodSync(fakeSsh, 0o755);
+    service.start(tunnelInput());
+    const failed = await harness.waitFor('failed', 4000);
+    assert.equal(harness.events.some((event) => event.status === 'running'), false);
+    assert.doesNotMatch(failed.lastError, /debug1:/u);
+    assert.match(failed.lastError, /Permission denied/u);
+    assert.match(failed.lastError, /Could not request local forwarding/u);
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('ssh errors are summarized without the verbose debug log', () => {
+  const { summarizeSshError } = require('../src/main/services/tunnel-service.cjs');
+  assert.equal(summarizeSshError('debug1: a\ndebug2: b\nbind [127.0.0.1]:18999: Address already in use\ndebug1: c\nCould not request local forwarding.\n'), 'bind [127.0.0.1]:18999: Address already in use · Could not request local forwarding.');
+});

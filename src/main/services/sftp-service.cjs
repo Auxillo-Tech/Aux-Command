@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { Duplex } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
@@ -151,8 +151,11 @@ async function replaceRemoteFile(sftp, partialPath, targetPath) {
   }
 }
 
+const HANDSHAKE_TIMEOUT_MS = 20_000;
+
 function createGuardedHostVerifier(verify, isConnectionDead) {
-  return (fingerprint, callback) => {
+  return (hostKey, callback) => {
+    const fingerprint = Buffer.isBuffer(hostKey) ? createHash('sha256').update(hostKey).digest('hex') : hostKey;
     let answered = false;
     const respond = (accepted) => {
       if (answered) return;
@@ -162,7 +165,7 @@ function createGuardedHostVerifier(verify, isConnectionDead) {
       if (isConnectionDead()) return;
       try { callback(accepted); } catch { /* connection died between the check and the callback */ }
     };
-    verify(fingerprint).then(respond, () => respond(false));
+    verify(fingerprint, Buffer.isBuffer(hostKey) ? hostKey : null).then(respond, () => respond(false));
   };
 }
 
@@ -260,6 +263,20 @@ class SftpService {
     holder.client = client;
     let connectionDead = false;
     client.once('close', () => { connectionDead = true; });
+    let promptsOpen = 0;
+    let handshakeTimer = null;
+    let failHandshake = () => {};
+    const armHandshakeTimer = () => {
+      clearTimeout(handshakeTimer);
+      if (promptsOpen > 0 || holder.ready) return;
+      handshakeTimer = setTimeout(() => failHandshake(new Error('Timed out while waiting for handshake')), HANDSHAKE_TIMEOUT_MS);
+      handshakeTimer.unref?.();
+    };
+    const whilePrompting = async (action) => {
+      promptsOpen += 1;
+      clearTimeout(handshakeTimer);
+      try { return await action(); } finally { promptsOpen -= 1; armHandshakeTimer(); }
+    };
     client.once('error', () => { connectionDead = true; });
     const config = {
       host: profile.host,
@@ -268,14 +285,15 @@ class SftpService {
       agent: process.env.SSH_AUTH_SOCK || undefined,
       keepaliveInterval: Math.max(0, profile.keepAliveSeconds * 1000),
       keepaliveCountMax: 3,
-      readyTimeout: 20_000,
+      // The handshake timeout is enforced below and pauses while a host-key or
+      // password prompt is open; ssh2's own timer cannot pause.
+      readyTimeout: 30 * 60_000,
       tryKeyboard: true,
       algorithms: {
         compress: profile.compression ? ['zlib@openssh.com', 'zlib', 'none'] : ['none', 'zlib@openssh.com', 'zlib']
       },
-      hostHash: 'sha256',
       hostVerifier: createGuardedHostVerifier(
-        (fingerprint) => this.knownHostService.verify(profile, fingerprint),
+        (fingerprint, hostKey) => whilePrompting(() => this.knownHostService.verify(profile, fingerprint, hostKey)),
         () => connectionDead
       )
     };
@@ -312,7 +330,7 @@ class SftpService {
         return;
       }
       try {
-        const response = await this.promptBroker.request('keyboard-interactive', {
+        const response = await whilePrompting(() => this.promptBroker.request('keyboard-interactive', {
           profileName: profile.name,
           host: profile.host,
           name: String(name || '').slice(0, 256),
@@ -322,28 +340,42 @@ class SftpService {
             prompt: String(prompt?.prompt || '').slice(0, 1024),
             echo: Boolean(prompt?.echo)
           }))
-        });
+        }));
         const answers = Array.isArray(response?.answers) ? response.answers : [];
         finish(requestedPrompts.map((_, index) => String(answers[index] || '').slice(0, 32_768)));
       } catch {
         finish([]);
       }
     });
-    client.on('error', (error) => this.#emit('sftp:error', { profileId: profile.id, message: error.message }));
+    // Errors while connecting reject connect() and are shown once by the
+    // caller; only errors on an established connection are broadcast.
+    client.on('error', (error) => { if (holder.ready) this.#emit('sftp:error', { profileId: profile.id, message: error.message }); });
 
-    await new Promise((resolve, reject) => {
-      const onError = (error) => {
-        client.off('ready', onReady);
-        reject(error);
-      };
-      const onReady = () => {
-        client.off('error', onError);
-        resolve();
-      };
-      client.once('error', onError);
-      client.once('ready', onReady);
-      client.connect(config);
-    });
+    try {
+      await new Promise((resolve, reject) => {
+        const onError = (error) => {
+          client.off('ready', onReady);
+          reject(error);
+        };
+        const onReady = () => {
+          client.off('error', onError);
+          resolve();
+        };
+        failHandshake = (error) => {
+          client.off('ready', onReady);
+          client.off('error', onError);
+          try { client.end(); } catch { /* already closed */ }
+          reject(error);
+        };
+        client.once('error', onError);
+        client.once('ready', onReady);
+        armHandshakeTimer();
+        client.connect(config);
+      });
+    } finally {
+      clearTimeout(handshakeTimer);
+      failHandshake = () => {};
+    }
 
     const sftp = await new Promise((resolve, reject) => {
       client.sftp((error, channel) => error ? reject(error) : resolve(channel));

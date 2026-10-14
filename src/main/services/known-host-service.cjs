@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 const { JsonStore } = require('../lib/json-store.cjs');
+const { checkOpenSshKnownHosts, defaultKnownHostsFiles } = require('../lib/openssh-known-hosts.cjs');
 
 function normalizeFingerprintHex(value) {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/iu.test(value)) {
@@ -17,9 +18,10 @@ function displayFingerprint(hex) {
 }
 
 class KnownHostService {
-  constructor(dataDir, promptBroker) {
+  constructor(dataDir, promptBroker, options = {}) {
     this.store = new JsonStore(path.join(dataDir, 'known-hosts.json'), { version: 1, hosts: {} });
     this.promptBroker = promptBroker;
+    this.knownHostsFiles = options.knownHostsFiles || defaultKnownHostsFiles;
     this.pendingVerifications = new Map();
   }
 
@@ -27,7 +29,9 @@ class KnownHostService {
     return `${profile.host}:${profile.port}`;
   }
 
-  async verify(profile, fingerprintValue) {
+  // `keyBlob` is the raw host key; with it, OpenSSH known_hosts entries are
+  // honoured so a host already trusted by ssh is not prompted for again.
+  async verify(profile, fingerprintValue, keyBlob = null) {
     const fingerprintHex = normalizeFingerprintHex(fingerprintValue);
     const key = this.key(profile);
     const hosts = this.store.get().hosts;
@@ -36,26 +40,30 @@ class KnownHostService {
       ? hosts[key]
       : undefined;
     if (known?.fingerprintHex === fingerprintHex) return true;
+    const openssh = keyBlob ? checkOpenSshKnownHosts(profile.host, profile.port, keyBlob, this.knownHostsFiles(profile)) : { trusted: false, revoked: false, conflicts: [] };
+    if (openssh.revoked) throw new Error('This host key is marked @revoked in OpenSSH known_hosts');
+    if (openssh.trusted && !known) return true;
+    const previousHex = known?.fingerprintHex || openssh.conflicts[0] || '';
 
     // Concurrent connection attempts to the same host share one trust prompt
     // instead of stacking one modal per attempt.
     const pendingKey = `${key}|${fingerprintHex}`;
     const pending = this.pendingVerifications.get(pendingKey);
     if (pending) return pending;
-    const decision = this.#promptAndRemember(profile, key, known, fingerprintHex)
+    const decision = this.#promptAndRemember(profile, key, known, fingerprintHex, previousHex)
       .finally(() => this.pendingVerifications.delete(pendingKey));
     this.pendingVerifications.set(pendingKey, decision);
     return decision;
   }
 
-  async #promptAndRemember(profile, key, known, fingerprintHex) {
+  async #promptAndRemember(profile, key, known, fingerprintHex, previousHex = known?.fingerprintHex || '') {
     const response = await this.promptBroker.request('host-key', {
       host: profile.host,
       port: profile.port,
       profileName: profile.name,
       fingerprint: displayFingerprint(fingerprintHex),
-      changed: Boolean(known?.fingerprintHex),
-      previousFingerprint: known?.fingerprintHex ? displayFingerprint(known.fingerprintHex) : ''
+      changed: Boolean(previousHex),
+      previousFingerprint: previousHex ? displayFingerprint(previousHex) : ''
     });
 
     if (!response?.accept) return false;

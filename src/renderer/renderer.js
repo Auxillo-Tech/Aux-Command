@@ -498,8 +498,18 @@
     return `/${stack.join('/')}` || '/';
   }
 
+  // A new or renamed entry is a single name in the current folder. Slashes,
+  // '.', '..' and control characters are refused instead of being silently
+  // rewritten, so what the user typed is exactly what gets created.
+  function validEntryName(input) {
+    const name = String(input || '').trim();
+    if (!name) throw new Error(uiText('Enter a name.'));
+    if (name === '.' || name === '..' || name.includes('/') || /[\x00-\x1f\x7f]/u.test(name)) throw new Error(uiText('Names cannot contain "/", control characters, or be "." or "..".'));
+    return name;
+  }
+
   function joinRemote(base, name) {
-    return normalizeRemotePath(`${normalizeRemotePath(base)}/${String(name || '').replaceAll('/', '')}`);
+    return normalizeRemotePath(`${normalizeRemotePath(base)}/${validEntryName(name)}`);
   }
 
   function parentRemote(remotePath) {
@@ -1830,10 +1840,53 @@
     tab.assist.bar.replaceChildren();
   }
 
+  // Input typed at a no-echo prompt (sudo, ssh, read -s) never appears on
+  // screen. It must never be displayed in the assist bar, suggested, or kept
+  // in history, so the screen is checked before any of that happens.
+  const secretPromptPattern = /(pass(word|phrase|code)?|passwort|kennwort|mot de passe|contraseña|senha|пароль|密码|口令|パスワード|\bpin\b|token|secret|otp|one-time|verification code)[^\n:：]*[:：]$/iu;
+
+  function cursorLineText(tab) {
+    const buffer = tab.terminal?.buffer?.active;
+    if (!buffer) return '';
+    let row = buffer.baseY + buffer.cursorY;
+    let text = buffer.getLine(row)?.translateToString(true) || '';
+    for (let guard = 0; guard < 8 && buffer.getLine(row)?.isWrapped; guard += 1) {
+      row -= 1;
+      text = (buffer.getLine(row)?.translateToString(true) || '') + text;
+    }
+    return text;
+  }
+
+  function secretPromptVisible(tab, typed = '') {
+    const screen = cursorLineText(tab).trimEnd();
+    const text = String(typed || '').trim();
+    const before = text && screen.endsWith(text) ? screen.slice(0, -text.length) : screen;
+    return secretPromptPattern.test(before.trimEnd());
+  }
+
+  function inputIsHidden(tab, typed) {
+    const text = String(typed || '').trim();
+    if (secretPromptVisible(tab, text)) return true;
+    return Boolean(text) && !cursorLineText(tab).includes(text.slice(-24));
+  }
+
   function updateAssistSuggestion(tab) {
     if (!tab.assist) return;
     if (tab.assist.correction) return; // the correction chip owns the bar until dismissed
     if (!state.assist.enabled || !state.assist.suggestions || !tab.assist.mirror.tracked) {
+      clearAssistBar(tab);
+      return;
+    }
+    // Wait for the shell's echo so a hidden prompt can be recognised before
+    // anything typed is drawn in the assist bar.
+    tab.assist.suggestion = null;
+    window.clearTimeout(tab.assist.suggestTimer);
+    tab.assist.suggestTimer = window.setTimeout(() => renderAssistSuggestion(tab), 90);
+  }
+
+  function renderAssistSuggestion(tab) {
+    if (!tab.assist || tab.assist.correction || !tab.assist.mirror.tracked) return;
+    if (!tab.assist.mirror.line || inputIsHidden(tab, tab.assist.mirror.line)) {
       clearAssistBar(tab);
       return;
     }
@@ -1905,9 +1958,13 @@
         tab.assist.correction = null;
         clearAssistBar(tab);
       }
+      // A typed Enter can be checked against the echo; a paste has not been
+      // echoed yet, so only a visible password prompt excludes it.
+      const typedEnter = /^[\r\n]+$/u.test(data);
+      const hidden = (line) => (typedEnter ? inputIsHidden(tab, line) : secretPromptVisible(tab));
       const result = tab.assist.mirror.feed(data);
       for (const commit of result.committed) {
-        if (commit.tracked && commit.line.trim()) {
+        if (commit.tracked && commit.line.trim() && !hidden(commit.line)) {
           tab.assist.history.add(commit.line);
           tab.assist.pendingCommand = commit.line;
           tab.assist.watchBuffer = '';
@@ -2823,7 +2880,7 @@
       className: 'remote-editor transcript-export',
       attrs: { readonly: '', spellcheck: 'false' }
     });
-    output.value = transcript.text || '';
+    output.value = transcript.plainText ?? transcript.text ?? '';
     const body = node('div', { className: 'form-grid compact-form' }, [
       node('div', { className: 'warning-box full', text: transcript.truncated ? uiText('This transcript was bounded to the most recent 1 MB of output.') : uiText('This transcript is captured locally from the active session output stream.') }),
       field(uiText('Session'), textInput('session', `${transcript.title || tab.title} · ${transcript.protocol || tab.profile.protocol}`, { required: false }), '', 'full'),
@@ -3305,6 +3362,8 @@
 
   function recordTerminalMacroInput(tab, data) {
     if (!state.macroRecording || typeof data !== 'string' || tab.id !== state.macroRecording.tabId) return;
+    // Keystrokes at a password prompt are not recorded into the macro.
+    if (secretPromptVisible(tab)) { state.macroRecording.skippedSecret = true; return; }
     state.macroRecording.chunks.push(data);
     const joined = state.macroRecording.chunks.join('');
     if (joined.length > 4096) state.macroRecording.chunks = [joined.slice(-4096)];
@@ -3363,7 +3422,9 @@
     };
     controller = showModal({
       title: uiText('Save recorded macro'),
-      description: uiText('Review the captured input before saving. Remove secrets before you save or replay it.'),
+      description: recorded.skippedSecret
+        ? `${uiText('Review the captured input before saving. Remove secrets before you save or replay it.')} ${uiText('Input typed at a password prompt was left out.')}`
+        : uiText('Review the captured input before saving. Remove secrets before you save or replay it.'),
       body: form,
       className: 'narrow',
       actions: [
@@ -4955,11 +5016,12 @@
   async function makeRemoteDirectory() {
     if (!state.sftp.profile) return;
     const name = await askText({ title: uiText('New remote folder'), label: uiText('Folder name'), placeholder: 'logs' });
-    if (!name) return;
+    if (name === null || name === undefined) return;
     try {
-      await api.sftp.mkdir(state.sftp.profile, joinRemote(state.sftp.path, name));
+      const target = joinRemote(state.sftp.path, name);
+      await api.sftp.mkdir(state.sftp.profile, target);
       await loadSftp(state.sftp.path);
-      toast(uiText('Folder created'), name, 'success');
+      toast(uiText('Folder created'), name.trim(), 'success');
     } catch (error) { toast(uiText('Could not create folder'), errorMessage(error), 'error'); }
   }
 

@@ -3,6 +3,7 @@
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { vncViewerUrl } = require('./lib/app-protocol.cjs');
+const { plainTerminalText } = require('./lib/terminal-text.cjs');
 const { FileBrowserService } = require('./services/file-browser-service.cjs');
 
 function registerIpc({
@@ -165,7 +166,10 @@ function registerIpc({
   handle('terminal:create', (request) => terminalService.create(request));
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));
-  handle('terminal:export-transcript', (id) => terminalService.exportTranscript(id));
+  handle('terminal:export-transcript', (id) => {
+    const transcript = terminalService.exportTranscript(id);
+    return { ...transcript, plainText: plainTerminalText(transcript.text) };
+  });
   handle('terminal:recording', (id) => terminalService.exportRecording(id));
   handle('terminal:save-transcript', async (id) => {
     const transcript = terminalService.exportTranscript(id);
@@ -176,8 +180,9 @@ function registerIpc({
       filters: [{ name: 'Text files', extensions: ['txt', 'log'] }]
     });
     if (result.canceled || !result.filePath) return { canceled: true };
-    systemService.writeTextFile(result.filePath, transcript.text || '');
-    return { canceled: false, filePath: result.filePath, bytes: Buffer.byteLength(transcript.text || '', 'utf8') };
+    const text = `${plainTerminalText(transcript.text)}\n`;
+    systemService.writeTextFile(result.filePath, text);
+    return { canceled: false, filePath: result.filePath, bytes: Buffer.byteLength(text, 'utf8') };
   });
   handle('terminal:print-transcript', async (id) => {
     const transcript = terminalService.exportTranscript(id);
@@ -194,7 +199,7 @@ function registerIpc({
       }
     });
     try {
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#111}pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.4}header{border-bottom:1px solid #ccc;margin-bottom:16px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px}.meta{font-size:12px;color:#555}</style></head><body><header><h1>${escapeHtml(title)}</h1><div class="meta">${escapeHtml(transcript.exportedAt || new Date().toISOString())}</div></header><pre>${escapeHtml(transcript.text || '')}</pre></body></html>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#111}pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.4}header{border-bottom:1px solid #ccc;margin-bottom:16px;padding-bottom:8px}h1{font-size:18px;margin:0 0 4px}.meta{font-size:12px;color:#555}</style></head><body><header><h1>${escapeHtml(title)}</h1><div class="meta">${escapeHtml(transcript.exportedAt || new Date().toISOString())}</div></header><pre>${escapeHtml(plainTerminalText(transcript.text))}</pre></body></html>`;
       await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
       const printed = await win.webContents.print({ silent: false, printBackground: true });
       return { printed: Boolean(printed) };

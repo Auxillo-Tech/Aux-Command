@@ -5,6 +5,19 @@ const { buildTunnelCommand, resolveHelper } = require('../lib/command-builder.cj
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { normalizeTunnel } = require('../lib/validation.cjs');
 
+// OpenSSH prints "Local forwarding listening" per address before it has
+// tried every bind, and with ExitOnForwardFailure a failed bind exits right
+// after. A tunnel is reported ready only when no failure follows quickly.
+const READY_SETTLE_MS = 1200;
+const FORWARD_FAILURE = /cannot listen|Address already in use|Permission denied|Could not request (local|remote) forwarding|remote port forwarding failed|forwarding failed|bind \[?[^\]]*\]?:\d+:/i;
+
+// The verbose log is kept for diagnostics, but the visible error is the last
+// few non-debug lines, which carry the actual cause.
+function summarizeSshError(text) {
+  const lines = String(text || '').split(/\r?\n/u).map((line) => line.trim()).filter((line) => line && !/^debug\d:/u.test(line));
+  return lines.slice(-3).join(' · ').slice(0, 400);
+}
+
 class TunnelService {
   constructor(profileStore, getWindow) {
     this.profileStore = profileStore;
@@ -45,8 +58,14 @@ class TunnelService {
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk) => {
       errorBuffer = `${errorBuffer}${chunk}`.slice(-8192);
-      if (/Local forwarding listening|remote forward success|Entering interactive session|pledge: network/i.test(errorBuffer)) {
-        this.#markRunning(tunnel.id, entry);
+      if (FORWARD_FAILURE.test(errorBuffer)) {
+        entry.forwardFailed = true;
+        clearTimeout(entry.readyTimer);
+        return;
+      }
+      if (!entry.readyTimer && /Local forwarding listening|remote forward success|Entering interactive session|pledge: network/i.test(errorBuffer)) {
+        entry.readyTimer = setTimeout(() => { if (!entry.forwardFailed) this.#markRunning(tunnel.id, entry); }, READY_SETTLE_MS);
+        entry.readyTimer.unref?.();
       }
     });
     child.once('spawn', () => {
@@ -67,7 +86,8 @@ class TunnelService {
       // SIGTERM, so an operator-requested stop must not be reported as failed.
       const stopped = entry.stopRequested || code === 0 || Boolean(signal);
       state.status = stopped ? 'stopped' : 'failed';
-      state.lastError = !stopped && code && errorBuffer.trim() ? errorBuffer.trim() : state.lastError;
+      clearTimeout(entry.readyTimer);
+      state.lastError = !stopped && code && errorBuffer.trim() ? (summarizeSshError(errorBuffer) || `ssh exited with code ${code}`) : state.lastError;
       if (this.tunnels.get(tunnel.id) === entry) this.tunnels.delete(tunnel.id);
       this.#emit(state);
     });
@@ -108,4 +128,4 @@ class TunnelService {
   }
 }
 
-module.exports = { TunnelService };
+module.exports = { TunnelService, summarizeSshError };

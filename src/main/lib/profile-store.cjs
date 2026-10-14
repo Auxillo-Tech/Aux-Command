@@ -151,12 +151,19 @@ class ProfileStore {
     return this.list().length < before;
   }
 
+  // Hosts are read from $HOME/.ssh/config, so OpenSSH must resolve them from
+  // the same file; without -F it reads the account's passwd home instead.
+  #defaultSshConfigFile() {
+    const filename = path.join(os.homedir(), '.ssh', 'config');
+    return fs.existsSync(filename) ? filename : undefined;
+  }
+
   async importSshConfig() {
     const imported = readDefaultSshConfig();
     // Resolve all entries before writing: a bad config must not partially
     // replace working saved connections. Ignore copied fields when resolving.
     for (const profile of imported) {
-      const config = await this.resolveSsh({ name: profile.name, protocol: 'ssh', host: profile.sshAlias, sshAlias: profile.sshAlias, useSshConfig: true }, { configFile: this.sshConfigFile });
+      const config = await this.resolveSsh({ name: profile.name, protocol: 'ssh', host: profile.sshAlias, sshAlias: profile.sshAlias, useSshConfig: true }, { configFile: this.sshConfigFile || this.#defaultSshConfigFile() });
       profile.host = config.hostname[0];
       profile.port = Number(config.port[0]);
       profile.username = config.user?.[0] || '';
