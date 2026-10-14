@@ -41,7 +41,12 @@ class RemoteDesktopGateway {
       rdpDomain: String(spec.rdpDomain || '').trim()
     });
     const clientSpec = buildExternalCommand(localProfile);
-    const clientExecutable = this.#resolveClient(clientSpec.candidates);
+    // VNC can use the built-in viewer through the tunnel, so a native VNC
+    // client is optional; RDP through the gateway still needs FreeRDP.
+    let clientExecutable = '';
+    try { clientExecutable = this.#resolveClient(clientSpec.candidates); }
+    catch (error) { if (protocol !== 'vnc' || this.clientExecutable) throw error; }
+    const embedded = !clientExecutable;
     const sshExecutable = this.sshExecutable || findExecutable(['ssh']);
     if (!sshExecutable) throw new Error('OpenSSH is required for a remote desktop gateway');
 
@@ -69,6 +74,7 @@ class RemoteDesktopGateway {
       startedAt: new Date().toISOString(),
       tunnel,
       client: null,
+      embedded,
       stopping: false,
       lastError: ''
     };
@@ -88,6 +94,14 @@ class RemoteDesktopGateway {
       };
       const launchClient = () => {
         if (settled || session.stopping || session.client) return;
+        if (embedded) {
+          settled = true;
+          clearTimeout(timer);
+          session.status = 'connected';
+          this.#emit(session);
+          resolve(this.#public(session));
+          return;
+        }
         const clientLaunch = this.#guardedCommand(clientExecutable, clientSpec.args);
         const client = spawn(clientLaunch.command, clientLaunch.args, {
           stdio: this.useGuard ? ['ignore', 'ignore', 'ignore', 'pipe'] : 'ignore',
@@ -191,6 +205,7 @@ class RemoteDesktopGateway {
       targetPort: session.targetPort,
       localPort: session.localPort,
       status: session.status,
+      embedded: Boolean(session.embedded),
       startedAt: session.startedAt,
       lastError: session.lastError
     };

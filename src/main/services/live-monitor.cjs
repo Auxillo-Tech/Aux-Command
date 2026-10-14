@@ -123,7 +123,8 @@ class LiveMonitorService {
         sections[current] += `${line}\n`;
       }
     }
-    for (const key of Object.keys(sections)) sections[key] = sections[key].trim();
+    // Only blank lines are trimmed; leading spaces align columns (free -h, ps).
+    for (const key of Object.keys(sections)) sections[key] = sections[key].replace(/^\s*\n|\s+$/gu, '');
     return sections;
   }
 }

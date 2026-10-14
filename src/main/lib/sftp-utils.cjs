@@ -5,7 +5,14 @@ function modeToString(mode = 0) {
   const type = (numericMode & 0o170000) === 0o040000 ? 'd' : (numericMode & 0o170000) === 0o120000 ? 'l' : '-';
   const bits = [0o400, 0o200, 0o100, 0o040, 0o020, 0o010, 0o004, 0o002, 0o001];
   const chars = ['r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x'];
-  return type + bits.map((bit, index) => (numericMode & bit ? chars[index] : '-')).join('');
+  const text = bits.map((bit, index) => (numericMode & bit ? chars[index] : '-'));
+  // setuid, setgid and sticky bits replace the matching execute character,
+  // as ls does (/tmp shows drwxrwxrwt).
+  const special = [[0o4000, 2, 's', 'S'], [0o2000, 5, 's', 'S'], [0o1000, 8, 't', 'T']];
+  for (const [bit, index, withExecute, withoutExecute] of special) {
+    if (numericMode & bit) text[index] = text[index] === 'x' ? withExecute : withoutExecute;
+  }
+  return type + text.join('');
 }
 
 function isDirectory(attrs = {}) {

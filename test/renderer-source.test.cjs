@@ -420,7 +420,7 @@ test('initialization failure has a durable recovery surface', () => {
 
 test('low-value pane resizing uses coalesced status instead of stacked toasts', () => {
   assert.doesNotMatch(renderer, /toast\('Pane size updated'/u);
-  assert.match(renderer, /setStatus\(uiText\("Pane size/u);
+  assert.match(renderer, /setStatus\(uiText\("Minimum pane size/u);
   assert.match(renderer, /if \(kind !== 'error'\) \{[\s\S]*setStatus/u);
   assert.match(renderer, /existing\.remove\(\)/u);
 });
@@ -582,4 +582,34 @@ test('tabs reorder by drag with a drop marker and rename in place', () => {
   assert.match(renderer, /enableTabDragging\(desktopTab\);/u);
   assert.match(renderer, /else \{ tab\.customTitle = false; tab\.title = tab\.autoTitle \|\| tab\.title; \}/u);
   assert.match(renderer, /if \(document\.activeElement\?\.classList\.contains\('tab-rename-input'\)\) return;/u);
+});
+
+test('QA pass: input at password prompts is never shown, suggested or kept', () => {
+  const start = renderer.indexOf('const secretPromptPattern');
+  const pattern = new Function(`${renderer.slice(start, renderer.indexOf(';\n', start) + 1)} return secretPromptPattern;`)();
+  for (const prompt of ['[sudo] password for edi:', 'Password:', 'Enter passphrase for key /home/u/.ssh/id_ed25519:', 'Verification code:', 'Passwort:', 'Пароль:', '密码：']) assert.match(prompt, pattern, prompt);
+  for (const normal of ['user@host:~$', 'Do you want to continue? [Y/n]', 'Name:']) assert.doesNotMatch(normal, pattern, normal);
+  assert.match(renderer, /if \(!tab\.assist\.mirror\.line \|\| inputIsHidden\(tab, tab\.assist\.mirror\.line\)\) \{/u);
+  assert.match(renderer, /if \(commit\.tracked && commit\.line\.trim\(\) && !hidden\(commit\.line\)\) \{/u);
+  assert.match(renderer, /if \(secretPromptVisible\(tab\)\) \{ state\.macroRecording\.skippedSecret = true; return; \}/u);
+});
+
+test('QA pass: UI state, tools and dialogs behave as labelled', () => {
+  // Multi-host runs report status in an invisible OSC sequence, not marker lines.
+  assert.match(renderer, /printf '\\\\033\]777;aux-run;/u);
+  assert.doesNotMatch(renderer, /AUX_RUN_/u);
+  // Network tools keep options per tool and reject invalid ports.
+  assert.match(renderer, /toolOptions\.set\(activeTool, extraInput\.value\);/u);
+  assert.match(renderer, /Invalid ports: \{p0\}/u);
+  // Switching language re-renders live state instead of default labels.
+  assert.match(renderer, /applyTerminalLayout\(\);\s*renderAgentStatus\(\);\s*refreshHostStats\(\);/u);
+  // The tour only shows steps whose control is visible.
+  assert.match(renderer, /steps: TOUR_STEPS\.filter\(visible\)/u);
+  // Workspaces only store reopenable sessions; entry names are validated.
+  assert.match(renderer, /filter\(\(tab\) => !tab\.closed && isReopenable\(tab\)\)/u);
+  assert.match(renderer, /name === '\.' \|\| name === '\.\.' \|\| name\.includes\('\/'\)/u);
+  // Status bar says what actually happened and clears itself.
+  assert.match(renderer, /uiText\("Session started · \{p0\}"/u);
+  assert.match(renderer, /statusResetTimer = window\.setTimeout/u);
+  assert.match(styles, /\.sftp-panel > :not\(\.panel-resizer\) \{ grid-column: 1; \}/u);
 });

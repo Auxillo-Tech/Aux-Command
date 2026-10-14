@@ -12,7 +12,7 @@
   }
   const searchCache = new WeakMap();
   function searchText(profile) {
-    if (!searchCache.has(profile)) searchCache.set(profile, [profile.name, profile.host, profile.username, profile.group, profile.protocol, profile.sshAlias, ...(profile.tags || []), ...(profile.sshAliases || [])].join(' ').toLocaleLowerCase());
+    if (!searchCache.has(profile)) searchCache.set(profile, [profile.name, profile.host, profile.port ? `${profile.host}:${profile.port} ${profile.port}` : '', profile.username, profile.group, profile.protocol, profile.sshAlias, profile.device, ...(profile.tags || []), ...(profile.sshAliases || [])].join(' ').toLocaleLowerCase());
     return searchCache.get(profile);
   }
   function duplicates(profiles) {

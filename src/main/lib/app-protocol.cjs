@@ -66,7 +66,8 @@ function within(appRoot, relative) {
 function resolveVncFile(url, appRoot) {
   const clean = cleanPath(url, SCHEME, HOST);
   if (!clean) return null;
-  if (clean === '/vnc.html' || clean === '/vnc.js') return within(appRoot, path.join('src', 'renderer', clean.slice(1)));
+  // dialog-i18n.js is plain translation data so the viewer follows the app language.
+  if (clean === '/vnc.html' || clean === '/vnc.js' || clean === '/dialog-i18n.js') return within(appRoot, path.join('src', 'renderer', clean.slice(1)));
   if (clean.startsWith('/node_modules/@novnc/novnc/') && clean.endsWith('.js')) return within(appRoot, clean.slice(1));
   return null;
 }

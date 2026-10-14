@@ -45,7 +45,7 @@ try:
  # Tab context menu is accessible from the keyboard and names survive shell title updates.
  c.eval('document.querySelector(".session-tab.active .tab-select").focus()');key('F10','F10',8)
  wait('!!document.querySelector(".context-menu")');click('.context-menu-item')
- wait('!!document.querySelector(".modal input")');fill('.modal input','Operations shell');click('.modal-footer .primary')
+ wait('!!document.querySelector(".tab-rename-input")');c.eval('(()=>{const i=document.querySelector(".tab-rename-input");i.value="Operations shell";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));})()')
  wait('document.querySelector(".session-tab.active .tab-title").textContent==="Operations shell"')
  c.eval('auxCommand.terminal.write(document.querySelector(".session-tab.active").dataset.sessionId,'+json.dumps("printf 'WORKSPACE_SEARCH_MARKER\\n'\r")+')')
  time.sleep(.3);click('#terminal-search-toggle');fill('.terminal-search-panel input','WORKSPACE_SEARCH_MARKER')

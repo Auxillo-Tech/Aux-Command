@@ -70,6 +70,9 @@ with tempfile.TemporaryDirectory(prefix='aux-file-ui-') as directory:
    click('.modal-backdrop:last-child .modal-footer .primary')
    wait('!document.querySelector("select[name=conflictPolicy]")')
    assert len(list(root.glob('file*.txt')))==2
+   # Completed transfers refresh both panes and clear the finished selection.
+   wait('document.querySelectorAll(".dual-file-pane:first-child input[type=checkbox]:checked").length===0')
+   c.eval("[...document.querySelectorAll('.dual-file-pane:first-child button')].find(b=>b.textContent==='Select all files').click()")
    click('.dual-file-pane[aria-label="Local files"] > .primary');wait('!!document.querySelector("select[name=conflictPolicy]")')
    fill('select[name=conflictPolicy]','rename','change');click('.modal-backdrop:last-child .modal-footer .primary')
    wait('(async()=>(await auxCommand.transfer.list()).filter(t=>t.status==="completed").length>=4)()')

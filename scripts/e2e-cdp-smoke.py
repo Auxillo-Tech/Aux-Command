@@ -300,7 +300,7 @@ def main() -> int:
             const resizable = getComputedStyle(document.querySelector('.terminal-view.active')).resize === 'both';
 
             return {
-              ok: searchOpen && paletteOpen && duplicateWorked && reconnectWorked && paneBefore !== paneAfterGrow && paneAfterShrink === paneBefore && resizable,
+              ok: searchOpen && paletteOpen && duplicateWorked && reconnectWorked && parseFloat(paneAfterGrow) > parseFloat(paneBefore) && parseFloat(paneAfterShrink) < parseFloat(paneAfterGrow) && resizable,
               beforeSessionCount: before.sessions.length,
               searchOpen,
               searchInToolbar,

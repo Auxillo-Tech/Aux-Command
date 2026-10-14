@@ -162,7 +162,7 @@ function registerIpc({
 
   handle('terminal:list', () => terminalService.list());
   handle('terminal:timeline', (id) => terminalService.connectionTimeline(id));
-  handle('terminal:detach', (id) => terminalWindows.open(id));
+  handle('terminal:detach', (id, appearance) => terminalWindows.open(id, appearance));
   handle('terminal:create', (request) => terminalService.create(request));
   handle('terminal:write', (id, data) => terminalService.write(id, data));
   handle('terminal:resize', (id, cols, rows) => terminalService.resize(id, cols, rows));

@@ -653,7 +653,7 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .toast.error::before { background: var(--danger); }
 .toast.success::before { background: var(--accent-2); }
 .toast strong { display: block; font-size: 12px; font-weight: 640; }
-.toast span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.toast span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.5; max-height: 9em; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-line; pointer-events: auto; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* ── Modals ────────────────────────────────────────────────────────────── */
@@ -730,11 +730,15 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .diagnostic-row .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 .diagnostic-row.available .indicator { background: var(--accent-2); }
 .diagnostic-row small, .tunnel-row small { color: var(--faint); font-family: var(--mono); font-size: 10.5px; }
+/* Name and detail on their own lines (they ran together as "QA fwdLOCAL"). */
+.diagnostic-row > div > strong, .tunnel-row > div > strong { display: block; margin-bottom: 2px; overflow-wrap: anywhere; }
+.diagnostic-row > div > small, .tunnel-row > div > small { display: block; overflow-wrap: anywhere; }
 .diagnostic-state { color: var(--muted); font-size: 10px; font-weight: 700; }
 .tunnel-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 8px rgba(255, 202, 106, .3); }
 .status-running .tunnel-indicator { background: var(--accent-2); box-shadow: 0 0 8px rgba(53, 211, 201, .4); }
 .status-failed .tunnel-indicator { background: var(--danger); box-shadow: none; }
 .status-stopped .tunnel-indicator { background: var(--faint); box-shadow: none; }
+.monitor-output { margin: 0; overflow-x: auto; white-space: pre; font-family: var(--mono); font-size: 11px; line-height: 1.45; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(5, 10, 18, .7); }
 .warning-box { padding: 13px 14px; border: 1px solid rgba(255, 202, 106, .22); border-radius: 10px; background: rgba(102, 71, 18, .16); color: #f4d899; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow-y: auto; }
 .danger-box { border-color: rgba(255, 113, 133, .3); background: rgba(112, 30, 44, .2); color: #ffb1bd; }
 .fingerprint { margin-top: 12px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: #070d16; color: var(--accent); font-family: var(--mono); font-size: 10.5px; word-break: break-all; }
@@ -930,7 +934,10 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .file-filters button { cursor: pointer; }
 .file-filters button[aria-pressed="true"] { color: var(--accent); border-color: rgba(69, 210, 255, .4); }
 .sftp-panel { grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto auto; position: relative; }
-.sftp-panel .file-list { grid-row: 6; }
+/* Every panel row sits in the single column; otherwise the empty-state
+   overlay and the list compete for row 6 and the grid grows a second column. */
+.sftp-panel > :not(.panel-resizer) { grid-column: 1; }
+.sftp-panel .file-list { grid-row: 6; grid-column: 1; }
 .sftp-panel .panel-empty { grid-row: 6; grid-column: 1; pointer-events: none; }
 .sftp-panel .transfer-status { grid-row: 7; }
 .sftp-panel .transfer-queue-section { grid-row: 8; }
@@ -1027,6 +1034,9 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .pane-maximize { display: none; position: absolute; top: 5px; right: 15px; z-index: 4; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--bg-1); color: var(--text); cursor: pointer; padding: 3px 8px; }
 .layout-grid .pane-maximize { display: block; }
 .pane-maximize:hover, .pane-maximize:focus-visible { border-color: var(--accent); }
+/* Keep the maximize button out of the way of terminal text until the pane is hovered. */
+.layout-grid .pane-maximize { opacity: 0; transition: opacity .12s ease; }
+.layout-grid .terminal-view:hover .pane-maximize, .layout-grid .pane-maximize:focus-visible { opacity: 1; }
 
 .terminal-stack:not(.layout-grid) .terminal-view { width: 100% !important; height: 100% !important; }
 
@@ -1040,7 +1050,12 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 
 .terminal-stack.layout-grid[data-flow="rows"] { grid-template-columns:1fr; }
 .terminal-stack.layout-grid[data-flow="columns"] { grid-auto-flow:column; grid-template-columns:none; grid-auto-columns:minmax(var(--pane-min-width),1fr); grid-template-rows:1fr; }
-#pane-flow { max-width:150px; padding:7px; }
+#pane-flow { max-width:150px; height: 29px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: rgba(22, 30, 48, .8); color: var(--muted); font: inherit; font-size: 11.5px; cursor: pointer; }
+#pane-flow:hover, #pane-flow:focus-visible { color: var(--text); border-color: rgba(69, 210, 255, .36); outline: none; }
+/* Native controls that sit outside .field get the same look as form fields. */
+.modal select:not(.field select), .file-manager-modal select { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(8, 14, 24, .72); color: var(--text); font: inherit; font-size: 12px; }
+.modal label, .modal input[type=checkbox] + span { font-family: inherit; }
+.modal input[type=checkbox] { accent-color: var(--accent); }
 
 #manage-connections { grid-column:1 / -1; margin:0; }
 .transfer-queue-section { grid-template-rows:auto auto minmax(0,1fr); }

@@ -25,3 +25,9 @@ test('file views keep directories first, sort naturally and do not mutate source
   assert.deepEqual(visibleFiles(entries, { sort: 'size' }).map(e => e.name), ['z-folder', 'file2', '.env', 'file10']);
   assert.equal(entries[0].name, 'file10');
 });
+
+test('connection search matches ports and serial devices', () => {
+  const list = [{ id: 'a', name: 'Lab', host: '127.0.0.1', port: 2299, protocol: 'ssh' }, { id: 'b', name: 'Switch', protocol: 'serial', device: '/dev/ttyUSB0' }];
+  assert.deepEqual(filterProfiles(list, '2299').map((p) => p.id), ['a']);
+  assert.deepEqual(filterProfiles(list, 'ttyUSB0').map((p) => p.id), ['b']);
+});

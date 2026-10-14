@@ -49,3 +49,9 @@ test('app pages come from app://aux and only the app\'s own files are served', (
     'file:///etc/passwd'
   ]) assert.equal(resolveAppFile(bad, root), null, bad);
 });
+
+test('the VNC viewer can load the translation data but nothing else from the app', () => {
+  assert.equal(resolveVncFile('aux-vnc://viewer/dialog-i18n.js', root), path.join(root, 'src/renderer/dialog-i18n.js'));
+  assert.equal(resolveVncFile('aux-vnc://viewer/i18n.js', root), null);
+  assert.equal(resolveVncFile('aux-vnc://viewer/renderer.js', root), null);
+});

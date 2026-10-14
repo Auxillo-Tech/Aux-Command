@@ -138,3 +138,10 @@ test('guarded host verifier absorbs callback faults and maps failures to denial'
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(denials, [false]);
 });
+
+test('modeToString shows setuid, setgid and sticky bits like ls', () => {
+  const { modeToString: format } = require('../src/main/lib/sftp-utils.cjs');
+  assert.equal(format(0o41777), 'drwxrwxrwt');
+  assert.equal(format(0o104755), '-rwsr-xr-x');
+  assert.equal(format(0o102644), '-rw-r-Sr--');
+});

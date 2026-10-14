@@ -19,6 +19,23 @@
 
 ### Fixed
 
+- Input typed at password prompts (sudo, ssh, `read -s`) or while the terminal is not echoing is never shown in the assist bar, suggested, saved in command history or recorded into macros.
+- Tunnels are reported ready only when no bind failure follows, and failures show the real ssh error instead of the verbose debug log.
+- SFTP trusts host keys already in OpenSSH `known_hosts` (plain, hashed, `[host]:port`, wildcards; `@revoked` keys refused) and warns when OpenSSH has a different key; the connection timeout pauses while a trust or password prompt is open, and connection errors are shown once.
+- Transcript export, save and print produce plain text without escape codes.
+- Remote file and folder names containing `/`, `.`, `..` or control characters are rejected instead of being silently rewritten; a path that cannot be opened keeps the current folder.
+- Imported `~/.ssh/config` hosts are resolved from the same config file.
+- Dialog translations were reviewed in every language: product, protocol and technical names are no longer translated, computing terms use the right sense, and garbled or truncated sentences are fixed. The tour, live state labels, pane layout options and the remote-desktop viewer now follow the selected language.
+- The status bar reports "Session started" rather than "Connected", marks failed exits as errors, and clears informational messages after a while. VNC reports a refused connection instead of "connection lost".
+- Network tools keep separate options per tool, reject invalid ports, and show errors without IPC prefixes.
+- Multi-host tasks no longer leave marker lines in terminals or shell history.
+- Pane − / + always changes the visible layout. The tour only shows steps it can highlight.
+- The detached terminal window uses the tab's font, size, colours, scrollback and name.
+- Gateway VNC opens the built-in viewer when no native VNC client is installed.
+- Saved workspaces leave out quick-connect sessions that cannot be reopened, with a warning.
+- The file manager refreshes both sides after a transfer; bulk connection edits are reviewed in plain language with the affected connections listed.
+- SFTP panel layout no longer breaks in its empty or error state; long notification text scrolls; setuid/setgid/sticky bits display like `ls`; live monitor output keeps column alignment.
+- The connection editor hides options that do not apply to the selected protocol, connection search matches ports and serial devices, the starter "Success" highlight no longer matches inside words, and theme names are readable in Settings.
 - Right-click in a terminal no longer selects the word under the pointer and copies it over the clipboard, which made right-click paste impossible over text.
 - Ctrl+Shift+V can no longer paste twice: Chromium's native plain-text paste is now suppressed.
 - Process cleanup reaps adopted descendants and terminates guarded process trees.

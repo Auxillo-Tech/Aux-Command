@@ -32,21 +32,22 @@ body { display:flex; flex-direction:column; }
 </style>
 </head>
 <body>
-<div id="connecting-overlay" class="overlay"><div class="card"><strong>Connecting</strong><p>Opening the VNC session...</p></div></div>
+<div id="connecting-overlay" class="overlay"><div class="card"><strong data-t>Connecting</strong><p data-t>Opening the VNC session...</p></div></div>
 <div id="credentials-overlay" class="overlay" hidden>
   <form id="credentials-form" class="card">
-    <strong>VNC authentication</strong>
-    <p>Enter the password required by this VNC server. It stays in this session only.</p>
-    <label for="vnc-password">Password</label>
+    <strong data-t>VNC authentication</strong>
+    <p data-t>Enter the password required by this VNC server. It stays in this session only.</p>
+    <label for="vnc-password" data-t>Password</label>
     <input id="vnc-password" type="password" autocomplete="current-password" required>
-    <button type="submit">Continue</button>
+    <button type="submit" data-t>Continue</button>
   </form>
 </div>
-<div id="error-overlay" class="overlay" hidden><div class="card"><strong>VNC connection failed</strong><span id="error-detail"></span></div></div>
-<div id="desktop-controls" style="height:45px;display:flex;gap:6px;align-items:center;padding:4px"><button id="desktop-fit">Actual size</button><button id="desktop-cad">Ctrl+Alt+Delete</button><button id="desktop-clipboard">Clipboard</button><button id="desktop-viewonly">View only</button><span style="font-size:11px">Release keyboard: Ctrl+Alt+Shift</span></div>
-<div id="clipboard-panel" hidden style="position:absolute;z-index:3;right:8px;top:48px;padding:12px;background:#152237;border:1px solid #40516b"><label for="clipboard-text">Remote clipboard — select and copy text here, or paste text to send</label><textarea id="clipboard-text" rows="6" cols="45" maxlength="1048576"></textarea><br><button id="clipboard-send">Send to remote clipboard</button><button id="clipboard-close">Close</button></div>
+<div id="error-overlay" class="overlay" hidden><div class="card"><strong data-t>VNC connection failed</strong><span id="error-detail"></span></div></div>
+<div id="desktop-controls" style="height:45px;display:flex;gap:6px;align-items:center;padding:4px"><button id="desktop-fit" data-t>Actual size</button><button id="desktop-cad" data-t>Ctrl+Alt+Delete</button><button id="desktop-clipboard" data-t>Clipboard</button><button id="desktop-viewonly" data-t>View only</button><span style="font-size:11px" data-t>Release keyboard: Ctrl+Alt+Shift</span></div>
+<div id="clipboard-panel" hidden style="position:absolute;z-index:3;right:8px;top:48px;padding:12px;background:#152237;border:1px solid #40516b"><label for="clipboard-text" data-t>Remote clipboard — select and copy text here, or paste text to send</label><textarea id="clipboard-text" rows="6" cols="45" maxlength="1048576"></textarea><br><button id="clipboard-send" data-t>Send to remote clipboard</button><button id="clipboard-close" data-t>Close</button></div>
 <div id="vnc-screen" aria-label="Remote VNC desktop"></div>
-<div id="vnc-status" role="status" aria-live="polite">Initializing...</div>
+<div id="vnc-status" role="status" aria-live="polite">Initializing…</div>
+<script src="./dialog-i18n.js"></script>
 <script type="module" src="./vnc.js"></script>
 </body>
 </html>

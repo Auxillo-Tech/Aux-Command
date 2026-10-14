@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld('auxCommand', Object.freeze({
   terminal: Object.freeze({
     onDetachedInput: (callback) => subscribe('terminal:detached-input', callback),
     timeline: (id) => invoke('terminal:timeline', id),
-    detach: (id) => invoke('terminal:detach', id),
+    detach: (id, appearance) => invoke('terminal:detach', id, appearance),
     onDetached: (callback) => subscribe('terminal:detached', callback),
     create: (request) => invoke('terminal:create', request),
     list: () => invoke('terminal:list'),

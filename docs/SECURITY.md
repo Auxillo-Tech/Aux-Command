@@ -26,6 +26,8 @@ Aux Command is security-sensitive software. Treat every renderer value, imported
 - Embedded RDP runs its virtual X display with a private MIT-MAGIC-COOKIE, and x11vnc listens only on a Unix socket in a `0700` directory, so other local users cannot watch or control the session.
 - Profile synchronization shares connection names, hosts, ports, users, groups and tags only. Startup commands, keys, jump hosts, known-hosts files and agent/X11 forwarding stay local; local-shell profiles are never synchronized; plain HTTP sources are allowed only on `localhost`, and redirects cannot change the scheme.
 - Workspace backups list every startup command before a restore.
+- Input typed at password prompts, or while the terminal does not echo, is never displayed by the assist bar, suggested, stored in history or recorded into macros.
+- SFTP host keys are checked against Aux Command's own trust store and OpenSSH `known_hosts`; keys marked `@revoked` are refused and a key that differs from OpenSSH's is shown as changed.
 - Executables are looked up only in absolute `PATH` directories.
 
 ## Important trust boundaries

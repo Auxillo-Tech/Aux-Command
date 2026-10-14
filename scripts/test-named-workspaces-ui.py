@@ -22,7 +22,7 @@ try:
  # Rename active tab through its accessible context menu.
  c.eval("document.querySelector('.session-tab.active .tab-select').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true}))")
  c.eval("[...document.querySelectorAll('.context-menu-item')].find(b=>b.textContent.includes('Rename')).click()")
- wait('!!document.querySelector(".modal input")');c.eval("document.querySelector('.modal input').value='Saved operations'");click('.modal-footer .primary')
+ wait('!!document.querySelector(".tab-rename-input")');c.eval('(()=>{const i=document.querySelector(".tab-rename-input");i.value="Saved operations";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));})()')
  click('#layout-toggle');c.eval("document.querySelector('.terminal-view[data-session-id=\"'+document.querySelector('.session-tab.active').dataset.sessionId+'\"]').style.width='480px'")
  click('#workspaces-button');wait('!!document.querySelector(".modal")');textbutton('Save current workspace')
  wait('document.querySelectorAll(".modal").length===2');c.eval("document.querySelector('.modal-backdrop:last-child input').value='Operations desk'");click('.modal-backdrop:last-child .primary')

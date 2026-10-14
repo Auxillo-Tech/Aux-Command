@@ -338,7 +338,14 @@
     return raw.replace(/^Error invoking remote method '[^']+':\s*/u, '').replace(/^Error:\s*/u, '');
   }
 
+  // Informational status text returns to "Ready" after a while so it never
+  // describes something that happened long ago; busy and error states stay.
+  let statusResetTimer = 0;
   function setStatus(message, kind = 'ready') {
+    window.clearTimeout(statusResetTimer);
+    if (kind === 'ready' && message !== window.AuxI18n?.t('status.ready')) {
+      statusResetTimer = window.setTimeout(() => setStatus(window.AuxI18n.t('status.ready')), 15_000);
+    }
     elements.globalStatus.textContent = message;
     elements.globalStatusDot.className = 'status-dot';
     if (kind === 'busy') elements.globalStatusDot.classList.add('busy');
@@ -464,7 +471,7 @@
   }
 
   function formatTarget(profile) {
-    if (profile.protocol === 'local') return 'Local machine';
+    if (profile.protocol === 'local') return uiText('Local machine');
     if (profile.protocol === 'serial') return `${profile.device} · ${profile.baudRate}`;
     const user = profile.username ? `${profile.username}@` : '';
     return `${user}${profile.host}${profile.port ? `:${profile.port}` : ''}`;
@@ -517,6 +524,15 @@
     if (path === '/') return '/';
     return normalizeRemotePath(path.split('/').slice(0, -1).join('/'));
   }
+
+  // One list of readable theme names for Settings and the connection editor.
+  const THEME_LABELS = {
+    'aux-dark': 'Aux dark', light: 'Light', 'high-contrast': 'High contrast', nord: 'Nord', dracula: 'Dracula',
+    'solarized-dark': 'Solarized dark', 'solarized-light': 'Solarized light', 'one-dark': 'One dark',
+    'catppuccin-mocha': 'Catppuccin mocha', 'tokyo-night': 'Tokyo night', 'gruvbox-dark': 'Gruvbox dark',
+    monokai: 'Monokai', 'oceanic-next': 'Oceanic next', material: 'Material'
+  };
+  function themeLabel(key) { return THEME_LABELS[key] ? uiText(THEME_LABELS[key]) : key; }
 
   function terminalOptionsForProfile(profile) {
     if (profile?.inheritTerminalDefaults || !profile?.terminalFontSize) profile = { ...profile, ...state.ui.terminalDefaults };
@@ -910,18 +926,18 @@
 
   // First-run guided tour: a spotlight walkthrough of the primary surfaces.
   const TOUR_STEPS = [
-    { selector: '.tool-rail', title: uiText('Your tool rail'), body: 'Every workstation tool lives here — snippets, tunnels, network diagnostics, the live monitor, the remote-desktop gateway, SSH keys, sync, diagnostics and updates. Hover any icon for its name.', placement: 'right' },
-    { selector: '.workspace-commandbar', title: uiText('Quick connect'), body: 'Type ssh://user@host, user@host, or a /dev/ttyUSB0 serial path and press Connect. Press Ctrl+K from anywhere to jump here.', placement: 'bottom' },
-    { selector: '#new-group-button', title: uiText('Organize with groups'), body: 'Create groups to file your connections. Each connection has a ⋯ menu (or right-click) to edit, duplicate, move, or delete it.', placement: 'bottom' },
-    { selector: '#palette-button', title: uiText('Command palette'), body: 'Press Ctrl+Shift+P to search every action, connection and snippet from the keyboard — the fastest way to drive Aux Command.', placement: 'bottom' },
-    { selector: '#highlight-toggle', title: uiText('Log highlighting'), body: 'Colour keywords in terminal output for fast log triage. Open it to add rules; toggle it any time with Ctrl+Shift+H.', placement: 'bottom' },
-    { selector: '#tunnel-status-cluster', title: uiText('Live status'), body: 'Active SSH tunnels show here in the status bar, and each saved connection carries a reachability dot in the sidebar. You are ready to go.', placement: 'top', optional: true }
+    { selector: '.tool-rail', title: 'Your tool rail', body: 'Every workstation tool lives here — snippets, tunnels, network diagnostics, the live monitor, the remote-desktop gateway, SSH keys, sync, diagnostics and updates. Hover any icon for its name.', placement: 'right' },
+    { selector: '.workspace-commandbar', title: 'Quick connect', body: 'Type ssh://user@host, user@host, or a /dev/ttyUSB0 serial path and press Connect. Press Ctrl+K (outside a terminal) to jump here.', placement: 'bottom' },
+    { selector: '#new-group-button', title: 'Organize with groups', body: 'Create groups to file your connections. Each connection has a ⋯ menu (or right-click) to edit, duplicate, move, or delete it.', placement: 'bottom' },
+    { selector: '#palette-button', title: 'Command palette', body: 'Press Ctrl+Shift+P to search every action, connection and snippet from the keyboard — the fastest way to drive Aux Command.', placement: 'bottom' },
+    { selector: '#highlight-toggle', title: 'Log highlighting', body: 'Colour keywords in terminal output for fast log triage. Open it to add rules; toggle it any time with Ctrl+Shift+H.', placement: 'bottom' },
+    { selector: '#tunnel-status-cluster', title: 'Live status', body: 'Active SSH tunnels show here in the status bar, and each saved connection carries a reachability dot in the sidebar. You are ready to go.', placement: 'top', optional: true }
   ];
   let tourState = null;
 
   function positionTourStep() {
     if (!tourState) return;
-    const step = TOUR_STEPS[tourState.index];
+    const step = tourState.steps[tourState.index];
     const target = step.selector ? document.querySelector(step.selector) : null;
     const highlight = elements.tourHighlight;
     const popover = elements.tourPopover;
@@ -954,17 +970,13 @@
   function renderTourStep() {
     if (!tourState) return;
     // Skip optional steps whose target is not present.
-    while (TOUR_STEPS[tourState.index]?.optional && !document.querySelector(TOUR_STEPS[tourState.index].selector)) {
-      if (tourState.direction < 0 && tourState.index > 0) tourState.index -= 1;
-      else if (tourState.index < TOUR_STEPS.length - 1) tourState.index += 1;
-      else break;
-    }
-    const step = TOUR_STEPS[tourState.index];
-    elements.tourStepCount.textContent = uiText("Step {p0} of {p1}", { p0: tourState.index + 1, p1: TOUR_STEPS.length });
-    elements.tourTitle.textContent = step.title;
-    elements.tourBody.textContent = step.body;
+    const step = tourState.steps[tourState.index];
+    elements.tourStepCount.textContent = uiText("Step {p0} of {p1}", { p0: tourState.index + 1, p1: tourState.steps.length });
+    // Translated when shown, so the tour follows the current language.
+    elements.tourTitle.textContent = uiText(step.title);
+    elements.tourBody.textContent = uiText(step.body);
     elements.tourPrev.disabled = tourState.index === 0;
-    elements.tourNext.textContent = tourState.index === TOUR_STEPS.length - 1 ? uiText('Finish') : uiText('Next');
+    elements.tourNext.textContent = tourState.index === tourState.steps.length - 1 ? uiText('Finish') : uiText('Next');
     positionTourStep();
   }
 
@@ -980,7 +992,11 @@
   }
 
   function startTour() {
-    tourState = { index: 0, direction: 1 };
+    // Only steps whose control is on screen are shown, so every step has a
+    // spotlight (log highlighting, for example, appears once a session is open).
+    const visible = (step) => Boolean(document.querySelector(step.selector)?.getClientRects().length);
+    tourState = { index: 0, direction: 1, steps: TOUR_STEPS.filter(visible) };
+    if (!tourState.steps.length) { tourState = null; return; }
     elements.tourRoot.hidden = false;
     window.addEventListener('resize', positionTourStep);
     renderTourStep();
@@ -988,7 +1004,7 @@
 
   function tourNext() {
     if (!tourState) return;
-    if (tourState.index >= TOUR_STEPS.length - 1) { endTour(true); return; }
+    if (tourState.index >= tourState.steps.length - 1) { endTour(true); return; }
     tourState.index += 1;
     tourState.direction = 1;
     renderTourStep();
@@ -1282,8 +1298,15 @@
       if(!selected.size)throw new Error('Select connections first');const patch={};
       if(group.value.trim())patch.group=group.value.trim();if(tags.value.trim())patch.tags=tags.value.split(',').map(t=>t.trim()).filter(Boolean);
       if(favorite.value!=='unchanged')patch.favorite=favorite.value==='yes';if(!Object.keys(patch).length)throw new Error('Choose a change first');
-      if(!await confirmAction({title:uiText('Apply bulk connection edit?'),description:uiText("{p0} connections\n{p1}", { p0: selected.size, p1: JSON.stringify(patch,null,2) }),confirmLabel:uiText('Apply changes')}))return false;
-      await api.profiles.bulkUpdate([...selected],patch);updateProfiles(await api.profiles.list());return true;
+      // Describe the change in words and list the affected connections.
+      const changes=[];
+      if(patch.group)changes.push(uiText('Move to folder: {p0}',{p0:patch.group}));
+      if(patch.tags)changes.push(uiText('Set tags: {p0}',{p0:patch.tags.join(', ')}));
+      if('favorite' in patch)changes.push(patch.favorite?uiText('Mark as favorite'):uiText('Remove from favorites'));
+      const names=state.profiles.filter(p=>selected.has(p.id)).map(p=>`• ${p.name} (${formatTarget(p)})`);
+      const listed=names.slice(0,25).join('\n')+(names.length>25?`\n${uiText('…and {p0} more',{p0:names.length-25})}`:'');
+      if(!await confirmAction({title:uiText('Apply bulk connection edit?'),description:`${changes.join('\n')}\n\n${uiText('{p0} connections:',{p0:selected.size})}\n${listed}`,confirmLabel:uiText('Apply changes')}))return false;
+      await api.profiles.bulkUpdate([...selected],patch);updateProfiles(await api.profiles.list());toast(uiText('Connections updated'),uiText('{p0} connections changed.',{p0:selected.size}),'success');return true;
     }}] });
   }
 
@@ -1483,8 +1506,8 @@
       const kind = profile.protocol.toUpperCase();
       try {
         const result = profile.protocol === 'vnc'
-          ? await runTask(uiText("Connecting VNC to {p0}…", { p0: profile.name }), () => api.vnc.start(profile), uiText('VNC connected'))
-          : await runTask(uiText("Starting embedded RDP to {p0}…", { p0: profile.name }), () => api.rdp.startEmbedded(profile), uiText('RDP connected'));
+          ? await runTask(uiText("Connecting VNC to {p0}…", { p0: profile.name }), () => api.vnc.start(profile), uiText("{p0} session started", { p0: kind }))
+          : await runTask(uiText("Starting embedded RDP to {p0}…", { p0: profile.name }), () => api.rdp.startEmbedded(profile), uiText("{p0} session started", { p0: kind }));
         const tab = createRemoteDesktopTab(result, profile, profile.protocol, saved);
         toast(uiText("{p0} session started", { p0: kind }), profile.name, 'success');
         return tab;
@@ -1532,7 +1555,7 @@
 
     let session;
     try {
-      session = await runTask(uiText("Connecting to {p0}…", { p0: profile.name }), () => api.terminal.create({ profile, cols: 120, rows: 34, cwd: profile.protocol === 'local' ? saved.cwd : undefined, remoteCwd: profile.protocol === 'ssh' ? saved.cwd : '' }), uiText("Connected to {p0}", { p0: profile.name }));
+      session = await runTask(uiText("Connecting to {p0}…", { p0: profile.name }), () => api.terminal.create({ profile, cols: 120, rows: 34, cwd: profile.protocol === 'local' ? saved.cwd : undefined, remoteCwd: profile.protocol === 'ssh' ? saved.cwd : '' }), uiText("Session started · {p0}", { p0: profile.name }));
     } catch {
       return;
     }
@@ -1696,7 +1719,7 @@
     return [
       { id: `rule-${Date.now()}-1`, label: uiText('Errors'), pattern: '/(error|fatal|failed|panic|denied)/', color: 'red', caseSensitive: false, wholeWord: false, enabled: true },
       { id: `rule-${Date.now()}-2`, label: uiText('Warnings'), pattern: '/(warn|warning|deprecated)/', color: 'amber', caseSensitive: false, wholeWord: false, enabled: true },
-      { id: `rule-${Date.now()}-3`, label: uiText('Success'), pattern: '/(success|succeeded|ok|ready|listening|started)/', color: 'green', caseSensitive: false, wholeWord: false, enabled: true },
+      { id: `rule-${Date.now()}-3`, label: uiText('Success'), pattern: '/\\b(success|succeeded|ok|ready|listening|started)\\b/', color: 'green', caseSensitive: false, wholeWord: false, enabled: true },
       { id: `rule-${Date.now()}-4`, label: uiText('IP addresses'), pattern: '/\\b\\d{1,3}(\\.\\d{1,3}){3}\\b/', color: 'cyan', caseSensitive: false, wholeWord: false, enabled: true }
     ];
   }
@@ -1993,7 +2016,7 @@
         }).then((confirmed) => {
           // The typed line stays visible either way; only Enter was held back.
           if (confirmed) commitTerminalInput(tab, data);
-          if(tab.detached)api.terminal.detach(tab.id).catch(()=>{});else tab.terminal.focus();
+          if(tab.detached)detachTab(tab).catch(()=>{});else tab.terminal.focus();
         });
         return;
       }
@@ -2392,12 +2415,12 @@
         tab.cwd = cwd; tab.explicitCwd = true; persistSessions();
       } },
       { label:uiText('Connection timeline'),icon:'◷',run:async()=>{const events=await api.terminal.timeline(tab.id);showModal({title:uiText('Connection timeline'),description:uiText('Observed process events and detected errors. Unreported DNS, network and authentication steps are not inferred as successful.'),body:node('div',{className:'transfer-review-list'},events.map(event=>node('div',{className:'transfer-review-item'},[node('strong',{text:(event.elapsedMs/1000).toFixed(2)+'s · '+event.stage}),node('span',{text:event.message})])))});} },
-      { label: uiText('Move to separate window'), icon:'↗', disabled:tab.closed, run:()=>api.terminal.detach(tab.id) },
+      { label: uiText('Move to separate window'), icon:'↗', disabled:tab.closed, run:()=>detachTab(tab) },
       { label: uiText('Move tab left'), icon: '←', run: () => moveSessionTab(tab, -1) },
       { label: uiText('Move tab right'), icon: '→', run: () => moveSessionTab(tab, 1) },
       { label: uiText('Duplicate session'), icon: '+', run: () => connectProfile(profile, tab) },
-      { label: uiText('Increase text size'), icon: '+', run: () => { terminal.options.fontSize = Math.min(32, terminal.options.fontSize + 1); fitVisibleTerminals(); persistSessions(); } },
-      { label: uiText('Decrease text size'), icon: '−', run: () => { terminal.options.fontSize = Math.max(8, terminal.options.fontSize - 1); fitVisibleTerminals(); persistSessions(); } },
+      { label: uiText('Increase text size'), icon: 'A+', run: () => { terminal.options.fontSize = Math.min(32, terminal.options.fontSize + 1); fitVisibleTerminals(); persistSessions(); } },
+      { label: uiText('Decrease text size'), icon: 'A−', run: () => { terminal.options.fontSize = Math.max(8, terminal.options.fontSize - 1); fitVisibleTerminals(); persistSessions(); } },
       { label: uiText('Reset text size'), icon: '↺', run: () => { terminal.options.fontSize = terminalOptionsForProfile(profile).fontSize; fitVisibleTerminals(); persistSessions(); } },
       'separator',
       { label: uiText('Close session'), icon: '×', danger: true, run: () => requestCloseTab(tab.id) }
@@ -2571,8 +2594,17 @@
     });
   }
 
+  // A detached window uses the same font, size, line height, scrollback,
+  // colours and name as the tab.
+  function detachTab(tab) {
+    const { fontFamily, fontSize, lineHeight, scrollback, theme } = tab.terminal?.options || {};
+    return api.terminal.detach(tab.id, { title: tab.title, fontFamily, fontSize, lineHeight, scrollback, theme });
+  }
+
   function applyTabTitle(tab) {
     tab.tabElement.querySelector('.tab-title').textContent = tab.title;
+    const close = tab.tabElement.querySelector('.tab-close');
+    if (close) close.title = uiText("Close {p0}", { p0: tab.title });
     if (tab.profile) tab.tabButton.title = `${tab.title} · ${formatTarget(tab.profile)}`;
     if (state.activeTabId === tab.id && tab.profile) elements.activeSessionLabel.textContent = `${tab.title} · ${tab.profile.protocol.toUpperCase()}`;
   }
@@ -2625,9 +2657,15 @@
     tab.tabButton.focus();
   }
 
+  function isReopenable(tab) {
+    return !tab.transient && (tab.profile?.id === 'local-shell' || state.profiles.some((profile) => profile.id === tab.profile?.id));
+  }
+
   async function sessionSnapshot() {
     const live = new Map((await api.terminal.list()).map((item) => [item.id, item]));
-    return [...state.tabs.values()].filter((tab) => !tab.closed).map((tab) => ({
+    // Only sessions of saved connections can be reopened later; quick-connect
+    // and gateway viewer tabs have no stored profile and are left out.
+    return [...state.tabs.values()].filter((tab) => !tab.closed && isReopenable(tab)).map((tab) => ({
       profileId: tab.profile.id, protocol: tab.profile.protocol, title: tab.title,
       startedAt: tab.id, customTitle: Boolean(tab.customTitle),
       cwd: tab.explicitCwd ? tab.cwd : live.get(tab.id)?.cwd || tab.cwd || '',
@@ -2676,7 +2714,9 @@
 
   async function saveNamedWorkspace(name, id) {
     const sessions = await sessionSnapshot();
-    if (!sessions.length) throw new Error('Open at least one live session before saving a workspace');
+    const skipped = [...state.tabs.values()].filter((tab) => !tab.closed && !isReopenable(tab)).length;
+    if (!sessions.length) throw new Error(skipped ? uiText('Quick-connect sessions cannot be saved in a workspace. Save the connection first.') : uiText('Open at least one live session before saving a workspace'));
+    if (skipped) toast(uiText('Some sessions were not saved'), uiText('{p0} quick-connect sessions have no saved connection and were left out.', { p0: skipped }), 'error');
     state.namedWorkspaces = await api.app.saveNamedWorkspace({ id, name, sessions, workspace: { layout: state.layout, paneMinWidth: state.paneMinWidth, paneMinHeight: state.paneMinHeight, paneFlow: state.paneFlow || 'auto' } });
   }
 
@@ -3020,11 +3060,16 @@
 
   function adjustPaneSize(delta) {
     const step = Number(delta) || 0;
-    state.paneMinWidth = Math.max(240, Math.min(720, state.paneMinWidth + step));
-    state.paneMinHeight = Math.max(160, Math.min(520, state.paneMinHeight + Math.round(step * 0.65)));
+    // The setting is a minimum, and panes stretch to fill the row. Start from
+    // the size panes actually have so every press visibly changes the layout.
+    const pane = [...elements.terminalStack.querySelectorAll('.terminal-view.active')].map((view) => view.getBoundingClientRect()).find((rect) => rect.width > 0);
+    const baseWidth = step > 0 && pane ? Math.max(state.paneMinWidth, Math.round(pane.width)) : state.paneMinWidth;
+    const baseHeight = step > 0 && pane ? Math.max(state.paneMinHeight, Math.round(pane.height)) : state.paneMinHeight;
+    state.paneMinWidth = Math.max(240, Math.min(720, baseWidth + step));
+    state.paneMinHeight = Math.max(160, Math.min(520, baseHeight + Math.round(step * 0.65)));
     applyPaneSize();
     state.initializing ? null : persistWorkspaceSettings();
-    setStatus(uiText("Pane size {p0}px × {p1}px", { p0: state.paneMinWidth, p1: state.paneMinHeight }));
+    setStatus(uiText("Minimum pane size {p0} × {p1} px", { p0: state.paneMinWidth, p1: state.paneMinHeight }));
   }
 
   function updateSessionActions() {
@@ -3157,7 +3202,7 @@
   }
 
   function activateTab(id) {
-    if(state.tabs.get(id)?.detached)api.terminal.detach(id).catch(error=>toast(uiText('Detached terminal'),errorMessage(error),'error'));
+    if(state.tabs.get(id)?.detached)detachTab(state.tabs.get(id)).catch(error=>toast(uiText('Detached terminal'),errorMessage(error),'error'));
     state.activeTabId = id || '';
     const fallbackTabId = state.tabs.keys().next().value || '';
     for (const [tabId, tab] of state.tabs) {
@@ -3227,7 +3272,7 @@
     view.append(node('iframe', {
       className: 'vnc-iframe',
       attrs: {
-        src: result.vncUrl,
+        src: `${result.vncUrl}&lang=${encodeURIComponent(window.AuxI18n.getLanguage())}`,
         // Same-origin here means the isolated aux-vnc://viewer origin (needed
         // for noVNC's module scripts), not the workspace page.
         sandbox: 'allow-scripts allow-same-origin',
@@ -3305,6 +3350,7 @@
       if (tab.desktopKind === 'rdp') await api.rdp.stopEmbedded(id);
       else await api.vnc.stop(id);
     } catch { /* bridge already closed */ }
+    if (tab.gatewayId) api.gateway.disconnect(tab.gatewayId).catch(() => {});
     state.tabs.delete(id);
     tab.tabElement?.remove();
     tab.view?.remove();
@@ -3608,13 +3654,7 @@
     const device = textInput('device', profile.device || '/dev/ttyUSB0', { placeholder: '/dev/ttyUSB0' });
     const baudRate = textInput('baudRate', profile.baudRate || 115200, { type: 'number', min: 50, max: 4000000 });
     const rdpDomain = textInput('rdpDomain', profile.rdpDomain, { placeholder: 'CORP' });
-    const terminalTheme = selectInput('terminalTheme', [
-      ['aux-dark', uiText('Aux dark')], ['light', uiText('Light')], ['high-contrast', uiText('High contrast')],
-      ['nord', uiText('Nord')], ['dracula', uiText('Dracula')], ['solarized-dark', uiText('Solarized dark')],
-      ['solarized-light', uiText('Solarized light')], ['one-dark', uiText('One dark')], ['catppuccin-mocha', uiText('Catppuccin mocha')],
-      ['tokyo-night', uiText('Tokyo night')], ['gruvbox-dark', uiText('Gruvbox dark')], ['monokai', uiText('Monokai')],
-      ['oceanic-next', uiText('Oceanic next')], ['material', uiText('Material')]
-    ], profile.terminalTheme || 'aux-dark');
+    const terminalTheme = selectInput('terminalTheme', Object.keys(THEME_LABELS).map((key) => [key, themeLabel(key)]), profile.terminalTheme || 'aux-dark');
     const terminalFontFamily = textInput('terminalFontFamily', profile.terminalFontFamily || defaultTerminalFont, { placeholder: defaultTerminalFont });
     const terminalFontSize = textInput('terminalFontSize', profile.terminalFontSize || 13, { type: 'number', min: 8, max: 32 });
     const terminalCursorStyle = selectInput('terminalCursorStyle', [
@@ -3664,16 +3704,18 @@
       field(uiText('RDP desktop height'),textInput('rdpHeight',profile.rdpHeight||900,{type:'number',min:'600',max:'2160'})),
       checkbox('rdpAudio',uiText('Play RDP audio on this computer'),Boolean(profile.rdpAudio)),
       field(uiText('Startup command'), startupCommand, uiText('Runs after connecting.'), 'full'),
-      node('div', { className: 'checkbox-column full' }, checkbox('trackRemoteCwd', uiText('Track SSH working directory with Bash integration (requires Bash 5.1+; no startup command)'), Boolean(profile.trackRemoteCwd))),
+      node('div', { className: 'checkbox-column full', attrs: { 'data-when': 'ssh' } }, checkbox('trackRemoteCwd', uiText('Track SSH working directory with Bash integration (requires Bash 5.1+; no startup command)'), Boolean(profile.trackRemoteCwd))),
       optionsRow,
-      node('div', { className: 'section-title full', text: uiText('Terminal appearance') }),
-      node('div', { className: 'checkbox-column full' }, checkbox('inheritTerminalDefaults', uiText('Use global terminal defaults'), Boolean(profile.inheritTerminalDefaults))),
+      // Terminal appearance only matters for protocols that open a terminal;
+      // it is hidden (not cleared) for file-transfer and desktop protocols.
+      node('div', { className: 'section-title full', text: uiText('Terminal appearance'), attrs: { 'data-terminal-only': '' } }),
+      node('div', { className: 'checkbox-column full', attrs: { 'data-terminal-only': '' } }, checkbox('inheritTerminalDefaults', uiText('Use global terminal defaults'), Boolean(profile.inheritTerminalDefaults))),
       field(uiText('Terminal theme'), terminalTheme, uiText('Applied to new terminal tabs for this profile.')),
       field(uiText('Terminal font'), terminalFontFamily, uiText('Font family stack used by xterm.js.')),
       field(uiText('Font size'), terminalFontSize, uiText('8–32 px.')),
       field(uiText('Cursor style'), terminalCursorStyle),
       field(uiText('Scrollback lines'), terminalScrollback, uiText('1,000–200,000 lines.')),
-      node('div', { className: 'checkbox-column' }, checkbox('terminalCursorBlink', uiText('Blinking cursor'), profile.terminalCursorBlink !== false)),
+      node('div', { className: 'checkbox-column', attrs: { 'data-terminal-only': '' } }, checkbox('terminalCursorBlink', uiText('Blinking cursor'), profile.terminalCursorBlink !== false)),
       credentialRow,
       node('div', { className: 'checkbox-row full' }, checkbox('favorite', uiText('Favorite connection'), profile.favorite)),
       field(uiText('Notes'), notes, '', 'full')
@@ -3698,6 +3740,7 @@
       [startupCommand.closest('.field'), 'ssh,mosh,local']
     ]);
     for (const [element, when] of conditional) element.dataset.when = when;
+    for (const control of [terminalTheme, terminalFontFamily, terminalFontSize, terminalCursorStyle, terminalScrollback]) control.closest('.field').dataset.terminalOnly = '';
 
     const updateConditionalFields = () => {
       const selected = protocol.value;
@@ -3706,6 +3749,8 @@
         element.hidden = !visible;
         element.querySelectorAll('input, select, textarea').forEach((control) => { control.disabled = !visible; });
       }
+      const terminal = ['ssh', 'mosh', 'local', 'telnet', 'serial'].includes(selected);
+      for (const element of form.querySelectorAll('[data-terminal-only]')) element.hidden = !terminal;
       const defaultPorts = { ssh: 22, mosh: 22, telnet: 23, ftp: 21, ftps: 990, rdp: 3389, vnc: 5900 };
       if (defaultPorts[selected] && (!port.value || Object.values(defaultPorts).includes(Number(port.value)))) port.value = defaultPorts[selected];
       host.required = ['ssh', 'mosh', 'rdp', 'vnc', 'telnet', 'ftp', 'ftps'].includes(selected);
@@ -4062,6 +4107,12 @@
   // and collect each session's output side by side.
   // ---------------------------------------------------------------------------
 
+  function renderAgentStatus() {
+    if (state.agentAvailable === undefined) return;
+    elements.agentStatus.textContent = state.agentAvailable ? window.AuxI18n.t('sidebar.agentReady') : window.AuxI18n.t('sidebar.agentNone');
+    elements.agentStatus.classList.toggle('good', state.agentAvailable);
+  }
+
   function applyLanguage(language) {
     window.AuxI18n.setLanguage(language);
     document.documentElement.lang = window.AuxI18n.getLanguage();
@@ -4075,7 +4126,13 @@
       button.title = window.AuxI18n.t('toolbar.maximize'); button.setAttribute('aria-label', button.title);
     }
     updateProfiles(state.profiles);
-    if (!state.activeTabId) elements.activeSessionLabel.textContent = window.AuxI18n.t('status.noSession');
+    // apply() resets every data-i18n element to its default text; elements
+    // that show live state are rendered again from that state.
+    applyTerminalLayout();
+    renderAgentStatus();
+    refreshHostStats();
+    const active = state.tabs.get(state.activeTabId);
+    elements.activeSessionLabel.textContent = active ? `${active.title} · ${active.profile.protocol.toUpperCase()}` : window.AuxI18n.t('status.noSession');
   }
 
   function applyAppearance() {
@@ -4103,7 +4160,7 @@
     const font = textInput('globalFontFamily', defaults.terminalFontFamily || defaultTerminalFont);
     const size = textInput('globalFontSize', defaults.terminalFontSize || 13, { type: 'number', min: 8, max: 32 });
     const scrollback = textInput('globalScrollback', defaults.terminalScrollback || 20000, { type: 'number', min: 1000, max: 200000 });
-    const theme = selectInput('globalTheme', Object.keys(terminalThemes).map((key) => [key, key]), defaults.terminalTheme || 'aux-dark');
+    const theme = selectInput('globalTheme', Object.keys(terminalThemes).map((key) => [key, themeLabel(key)]), defaults.terminalTheme || 'aux-dark');
     const copyOnSelect = checkbox('terminalCopyOnSelect', uiText('Copy highlighted terminal text to the clipboard'), state.ui.terminalCopyOnSelect !== false);
     const pasteWarning = checkbox('terminalPasteWarning', uiText('Ask before pasting several lines or pasting into several sessions'), state.ui.terminalPasteWarning !== false);
     const rightClick = selectInput('terminalRightClick', [['menu', uiText('Show copy and paste menu')], ['paste', uiText('Copy selection, or paste if nothing is selected')]], state.ui.terminalRightClick === 'paste' ? 'paste' : 'menu');
@@ -4135,6 +4192,7 @@
         await saveAppearance({ density: density.value, sidebarHidden: sidebar.querySelector('input').checked, shortcuts,
           terminalCopyOnSelect: copyOnSelect.querySelector('input').checked, terminalPasteWarning: pasteWarning.querySelector('input').checked, terminalRightClick: rightClick.value,
           terminalDefaults: { terminalTheme: theme.value, terminalFontFamily: font.value, terminalFontSize: Number(size.value), terminalScrollback: Number(scrollback.value) } });
+        toast(uiText('Preferences saved'), '', 'success');
         return true;
       } }
     ] });
@@ -4203,9 +4261,11 @@
   function multiRunCaptureTap(id, data) {
     const capture=state.multiRun?.captures.get(id);if(!capture || capture.done)return;
     capture.text=(capture.text+data).slice(-100000);
-    const match=capture.text.match(new RegExp('\\x1e'+capture.marker+':(\\d+)\\x1f'));
-    if(match){capture.done=true;capture.status.textContent=Number(match[1])===0?uiText('Completed · exit 0'):'Failed · exit '+match[1];}
-    capture.pre.textContent=window.AuxAssist.stripAnsi(capture.text.replace(/\x1e[^\x1f]*\x1f/g,'')).trim().slice(-12000);
+    // The exit status arrives in an OSC 777 sequence, which xterm does not
+    // display, so no marker text is left in the terminal or its scrollback.
+    const match=capture.text.match(new RegExp('\\x1b\\]777;aux-run;'+capture.marker+';(\\d+)\\x07'));
+    if(match){capture.done=true;capture.status.textContent=Number(match[1])===0?uiText('Completed · exit 0'):uiText('Failed · exit {p0}',{p0:match[1]});}
+    capture.pre.textContent=window.AuxAssist.stripAnsi(capture.text.replace(/\x1b\]777;aux-run;[^\x07]*\x07/g,'')).split(/\r?\n/u).filter(line=>!line.includes('aux-run;'+capture.marker)).join('\n').trim().slice(-12000);
     if([...state.multiRun.captures.values()].every(item=>item.done)){clearTimeout(state.multiRun.timer);state.multiRun.finish();}
   }
 
@@ -4229,7 +4289,7 @@
     const results=node('div',{className:'multi-run-results'});const status=node('p',{attrs:{role:'status'},text:uiText('Ready. Commands run in a POSIX sh subprocess of each selected terminal.')});
     const save=node('button',{type:'button',className:'mini-button',text:uiText('Save reusable task')});
     save.onclick=async()=>{try{if(privateCommand.querySelector('input').checked)throw new Error('Sensitive commands cannot be saved');if(!input.value.trim())throw new Error('Enter a command');const name=await askText({title:uiText('Save reusable task'),label:uiText('Task name'),value:''});if(!name)return;await api.snippets.save({name,command:input.value,description:uiText('Reusable multi-host task')});state.snippets=await api.snippets.list();toast(uiText('Task saved'),name,'success');}catch(error){toast(uiText('Task not saved'),errorMessage(error),'error');}};
-    const cancel=node('button',{type:'button',className:'mini-button destructive',text:uiText('Cancel run'),disabled:true});
+    const cancel=node('button',{type:'button',className:'mini-button',text:uiText('Cancel run'),disabled:true});
     const interrupt=async(reason)=>{
       const run=state.multiRun;if(!run)return;run.cancelled=true;clearTimeout(run.timer);
       for(const [id,capture] of run.captures){if(capture.done)continue;capture.done=true;capture.status.textContent=reason+' · interrupt requested';try{await api.terminal.write(id,'\x03');}catch(error){capture.status.textContent=errorMessage(error);}}
@@ -4243,24 +4303,26 @@
       if(!Number.isInteger(seconds)||seconds<5||seconds>3600)throw new Error('Timeout must be 5–3,600 seconds');
       const danger=window.AuxAssist.dangerCheck(command);
       if(!await confirmAction({title:danger?uiText('Review dangerous multi-host task'):uiText('Review multi-host task'),description:command+'\n\nTargets:\n'+targets.map(tab=>tab.title+' · '+formatTarget(tab.profile)).join('\n')+'\n\nTimeout: '+seconds+'s. Each terminal must be at a shell prompt.',confirmLabel:uiText('Run on selected sessions'),danger:Boolean(danger)}))return false;
-      results.replaceChildren();const captures=new Map();cancel.disabled=false;save.disabled=true;input.disabled=true;status.textContent='Running on '+targets.length+' sessions';
-      const finish=()=>{cancel.disabled=true;save.disabled=false;input.disabled=false;status.textContent=uiText('Run finished. Review each host result.');};
+      results.replaceChildren();const captures=new Map();cancel.disabled=false;cancel.classList.add('destructive');save.disabled=true;input.disabled=true;status.textContent='Running on '+targets.length+' sessions';
+      const finish=()=>{cancel.disabled=true;cancel.classList.remove('destructive');save.disabled=false;input.disabled=false;status.textContent=uiText('Run finished. Review each host result.');};
       const run=state.multiRun={captures,finish,cancelled:false,timer:setTimeout(()=>interrupt('Timed out'),seconds*1000)};
       const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
       const runs=targets.map(tab=>{
-        const marker='AUX_RUN_'+crypto.randomUUID().replaceAll('-','');const pre=node('pre',{className:'multi-run-output'});const line=node('span',{text:uiText('Running')});
+        const marker=crypto.randomUUID().replaceAll('-','').slice(0,12);const pre=node('pre',{className:'multi-run-output'});const line=node('span',{text:uiText('Running')});
         results.append(node('div',{className:'multi-run-block'},[node('strong',{text:tab.title}),line,pre]));const capture={pre,status:line,text:'',marker,done:false};captures.set(tab.id,capture);return {tab,marker,capture};
       });
       for(const {tab,marker,capture} of runs){
         if(run.cancelled)break;
-        const wrapper='sh -c '+quote(command)+"; printf '\\036"+marker+":%s\\037\\n' \"$?\"";
+        const wrapper='sh -c '+quote(command)+"; printf '\\033]777;aux-run;"+marker+";%s\\007' \"$?\"";
         if(!privateCommand.querySelector('input').checked)tab.assist?.history.add(command);
-        try{await api.terminal.write(tab.id,'sh -c '+quote(wrapper)+'\r');}catch(error){capture.done=true;line.textContent='Failed: '+errorMessage(error);}
+        // Ctrl+U clears any half-typed input first; the leading space keeps
+        // the wrapper out of shell history (HISTCONTROL=ignorespace).
+        try{await api.terminal.write(tab.id,'\x15 sh -c '+quote(wrapper)+'\r');}catch(error){capture.done=true;line.textContent='Failed: '+errorMessage(error);}
       }
       if(!run.cancelled&&[...captures.values()].every(c=>c.done)){clearTimeout(run.timer);finish();}return false;
     };
     // While running, keep cancellation reachable by retaining this dialog.
-    const controller=showModal({title:uiText('Reusable multi-host tasks'),description:uiText('Existing authenticated sessions are used. Credentials are not copied into task templates. Output stays in this session; terminal logging, if enabled separately, still applies.'),closeable:false,className:'wide',body:node('div',{className:'modal-sections'},[templates,node('div',{className:'checkbox-column'},boxes.map(item=>item.box)),input,privateCommand,field(uiText('Timeout (seconds)'),timeout),node('div',{className:'button-row'},[save,cancel]),status,results]),actions:[{label:uiText('Close'),run:()=>{if(state.multiRun&&[...state.multiRun.captures.values()].some(c=>!c.done)){toast(uiText('Task still running'),uiText('Cancel the run before closing this window.'),'error');return false;}controller.close();return false;}},{label:uiText('Review and run'),className:'primary',run:start}]});
+    const controller=showModal({title:uiText('Reusable multi-host tasks'),description:uiText('Existing authenticated sessions are used. Credentials are not copied into task templates. Output stays in this session; terminal logging, if enabled separately, still applies.'),closeable:false,className:'wide',body:node('div',{className:'modal-sections'},[field(uiText('Saved task'),templates),node('div',{className:'checkbox-column'},boxes.map(item=>item.box)),field(uiText('Command to run'),input,'','full'),privateCommand,field(uiText('Timeout (seconds)'),timeout),node('div',{className:'button-row'},[save,cancel]),status,results]),actions:[{label:uiText('Close'),run:()=>{if(state.multiRun&&[...state.multiRun.captures.values()].some(c=>!c.done)){toast(uiText('Task still running'),uiText('Cancel the run before closing this window.'),'error');return false;}controller.close();return false;}},{label:uiText('Review and run'),className:'primary',run:start}]});
   }
 
   function historySearchEntries() {
@@ -4709,7 +4771,7 @@
     if(!document.getElementById('queue-batch-controls')){
       const controls=node('div',{id:'queue-batch-controls',className:'button-row'});
       for(const [label,action,statuses] of [['Pause all','pause',['queued','transferring']],['Resume / retry all','resume',['paused','failed']]]){
-        const button=node('button',{type:'button',className:'mini-button',text:label});button.onclick=async()=>{button.disabled=true;try{for(const entry of state.transferQueue.entries.filter(e=>statuses.includes(e.status)))await api.transfer[action](entry.id);}catch(error){toast(uiText('Queue action failed'),errorMessage(error),'error');}finally{button.disabled=false;}};controls.append(button);
+        const button=node('button',{type:'button',className:'mini-button',text:uiText(label),attrs:{'data-ui-message':label}});button.onclick=async()=>{button.disabled=true;try{for(const entry of state.transferQueue.entries.filter(e=>statuses.includes(e.status)))await api.transfer[action](entry.id);}catch(error){toast(uiText('Queue action failed'),errorMessage(error),'error');}finally{button.disabled=false;}};controls.append(button);
       }
       container.insertAdjacentElement('beforebegin',controls);
     }
@@ -4907,7 +4969,10 @@
           const result = side === 'local' ? await api.sftp.localList(directory) : { path: directory || '/', entries: await api.sftp.list(profile, directory || '/') };
           if (disposed || token !== pane.token) return;
           pane.path = result.path; input.value = result.path; pane.entries = result.entries; pane.renderLimit=200; pane.selected.clear(); render();
-        } catch (error) { if (!disposed && token === pane.token) { pane.entries = []; pane.selected.clear(); list.replaceChildren(); status.textContent = errorMessage(error); } }
+        } catch (error) {
+          // A path that cannot be opened leaves the current folder in place.
+          if (!disposed && token === pane.token) { input.value = pane.path || ''; status.textContent = errorMessage(error); render(); }
+        }
         finally { if (!disposed && token === pane.token) list.inert = false; }
       };
       pane.load = load;
@@ -4951,6 +5016,9 @@
     }catch(error){toast(uiText('Verification failed'),errorMessage(error),'error');}finally{checksum.disabled=false;}};
     tools.append(direction,verify,compare,search,checksum);body.append(tools);
     const controller = showModal({ title: uiText('File manager'), description: uiText('Select files or folders on either side, then review the transfer. Selected folders include their contents; symbolic links are not followed.'), body, className: 'file-manager-modal', actions: [{ label: uiText('Close'), busy: false }] });
+    // Completed transfers refresh both sides and clear the finished selection.
+    state.fileManager = { profileId: profile.id, panes };
+    controller.onClose(() => { if (state.fileManager?.panes === panes) state.fileManager = null; });
     controller.onClose(() => { disposed = true; });
     await Promise.all([panes.local.load(''), panes.remote.load(state.sftp.path)]);
   }
@@ -5257,7 +5325,7 @@
       if (running) return;
       running = true;
       refresh.disabled = true;
-      refresh.textContent = 'Capturing...';
+      refresh.textContent = uiText('Capturing…');
       try {
         const profile = sshProfiles.find((item) => item.id === profileSelect.value);
         const result = await api.monitor.snapshot(profile);
@@ -5265,7 +5333,7 @@
         for (const [key, value] of Object.entries(result.sections || {})) {
           output.append(node('section', {}, [
             node('div', { className: 'section-title', text: key.replaceAll('_', ' ') }),
-            node('pre', { className: 'network-output', text: value || 'No data' })
+            node('pre', { className: 'network-output monitor-output', text: value || uiText('No data') })
           ]));
         }
         if (!output.childElementCount) output.append(node('div', { className: 'empty-state', text: uiText('The host returned no monitor data.') }));
@@ -5362,6 +5430,14 @@
           rdpDomain: protocolSelect.value === 'rdp' ? domainInput.value.trim() : ''
         });
         setStatus(uiText("{p0} gateway connected on localhost:{p1}", { p0: result.protocol.toUpperCase(), p1: result.localPort }));
+        // Without a native VNC client, the built-in viewer opens through the tunnel.
+        if (result.embedded) {
+          const viewerProfile = { id: `gateway-vnc-${result.id}`, name: uiText("VNC via {p0}", { p0: result.gatewayName }), protocol: 'vnc', host: '127.0.0.1', port: result.localPort };
+          const bridge = await api.vnc.start(viewerProfile);
+          const desktop = createRemoteDesktopTab(bridge, viewerProfile, 'vnc');
+          desktop.gatewayId = result.id;
+          desktop.transient = true;
+        }
         await renderSessions();
       } catch (error) {
         toast(uiText('Could not open remote desktop gateway'), errorMessage(error), 'error');
@@ -5497,7 +5573,7 @@
     const name = textInput('name', 'id_aux_command', { required: true, maxlength: 64 });
     const type = selectInput('type', [['ed25519', 'Ed25519'], ['rsa', uiText('RSA 4096')]], 'ed25519');
     const passphrase = textInput('passphrase', '', { type: 'password', required: false, maxlength: 4096 });
-    const generate = node('button', { type: 'button', className: 'primary', text: uiText('Generate key') });
+    const generate = node('button', { type: 'button', className: 'button primary', text: uiText('Generate key') });
     const form = node('form', { className: 'form-grid compact-form' }, [
       field(uiText('Key name'), name, uiText('Letters, numbers, dots, underscores, and hyphens only.')),
       field(uiText('Type'), type),
@@ -5595,6 +5671,9 @@
     inputRow.append(input, runButton, cancelButton);
     const extraInput = node('input', { type: 'text', placeholder: uiText('optional: count / port list / DNS type'), attrs: { 'aria-label': uiText('Network tool options'), style: 'height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(5,15,22,.72);color:var(--text);padding:0 10px;display:none' } });
     let activeTool = 'Ping';
+    // Each tool keeps its own options, so a port list never becomes a DNS
+    // record type when switching tools.
+    const toolOptions = new Map();
 
     const tabs = toolTabs.map((name) => {
       const btn = node('button', { type: 'button', className: 'mini-button', text: name, attrs: { role: 'tab', 'aria-selected': 'false' } });
@@ -5602,7 +5681,9 @@
         tabs.forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
         btn.classList.add('active');
         btn.setAttribute('aria-selected', 'true');
+        toolOptions.set(activeTool, extraInput.value);
         activeTool = name;
+        extraInput.value = toolOptions.get(name) || '';
         extraInput.style.display = ['Ping', 'Port scan', 'DNS lookup'].includes(name) ? 'block' : 'none';
         extraInput.placeholder = name === 'Ping' ? uiText('Count (default 4)') : name === 'Port scan' ? uiText('Comma-separated ports') : uiText('Record type (A/MX/TXT/AAAA)');
         input.placeholder = name === 'Whois' ? uiText('Domain or IP') : name === 'Wake-on-LAN' ? uiText('MAC address (xx:xx:xx:xx:xx:xx)') : uiText('Hostname or IP');
@@ -5617,7 +5698,7 @@
     runButton.addEventListener('click', async () => {
       const target = input.value.trim();
       if (!target) { output.textContent = uiText('Enter a target first.'); return; }
-      output.textContent = 'Running...';
+      output.textContent = uiText('Running…');
       runButton.disabled = true;
       cancelButton.hidden = false;
       cancelButton.disabled = false;
@@ -5640,8 +5721,10 @@
             break;
           }
           case 'Port scan': {
-            const ports = (extraInput.value || '22,80,443,8080,3306,8443,9090,3000').split(',').map((p) => parseInt(p.trim())).filter((p) => p > 0 && p < 65536);
-            result = await api.network.portScan(target, ports);
+            const entries = (extraInput.value || '22,80,443,8080,3306,8443,9090,3000').split(',').map((p) => p.trim()).filter(Boolean);
+            const invalid = entries.filter((p) => !/^\d+$/u.test(p) || Number(p) < 1 || Number(p) > 65535);
+            if (invalid.length) throw new Error(uiText('Invalid ports: {p0}. Use numbers from 1 to 65535, separated by commas.', { p0: invalid.join(', ') }));
+            result = await api.network.portScan(target, [...new Set(entries.map(Number))]);
             break;
           }
           case 'Whois':
@@ -5662,7 +5745,7 @@
           output.textContent = JSON.stringify(result, null, 2);
         }
       } catch (error) {
-        output.textContent = 'Error: ' + (error.message || String(error));
+        output.textContent = errorMessage(error);
       }
       runButton.disabled = false;
       cancelButton.hidden = true;
@@ -5680,7 +5763,7 @@
       node('div', {}, [node('div', { className: 'section-title', text: uiText('Target') }), inputRow, extraInput]),
       node('div', {}, [node('div', { className: 'section-title', text: uiText('Output') }), output])
     ]);
-    const controller = showModal({ title: uiText('Network tools'), description: uiText('Ping, traceroute, DNS, port scan, whois, and Wake-on-LAN.'), body, className: 'wide' });
+    const controller = showModal({ title: uiText('Network tools'), description: uiText('Ping, traceroute, DNS, port scan, whois, and Wake-on-LAN.'), body, className: 'wide', actions: [{ label: uiText('Close'), busy: false }] });
     controller.onClose(() => { api.network.cancelAll().catch(() => {}); });
     setTimeout(() => input.focus(), 0);
   }
@@ -5813,7 +5896,7 @@
       if (diagnosis) {
         tab.terminal.write(`\r\n${diagnosis.title}: ${diagnosis.guidance}\r\n`);
         toast(diagnosis.title, diagnosis.guidance, 'error');
-      } else if (state.activeTabId === id) setStatus(uiText("Session exited with {p0}", { p0: signal || exitCode }));
+      } else if (state.activeTabId === id) setStatus(uiText("Session exited with {p0}", { p0: signal || exitCode }), exitCode || signal ? 'error' : 'ready');
     });
     api.tunnels.onStatus((tunnel) => {
       state.tunnels.set(tunnel.id, tunnel);
@@ -5858,6 +5941,12 @@
       if (entry.status === 'completed' && entry.direction === 'upload' && state.sftp.open && state.sftp.profile?.id === entry.profileId) {
         clearTimeout(state.transferQueue.refreshTimer);
         state.transferQueue.refreshTimer = setTimeout(() => { if (state.sftp.open && state.sftp.profile?.id === entry.profileId) loadSftp(state.sftp.path).catch(() => {}); }, 300);
+      }
+      if (entry.status === 'completed' && state.fileManager?.profileId === entry.profileId) {
+        clearTimeout(state.transferQueue.managerTimer);
+        state.transferQueue.managerTimer = setTimeout(() => {
+          for (const pane of Object.values(state.fileManager?.panes || {})) { pane.selected.clear(); pane.load?.(pane.path).catch?.(() => {}); }
+        }, 400);
       }
       if (entry.status === 'failed' && !state.transferQueue.expanded) {
         toast(uiText('Transfer failed'), `${entry.fileName}: ${entry.error}`, 'error');
@@ -5924,8 +6013,8 @@
     elements.paletteButton.addEventListener('click', () => openCommandPalette());
     elements.statusbarWebsite.addEventListener('click', () => api.system.openWebsite().catch((error) => toast(uiText('Could not open website'), errorMessage(error), 'error')));
     $('#workspaces-button').addEventListener('click', () => openWorkspaces().catch((error) => toast(uiText('Workspace error'), errorMessage(error), 'error')));
-    const flow=selectInput('paneFlow',[['auto',uiText('Auto tiles')],['columns',uiText('Side by side')],['rows',uiText('Stacked panes')]],'auto');flow.id='pane-flow';flow.setAttribute('aria-label',uiText('Terminal split arrangement'));elements.layoutToggle.insertAdjacentElement('afterend',flow);flow.onchange=()=>{state.paneFlow=flow.value;state.layout='grid';applyTerminalLayout();persistWorkspaceSettings();};
-    const manageConnections = node('button', { type:'button', id:'manage-connections', className:'mini-button', text:uiText('Manage connections'), title:uiText('Bulk edit, organize and find duplicate connections') });
+    const flow=selectInput('paneFlow',[['auto',uiText('Auto tiles')],['columns',uiText('Side by side')],['rows',uiText('Stacked panes')]],'auto');flow.id='pane-flow';for(const option of flow.options)option.dataset.uiMessage=option.value==='auto'?'Auto tiles':option.value==='columns'?'Side by side':'Stacked panes';flow.setAttribute('aria-label',uiText('Terminal split arrangement'));elements.layoutToggle.insertAdjacentElement('afterend',flow);flow.onchange=()=>{state.paneFlow=flow.value;state.layout='grid';applyTerminalLayout();persistWorkspaceSettings();};
+    const manageConnections = node('button', { type:'button', id:'manage-connections', className:'mini-button', text:uiText('Manage connections'), title:uiText('Bulk edit, organize and find duplicate connections'), attrs:{ 'data-ui-message':'Manage connections', 'data-ui-title':'Bulk edit, organize and find duplicate connections' } });
     document.querySelector('.sidebar-tools').append(manageConnections);
     manageConnections.addEventListener('click', openConnectionManager);
     $('#preferences-button').addEventListener('click', openPreferences);
@@ -6121,9 +6210,8 @@
       // Restore persisted sessions only after reattaching still-live backend sessions.
       await restoreSavedSessions();
       elements.appVersion.textContent = uiText("Aux Command {p0}", { p0: initial.version });
-      const agentAvailable = Boolean(initial.diagnostics?.sshAgent);
-      elements.agentStatus.textContent = agentAvailable ? window.AuxI18n.t('sidebar.agentReady') : window.AuxI18n.t('sidebar.agentNone');
-      elements.agentStatus.classList.toggle('good', agentAvailable);
+      state.agentAvailable = Boolean(initial.diagnostics?.sshAgent);
+      renderAgentStatus();
       elements.sftpEmpty.classList.add('visible');
       elements.appShell.setAttribute('aria-busy', 'false');
       state.initializing = false;

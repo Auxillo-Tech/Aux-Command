@@ -1,5 +1,5 @@
 'use strict';
-const api=window.detachedTerminal,terminal=new window.Terminal({fontSize:14,scrollback:5000,theme:{background:'#060b13',foreground:'#dcecf4'}}),fit=new window.FitAddon.FitAddon();
+const api=window.detachedTerminal,terminal=new window.Terminal({fontSize:13,lineHeight:1.12,scrollback:20000,fontFamily:'JetBrains Mono, monospace',theme:{background:'#060b13',foreground:'#dcecf4'}}),fit=new window.FitAddon.FitAddon();
 terminal.loadAddon(fit);terminal.open(document.querySelector('#terminal'));
 let ready=false,pending=[],timer,ended=false;
 api.onData(event=>{if(ready)terminal.write(event.data);else pending.push(event);});
@@ -32,4 +32,8 @@ element.addEventListener('mouseup',event=>{
 },true);
 element.addEventListener('contextmenu',event=>{event.preventDefault();if(appOwnsMouse(event))return;if(!copy())paste();});
 document.querySelector('#attach').onclick=()=>api.attach();document.querySelector('#fullscreen').onclick=()=>api.fullscreen();
-api.init().then(snapshot=>{copyOnSelect=snapshot.copyOnSelect!==false;pasteWarning=snapshot.pasteWarning!==false;terminal.write(snapshot.text);for(const event of pending)if(event.sequence>snapshot.sequence)terminal.write(event.data);pending=[];ready=true;ended=ended||snapshot.closed;terminal.options.disableStdin=ended;document.querySelector('#status').textContent=ended?'Session ended':snapshot.title;fit.fit();if(!ended)terminal.focus();}).catch(error=>{document.querySelector('#status').textContent=error.message;});
+api.init().then(snapshot=>{copyOnSelect=snapshot.copyOnSelect!==false;
+ // Look like the workspace tab this terminal came from.
+ const look=snapshot.appearance||{};if(look.fontFamily)terminal.options.fontFamily=look.fontFamily;if(look.fontSize)terminal.options.fontSize=look.fontSize;if(look.lineHeight)terminal.options.lineHeight=look.lineHeight;if(look.scrollback)terminal.options.scrollback=look.scrollback;if(look.theme&&Object.keys(look.theme).length){terminal.options.theme=look.theme;document.body.style.background=look.theme.background||'';}if(look.title)document.title=look.title+' — Aux Command';
+ // Measure cells with the real font once it has loaded.
+ document.fonts?.load(`${terminal.options.fontSize}px "JetBrains Mono"`).then(()=>{const family=terminal.options.fontFamily;terminal.options.fontFamily="monospace";terminal.options.fontFamily=family;fit.fit();}).catch(()=>{});pasteWarning=snapshot.pasteWarning!==false;terminal.write(snapshot.text);for(const event of pending)if(event.sequence>snapshot.sequence)terminal.write(event.data);pending=[];ready=true;ended=ended||snapshot.closed;terminal.options.disableStdin=ended;document.querySelector('#status').textContent=ended?'Session ended':(look.title||snapshot.title);fit.fit();if(!ended)terminal.focus();}).catch(error=>{document.querySelector('#status').textContent=error.message;});
