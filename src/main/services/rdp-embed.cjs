@@ -10,6 +10,7 @@ const { vncViewerUrl } = require('../lib/app-protocol.cjs');
 const { normalizeProfile } = require('../lib/validation.cjs');
 const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
+const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
 
 const XVFB_SETTLE_TIMEOUT = 8000;
 const X11VNC_SETTLE_TIMEOUT = 10_000;
@@ -57,6 +58,9 @@ class RdpEmbedService {
     this.vaultService = options.vaultService || null;
     this.vncBridge = options.vncBridge || null;
     this.useGuard = options.useGuard !== false;
+    this.knownHostService = options.knownHostService || null;
+    this.rdpCertificateArgs = options.rdpCertificateArgs
+      || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.sessions = new Map();
   }
 
@@ -84,6 +88,9 @@ class RdpEmbedService {
     const xvfbBin = findExecutable(REQUIRED_TOOLS.xvfb);
     const x11vncBin = findExecutable(REQUIRED_TOOLS.x11vnc);
     const rdpBin = findExecutable(REQUIRED_TOOLS.xfreerdp);
+    // Confirm the server certificate before starting anything, so the trust
+    // prompt can wait for the user without display timeouts running.
+    const certificateArgs = await this.rdpCertificateArgs({ probeHost: host, probePort: port, name: profile.name }, rdpBin);
 
     const id = randomUUID();
     const session = {
@@ -108,7 +115,7 @@ class RdpEmbedService {
 
     try {
       await this.#startXvfb(session, xvfbBin);
-      await this.#startXfreerdp(session, rdpBin, profile);
+      await this.#startXfreerdp(session, rdpBin, profile, certificateArgs);
       await this.#startX11vnc(session, x11vncBin);
       if (session.stopping) throw new Error('RDP connection closed before its display was ready');
       const bridge = await this.vncBridge.start({ protocol: 'vnc', host: '127.0.0.1', port: 5900 }, { socketPath: session.x11vncSocket });
@@ -148,11 +155,11 @@ class RdpEmbedService {
     throw new Error('Xvfb did not create its display in time');
   }
 
-  async #startXfreerdp(session, rdpBin, profile) {
+  async #startXfreerdp(session, rdpBin, profile, certificateArgs) {
     const args = [
       `/v:${session.host}:${session.port}`,
       `/size:${session.width}x${session.height}`,
-      '/cert:tofu',
+      ...certificateArgs,
       '+clipboard',
       '+auto-reconnect',
       '-grab-keyboard',

@@ -3,17 +3,27 @@
 const { spawn } = require('node:child_process');
 const { buildExternalCommand, resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
+const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
+const { normalizeProfile } = require('../lib/validation.cjs');
 
 class ExternalService {
   constructor(options = {}) {
     this.useGuard = options.useGuard !== false;
+    this.knownHostService = options.knownHostService || null;
+    this.rdpCertificateArgs = options.rdpCertificateArgs
+      || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.children = new Map();
   }
 
-  async launch(profile) {
-    const spec = buildExternalCommand(profile);
-    const executable = findExecutable(spec.candidates);
-    if (!executable) throw new Error(`No supported client found. Install one of: ${spec.candidates.join(', ')}`);
+  async launch(profileInput) {
+    const profile = normalizeProfile(profileInput, profileInput?.id);
+    const candidates = buildExternalCommand(profile).candidates;
+    const executable = findExecutable(candidates);
+    if (!executable) throw new Error(`No supported client found. Install one of: ${candidates.join(', ')}`);
+    const certificateArgs = profile.protocol === 'rdp'
+      ? await this.rdpCertificateArgs({ probeHost: profile.host, probePort: profile.port, name: profile.name }, executable)
+      : undefined;
+    const spec = buildExternalCommand(profile, { certificateArgs });
     const launch = this.#guardedCommand(executable, spec.args);
     return new Promise((resolve, reject) => {
       const child = spawn(launch.command, launch.args, {

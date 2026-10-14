@@ -27,7 +27,7 @@ The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI 
 - The updater verifies downloaded AppImage bytes against the GPG-signed manifest, rechecks them before installation, and prevents overlapping update operations. Unsolicited download events cannot authorize installation; authentication response sizes are bounded while streaming.
 - FTP replacement preserves the original through a backup and attempts rollback if replacement fails. If rollback fails, the error identifies the retained original file.
 - Partial FTP downloads have private permissions from creation. Resumed files cannot retain stale trailing bytes. Cancelled queued transfers do not start data transfer, and the inline editor stops at its byte limit.
-- Embedded RDP remembers server certificates and rejects changes instead of ignoring certificate validation.
+- RDP asks you to confirm the server certificate on the first connection, pins FreeRDP to it, refuses changed certificates and never falls back to legacy RDP security.
 
 ## Evidence
 

@@ -51,10 +51,10 @@ Aux Command is a free, open-source public product. Every feature in this roadmap
   headless Xvfb display exported through x11vnc) both ship as in-app tabs, with
   automatic fallback to the native FreeRDP/TigerVNC clients when the embedded
   toolchain is unavailable.
-- Certificate/fingerprint management.
+- RDP server certificates are confirmed on first use and pinned (0.5); a view for reviewing and removing remembered certificates and host keys is still planned.
 - Multi-monitor controls, audio and drive redirection policy.
 - Remote desktop session recording controls where legally permitted.
-- Deeper RDP/VNC settings for clipboard, geometry, console/admin mode, certificate/fingerprint handling, drive/device redirection policy, and multi-monitor behavior.
+- Deeper RDP/VNC settings for clipboard, geometry, console/admin mode, drive/device redirection policy, and multi-monitor behavior.
 - SSH-gateway assisted RDP/VNC/Telnet workflows where the protocol can be safely wrapped through OpenSSH forwarding.
 
 ## 0.4 - workspace power and protocol parity

@@ -326,7 +326,10 @@ Key controls:
 - Privileged IPC validates sender window and frame.
 - Direct process spawning with argument arrays; no profile values are passed through a local shell.
 - Managed helper processes use an exact-parent Linux death-signal guard.
-- Graphical SFTP host keys are explicitly verified and stored separately from OpenSSH.
+- Graphical SFTP host keys are explicitly verified; keys already trusted in OpenSSH `known_hosts` are honoured, and a different or `@revoked` key is flagged.
+- RDP server certificates are confirmed on first use like SSH host keys, and FreeRDP is pinned to the confirmed certificate with legacy RDP security disabled.
+- App pages load from a private `app://aux` origin and the embedded remote-desktop viewer from its own isolated origin.
+- Pasted text is stripped of control characters; multi-line and broadcast pastes are confirmed first.
 - SFTP secrets are stored persistently only when encrypted desktop safe storage is available.
 - Profile exports exclude secret material.
 - Telnet and some VNC deployments are recognized as potentially unencrypted legacy paths.
@@ -411,6 +414,9 @@ See [`docs/RELEASE_STATUS.md`](docs/RELEASE_STATUS.md) and [`docs/LIVE_QUALIFICA
 | Middle-click | Paste the highlighted (primary selection) text |
 | `Ctrl`+click | Open an http/https link from terminal output in the browser |
 | `F2` / double-click a tab | Rename the tab (empty name restores the automatic title) |
+| `Ctrl+PageUp` / `Ctrl+PageDown` | Previous / next tab |
+| `Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown` | Move the active tab left / right |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Larger / smaller / default terminal text |
 | `Ctrl+Space` | Accept inline command suggestion |
 | `Ctrl+Shift+Y` | Search command history across sessions |
 | `Ctrl+Shift+M` | Run a command on multiple sessions |

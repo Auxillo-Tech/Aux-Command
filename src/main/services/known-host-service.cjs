@@ -17,6 +17,10 @@ function displayFingerprint(hex) {
   return `SHA256:${raw}`;
 }
 
+function displayCertificateFingerprint(hex) {
+  return `SHA-256 ${normalizeFingerprintHex(hex).toUpperCase().match(/../gu).join(':')}`;
+}
+
 class KnownHostService {
   constructor(dataDir, promptBroker, options = {}) {
     this.store = new JsonStore(path.join(dataDir, 'known-hosts.json'), { version: 1, hosts: {} });
@@ -56,14 +60,42 @@ class KnownHostService {
     return decision;
   }
 
-  async #promptAndRemember(profile, key, known, fingerprintHex, previousHex = known?.fingerprintHex || '') {
+  // RDP server certificates use the same trust store under their own key and
+  // the same prompt, which shows the certificate's SHA-256 fingerprint in the
+  // colon-separated form Windows and browsers display.
+  async verifyRdpCertificate(target, certificate) {
+    const fingerprintHex = normalizeFingerprintHex(certificate?.fingerprintHex);
+    const key = `rdp:${target.host}:${target.port}`;
+    const hosts = this.store.get().hosts;
+    const known = hosts && typeof hosts === 'object' && !Array.isArray(hosts)
+      && Object.prototype.hasOwnProperty.call(hosts, key)
+      ? hosts[key]
+      : undefined;
+    if (known?.fingerprintHex === fingerprintHex) return true;
+    const pendingKey = `${key}|${fingerprintHex}`;
+    const pending = this.pendingVerifications.get(pendingKey);
+    if (pending) return pending;
+    const decision = this.#promptAndRemember(target, key, known, fingerprintHex, known?.fingerprintHex || '', {
+      kind: 'rdp',
+      display: displayCertificateFingerprint,
+      subject: String(certificate.subject || '').slice(0, 200),
+      issuer: String(certificate.issuer || '').slice(0, 200),
+      validTo: String(certificate.validTo || '').slice(0, 64)
+    }).finally(() => this.pendingVerifications.delete(pendingKey));
+    this.pendingVerifications.set(pendingKey, decision);
+    return decision;
+  }
+
+  async #promptAndRemember(profile, key, known, fingerprintHex, previousHex = known?.fingerprintHex || '', extra = {}) {
+    const { display = displayFingerprint, ...details } = extra;
     const response = await this.promptBroker.request('host-key', {
+      ...details,
       host: profile.host,
       port: profile.port,
       profileName: profile.name,
-      fingerprint: displayFingerprint(fingerprintHex),
+      fingerprint: display(fingerprintHex),
       changed: Boolean(previousHex),
-      previousFingerprint: previousHex ? displayFingerprint(previousHex) : ''
+      previousFingerprint: previousHex ? display(previousHex) : ''
     });
 
     if (!response?.accept) return false;
@@ -87,4 +119,4 @@ class KnownHostService {
   }
 }
 
-module.exports = { KnownHostService, displayFingerprint, normalizeFingerprintHex };
+module.exports = { KnownHostService, displayCertificateFingerprint, displayFingerprint, normalizeFingerprintHex };

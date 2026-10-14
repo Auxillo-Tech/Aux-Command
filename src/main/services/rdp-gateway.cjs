@@ -8,6 +8,7 @@ const { normalizeProfile } = require('../lib/validation.cjs');
 const { buildExternalCommand, resolveHelper, sshBaseArgs } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { validateHost } = require('./network-tools.cjs');
+const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
 
 class RemoteDesktopGateway {
   constructor(options = {}) {
@@ -15,6 +16,9 @@ class RemoteDesktopGateway {
     this.sshExecutable = options.sshExecutable || null;
     this.clientExecutable = options.clientExecutable || null;
     this.useGuard = options.useGuard !== false;
+    this.knownHostService = options.knownHostService || null;
+    this.rdpCertificateArgs = options.rdpCertificateArgs
+      || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.connectTimeout = Math.max(1000, Number(options.connectTimeout) || 20_000);
     this.sessions = new Map();
   }
@@ -93,7 +97,8 @@ class RemoteDesktopGateway {
         reject(error);
       };
       const launchClient = () => {
-        if (settled || session.stopping || session.client) return;
+        if (settled || session.stopping || session.client || session.launching) return;
+        session.launching = true;
         if (embedded) {
           settled = true;
           clearTimeout(timer);
@@ -102,7 +107,20 @@ class RemoteDesktopGateway {
           resolve(this.#public(session));
           return;
         }
-        const clientLaunch = this.#guardedCommand(clientExecutable, clientSpec.args);
+        // The forward is up, so the readiness timeout no longer applies; for
+        // RDP the certificate is read through the tunnel but trusted under
+        // the real target's name, then pinned for the client.
+        clearTimeout(timer);
+        if (protocol === 'rdp') {
+          this.rdpCertificateArgs({ probeHost: '127.0.0.1', probePort: localPort, trustHost: targetHost, trustPort: targetPort, name: `${targetHost} via ${gatewayProfile.name}` }, clientExecutable)
+            .then((certificateArgs) => { if (!settled && !session.stopping) startClient(buildExternalCommand(localProfile, { certificateArgs }).args); })
+            .catch((error) => finishError(error));
+          return;
+        }
+        startClient(clientSpec.args);
+      };
+      const startClient = (clientArgs) => {
+        const clientLaunch = this.#guardedCommand(clientExecutable, clientArgs);
         const client = spawn(clientLaunch.command, clientLaunch.args, {
           stdio: this.useGuard ? ['ignore', 'ignore', 'ignore', 'pipe'] : 'ignore',
           shell: false

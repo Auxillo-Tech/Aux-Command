@@ -124,14 +124,16 @@ function buildTunnelCommand(tunnelInput, profileInput) {
   return { command: 'ssh', args, env: { ...process.env }, title: tunnel.name };
 }
 
-function buildExternalCommand(profileInput) {
+// `certificateArgs` pins the server certificate the user confirmed (see
+// rdp-certificate.cjs); launchers always pass it.
+function buildExternalCommand(profileInput, { certificateArgs = ['/cert:deny'] } = {}) {
   const profile = normalizeProfile(profileInput, profileInput?.id);
   if (profile.protocol === 'rdp') {
     const args = [
       `/v:${profile.host}:${profile.port}`,
       '/dynamic-resolution',
       '/clipboard',
-      '/cert:tofu',
+      ...certificateArgs,
       '+auto-reconnect'
     ];
     if (profile.username) args.push(`/u:${profile.username}`);

@@ -56,7 +56,7 @@ xvfb-run -a node_modules/electron/dist/electron scripts/test-live-updater.cjs
 
 The updater test uses a simulated old application version and the real public release/signature/download services. It replaces only a disposable AppImage path, intercepts the automatic desktop launch, and prints the resulting path for inspection. It does not publish anything or replace your installed application. The temporary directory is intentionally retained for inspection; remove the printed test directory when finished.
 
-RDP qualification includes trust-on-first-use persistence and rejection after the test trust record is changed. The fixture uses a loopback TLS RDP server, not a Windows domain server. FTP qualification includes implicit FTPS with a temporary trusted certificate and rejection of a hostname mismatch. These fixture certificates and keys are never packaged.
+RDP qualification checks that the first connection asks to confirm the server certificate, a remembered certificate connects without asking, a changed certificate is reported and refused, and FreeRDP refuses a certificate that does not match the pin. The fixture uses a loopback TLS RDP server, not a Windows domain server. FTP qualification includes implicit FTPS with a temporary trusted certificate and rejection of a hostname mismatch. These fixture certificates and keys are never packaged.
 
 ## Import/recovery UI and installer matrix
 

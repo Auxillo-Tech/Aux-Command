@@ -14,10 +14,12 @@ test('waits for a native desktop client to spawn before reporting success', asyn
   try {
     fs.writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 });
     process.env.PATH = directory;
-    const result = await new ExternalService({ useGuard: false }).launch({
+    const targets = [];
+    const result = await new ExternalService({ useGuard: false, rdpCertificateArgs: async (target) => { targets.push(target); return ['/cert:deny']; } }).launch({
       name: 'Desktop', protocol: 'rdp', host: 'desktop.example', port: 3389
     });
     assert.equal(result.executable, executable);
+    assert.deepEqual(targets, [{ probeHost: 'desktop.example', probePort: 3389, name: 'Desktop' }]);
     assert.ok(Number.isInteger(result.pid));
   } finally {
     process.env.PATH = previousPath;
@@ -44,7 +46,7 @@ test('tracks and terminates guarded native clients', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-external-'));
   const executable = path.join(directory, 'xfreerdp3');
   const previousPath = process.env.PATH;
-  const service = new ExternalService();
+  const service = new ExternalService({ rdpCertificateArgs: async () => ['/cert:deny'] });
   try {
     fs.writeFileSync(executable, '#!/bin/sh\ntrap "" TERM\nsleep 30\n', { mode: 0o700 });
     process.env.PATH = `${directory}${path.delimiter}${previousPath}`;
@@ -56,6 +58,23 @@ test('tracks and terminates guarded native clients', async () => {
     assert.equal(service.children.size, 0);
   } finally {
     service.stopAll();
+    process.env.PATH = previousPath;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('does not launch an RDP client when the certificate is not trusted', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-external-'));
+  const executable = path.join(directory, 'xfreerdp3');
+  const marker = path.join(directory, 'started');
+  const previousPath = process.env.PATH;
+  try {
+    fs.writeFileSync(executable, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o700 });
+    process.env.PATH = directory;
+    const service = new ExternalService({ useGuard: false, rdpCertificateArgs: async () => { throw new Error('The RDP server certificate was not trusted'); } });
+    await assert.rejects(() => service.launch({ name: 'Desktop', protocol: 'rdp', host: 'desktop.example', port: 3389 }), /not trusted/u);
+    assert.equal(fs.existsSync(marker), false);
+  } finally {
     process.env.PATH = previousPath;
     fs.rmSync(directory, { recursive: true, force: true });
   }

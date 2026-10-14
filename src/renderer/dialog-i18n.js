@@ -11242,6 +11242,204 @@ const messages = {
     "pt": "Ambiente de trabalho VNC remoto",
     "ru": "Удалённый рабочий стол VNC",
     "zh": "远程 VNC 桌面"
+  },
+  "None": {
+    "en": "None",
+    "de": "Keine",
+    "es": "Ninguno",
+    "fr": "Aucune",
+    "it": "Nessuno",
+    "ja": "なし",
+    "pt": "Nenhuma",
+    "ru": "Нет",
+    "zh": "无"
+  },
+  "Orange": {
+    "en": "Orange",
+    "de": "Orange",
+    "es": "Naranja",
+    "fr": "Orange",
+    "it": "Arancione",
+    "ja": "オレンジ",
+    "pt": "Laranja",
+    "ru": "Оранжевая",
+    "zh": "橙色"
+  },
+  "Teal": {
+    "en": "Teal",
+    "de": "Petrol",
+    "es": "Verde azulado",
+    "fr": "Bleu canard",
+    "it": "Verde acqua",
+    "ja": "ティール",
+    "pt": "Azul-petróleo",
+    "ru": "Тёмно-бирюзовая",
+    "zh": "蓝绿色"
+  },
+  "Purple": {
+    "en": "Purple",
+    "de": "Lila",
+    "es": "Morado",
+    "fr": "Violet",
+    "it": "Viola",
+    "ja": "パープル",
+    "pt": "Roxo",
+    "ru": "Фиолетовая",
+    "zh": "紫色"
+  },
+  "Pink": {
+    "en": "Pink",
+    "de": "Rosa",
+    "es": "Rosa",
+    "fr": "Rose",
+    "it": "Rosa",
+    "ja": "ピンク",
+    "pt": "Rosa",
+    "ru": "Розовая",
+    "zh": "粉色"
+  },
+  "Text size {p0} px": {
+    "en": "Text size {p0} px",
+    "de": "Textgröße {p0} px",
+    "es": "Tamaño del texto: {p0} px",
+    "fr": "Taille du texte : {p0} px",
+    "it": "Dimensione testo {p0} px",
+    "ja": "文字サイズ {p0} px",
+    "pt": "Tamanho do texto: {p0} px",
+    "ru": "Размер текста: {p0} px",
+    "zh": "文字大小 {p0} px"
+  },
+  "Tab color": {
+    "en": "Tab color",
+    "de": "Tab-Farbe",
+    "es": "Color de la pestaña",
+    "fr": "Couleur de l’onglet",
+    "it": "Colore della scheda",
+    "ja": "タブの色",
+    "pt": "Cor do separador",
+    "ru": "Цвет вкладки",
+    "zh": "标签页颜色"
+  },
+  "Marks this connection’s tabs and list entry, e.g. red for production.": {
+    "en": "Marks this connection’s tabs and list entry, e.g. red for production.",
+    "de": "Markiert die Tabs und den Listeneintrag dieser Verbindung, z. B. Rot für Produktion.",
+    "es": "Marca las pestañas y la entrada de la lista de esta conexión; por ejemplo, rojo para producción.",
+    "fr": "Marque les onglets et l’entrée de liste de cette connexion, par exemple en rouge pour la production.",
+    "it": "Contrassegna le schede e la voce in elenco di questa connessione, ad esempio rosso per la produzione.",
+    "ja": "この接続のタブと一覧の項目に色を付けます（例: 本番環境は赤）。",
+    "pt": "Assinala os separadores e a entrada na lista desta ligação, por exemplo, vermelho para produção.",
+    "ru": "Отмечает вкладки и строку этого подключения в списке, например красным для рабочих серверов.",
+    "zh": "标记此连接的标签页和列表项，例如用红色表示生产环境。"
+  },
+  "The certificate for the RDP server {p0} has changed. This can mean the server was reinstalled or someone is intercepting the connection. Check the fingerprint with the server’s administrator before continuing.": {
+    "en": "The certificate for the RDP server {p0} has changed. This can mean the server was reinstalled or someone is intercepting the connection. Check the fingerprint with the server’s administrator before continuing.",
+    "de": "Das Zertifikat des RDP-Servers {p0} hat sich geändert. Das kann bedeuten, dass der Server neu installiert wurde oder jemand die Verbindung abfängt. Prüfen Sie den Fingerabdruck mit dem Administrator des Servers, bevor Sie fortfahren.",
+    "es": "El certificado del servidor RDP {p0} ha cambiado. Puede significar que el servidor se ha reinstalado o que alguien está interceptando la conexión. Compruebe la huella digital con el administrador del servidor antes de continuar.",
+    "fr": "Le certificat du serveur RDP {p0} a changé. Cela peut signifier que le serveur a été réinstallé ou que quelqu’un intercepte la connexion. Vérifiez l’empreinte auprès de l’administrateur du serveur avant de continuer.",
+    "it": "Il certificato del server RDP {p0} è cambiato. Può significare che il server è stato reinstallato o che qualcuno sta intercettando la connessione. Verifica l'impronta digitale con l'amministratore del server prima di continuare.",
+    "ja": "RDP サーバー {p0} の証明書が変更されました。サーバーが再インストールされたか、誰かが接続を傍受している可能性があります。続行する前に、サーバーの管理者にフィンガープリントを確認してください。",
+    "pt": "O certificado do servidor RDP {p0} foi alterado. Isto pode significar que o servidor foi reinstalado ou que alguém está a intercetar a ligação. Confirme a impressão digital com o administrador do servidor antes de continuar.",
+    "ru": "Сертификат RDP-сервера {p0} изменился. Это может означать, что сервер переустановили или кто-то перехватывает подключение. Прежде чем продолжить, сверьте отпечаток с администратором сервера.",
+    "zh": "RDP 服务器 {p0} 的证书已更改。这可能表示服务器已重新安装，或有人正在拦截连接。继续之前，请向服务器管理员核对指纹。"
+  },
+  "Aux Command has not connected to the RDP server {p0} before. Check that this fingerprint matches the server’s certificate before trusting it.": {
+    "en": "Aux Command has not connected to the RDP server {p0} before. Check that this fingerprint matches the server’s certificate before trusting it.",
+    "de": "Aux Command war noch nie mit dem RDP-Server {p0} verbunden. Prüfen Sie, ob dieser Fingerabdruck zum Zertifikat des Servers passt, bevor Sie ihm vertrauen.",
+    "es": "Aux Command no se ha conectado antes al servidor RDP {p0}. Compruebe que esta huella digital coincide con el certificado del servidor antes de confiar en él.",
+    "fr": "Aux Command ne s’est encore jamais connecté au serveur RDP {p0}. Vérifiez que cette empreinte correspond au certificat du serveur avant de lui faire confiance.",
+    "it": "Aux Command non si è mai connesso al server RDP {p0}. Verifica che questa impronta digitale corrisponda al certificato del server prima di considerarlo attendibile.",
+    "ja": "Aux Command はまだ RDP サーバー {p0} に接続したことがありません。信頼する前に、このフィンガープリントがサーバーの証明書と一致することを確認してください。",
+    "pt": "O Aux Command nunca se ligou ao servidor RDP {p0}. Confirme que esta impressão digital corresponde ao certificado do servidor antes de confiar nele.",
+    "ru": "Aux Command ещё не подключался к RDP-серверу {p0}. Прежде чем доверять ему, убедитесь, что этот отпечаток совпадает с сертификатом сервера.",
+    "zh": "Aux Command 之前从未连接过 RDP 服务器 {p0}。信任之前，请确认此指纹与服务器的证书一致。"
+  },
+  "The host key for {p0} has changed. This can indicate a rebuilt server or a man-in-the-middle attack. Verify the fingerprint through a trusted channel before continuing.": {
+    "en": "The host key for {p0} has changed. This can indicate a rebuilt server or a man-in-the-middle attack. Verify the fingerprint through a trusted channel before continuing.",
+    "de": "Der Host-Schlüssel für {p0} hat sich geändert. Das kann auf einen neu aufgesetzten Server oder einen Man-in-the-Middle-Angriff hindeuten. Prüfen Sie den Fingerabdruck über einen vertrauenswürdigen Weg, bevor Sie fortfahren.",
+    "es": "La clave de host de {p0} ha cambiado. Puede indicar que el servidor se ha reconstruido o un ataque de intermediario. Verifique la huella digital por un canal de confianza antes de continuar.",
+    "fr": "La clé d’hôte de {p0} a changé. Cela peut indiquer un serveur réinstallé ou une attaque de l’homme du milieu. Vérifiez l’empreinte par un canal de confiance avant de continuer.",
+    "it": "La chiave host di {p0} è cambiata. Può indicare un server reinstallato o un attacco man-in-the-middle. Verifica l'impronta digitale tramite un canale attendibile prima di continuare.",
+    "ja": "{p0} のホスト鍵が変更されました。サーバーの再構築か中間者攻撃の可能性があります。続行する前に、信頼できる手段でフィンガープリントを確認してください。",
+    "pt": "A chave do host {p0} foi alterada. Isto pode indicar um servidor reinstalado ou um ataque man-in-the-middle. Confirme a impressão digital através de um canal de confiança antes de continuar.",
+    "ru": "Ключ хоста {p0} изменился. Это может означать, что сервер переустановили, или атаку «человек посередине». Прежде чем продолжить, сверьте отпечаток по надёжному каналу.",
+    "zh": "{p0} 的主机密钥已更改。这可能表示服务器已重建，或存在中间人攻击。继续之前，请通过可信渠道核对指纹。"
+  },
+  "Aux Command has not seen the host key for {p0}. Verify the fingerprint before trusting this server.": {
+    "en": "Aux Command has not seen the host key for {p0}. Verify the fingerprint before trusting this server.",
+    "de": "Aux Command kennt den Host-Schlüssel für {p0} noch nicht. Prüfen Sie den Fingerabdruck, bevor Sie diesem Server vertrauen.",
+    "es": "Aux Command no conoce todavía la clave de host de {p0}. Verifique la huella digital antes de confiar en este servidor.",
+    "fr": "Aux Command ne connaît pas encore la clé d’hôte de {p0}. Vérifiez l’empreinte avant de faire confiance à ce serveur.",
+    "it": "Aux Command non conosce ancora la chiave host di {p0}. Verifica l'impronta digitale prima di considerare attendibile questo server.",
+    "ja": "Aux Command は {p0} のホスト鍵をまだ確認していません。このサーバーを信頼する前にフィンガープリントを確認してください。",
+    "pt": "O Aux Command ainda não conhece a chave do host {p0}. Confirme a impressão digital antes de confiar neste servidor.",
+    "ru": "Aux Command ещё не встречал ключ хоста {p0}. Прежде чем доверять этому серверу, сверьте отпечаток.",
+    "zh": "Aux Command 尚未见过 {p0} 的主机密钥。信任此服务器之前，请核对指纹。"
+  },
+  "Issued to": {
+    "en": "Issued to",
+    "de": "Ausgestellt für",
+    "es": "Emitido para",
+    "fr": "Délivré à",
+    "it": "Rilasciato a",
+    "ja": "発行先",
+    "pt": "Emitido para",
+    "ru": "Кому выдан",
+    "zh": "颁发给"
+  },
+  "Issued by": {
+    "en": "Issued by",
+    "de": "Ausgestellt von",
+    "es": "Emitido por",
+    "fr": "Délivré par",
+    "it": "Rilasciato da",
+    "ja": "発行者",
+    "pt": "Emitido por",
+    "ru": "Кем выдан",
+    "zh": "颁发者"
+  },
+  "Valid until": {
+    "en": "Valid until",
+    "de": "Gültig bis",
+    "es": "Válido hasta",
+    "fr": "Valide jusqu’au",
+    "it": "Valido fino al",
+    "ja": "有効期限",
+    "pt": "Válido até",
+    "ru": "Действителен до",
+    "zh": "有效期至"
+  },
+  "Fingerprint unavailable": {
+    "en": "Fingerprint unavailable",
+    "de": "Fingerabdruck nicht verfügbar",
+    "es": "Huella digital no disponible",
+    "fr": "Empreinte indisponible",
+    "it": "Impronta digitale non disponibile",
+    "ja": "フィンガープリントを取得できません",
+    "pt": "Impressão digital indisponível",
+    "ru": "Отпечаток недоступен",
+    "zh": "指纹不可用"
+  },
+  "RDP certificate changed": {
+    "en": "RDP certificate changed",
+    "de": "RDP-Zertifikat geändert",
+    "es": "El certificado RDP ha cambiado",
+    "fr": "Le certificat RDP a changé",
+    "it": "Certificato RDP cambiato",
+    "ja": "RDP 証明書が変更されました",
+    "pt": "Certificado RDP alterado",
+    "ru": "Сертификат RDP изменился",
+    "zh": "RDP 证书已更改"
+  },
+  "Trust RDP server?": {
+    "en": "Trust RDP server?",
+    "de": "RDP-Server vertrauen?",
+    "es": "¿Confiar en el servidor RDP?",
+    "fr": "Faire confiance au serveur RDP ?",
+    "it": "Considerare attendibile il server RDP?",
+    "ja": "RDP サーバーを信頼しますか？",
+    "pt": "Confiar no servidor RDP?",
+    "ru": "Доверять RDP-серверу?",
+    "zh": "信任 RDP 服务器？"
   }
 };
 if(typeof module==='object' && module.exports) module.exports=messages; else root.AuxDialogMessages=messages;

@@ -10,6 +10,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const WebSocket = require('ws');
 const { VncBridgeService } = require('../src/main/services/vnc-bridge.cjs');
 const { RdpEmbedService } = require('../src/main/services/rdp-embed.cjs');
+const { KnownHostService } = require('../src/main/services/known-host-service.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-rdp-integration-'));
@@ -19,7 +20,10 @@ async function main() {
   const shadow = spawn('freerdp-shadow-cli', [`/port:${port}`, '/bind-address:127.0.0.1', '-auth', '/sec:tls']);
   let shadowLog = ''; for (const pipe of [shadow.stdout, shadow.stderr]) pipe.on('data', (chunk) => { shadowLog = (shadowLog + chunk).slice(-8000); });
   const bridge = new VncBridgeService();
-  const service = new RdpEmbedService({ vncBridge: bridge, vaultService: { has: () => true, get: async () => 'test-only-password' } });
+  const prompts = [];
+  let answer = { accept: true, remember: true };
+  const knownHostService = new KnownHostService(directory, { request: async (kind, payload) => { prompts.push({ kind, payload }); return answer; } });
+  const service = new RdpEmbedService({ vncBridge: bridge, knownHostService, vaultService: { has: () => true, get: async () => 'test-only-password' } });
   let ws;
   try {
     await delay(1500);
@@ -56,15 +60,25 @@ async function main() {
     ws.close(); service.stop(session.id);
     assert.equal(service.list().length, 0); assert.equal(bridge.list().length, 0);
     console.log('RDP_VNC_CLEANUP_PASSED');
-    const findTrust = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? findTrust(path.join(dir, entry.name)) : entry.name === 'known_hosts2' ? [path.join(dir, entry.name)] : []);
-    const trust = findTrust(directory); assert.equal(trust.length, 1, 'TOFU should persist the accepted certificate');
-    const original = fs.readFileSync(trust[0], 'utf8');
-    const changed = original.replace(/(?:[0-9a-f]{2}:){19,31}[0-9a-f]{2}/gi, (value) => value.replace(/[0-9a-f]/gi, '0'));
-    assert.notEqual(changed, original); fs.writeFileSync(trust[0], changed);
-    try { await service.start({ id: 'changed', name: 'Changed certificate', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' }); }
+    // The first connection asked the user to confirm the certificate.
+    assert.equal(prompts.length, 1); assert.equal(prompts[0].payload.kind, 'rdp'); assert.equal(prompts[0].payload.changed, false);
+    console.log('RDP_FIRST_CONNECTION_CERTIFICATE_CONFIRMED');
+    // A remembered certificate connects without asking again.
+    const again = await service.start({ id: 'again', name: 'Fixture RDP', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' });
+    assert.equal(prompts.length, 1); service.stop(again.id);
+    // Pretend a different certificate was trusted before: the user is warned
+    // that it changed, and rejecting it starts nothing.
+    knownHostService.store.update((data) => { data.hosts[`rdp:127.0.0.1:${port}`].fingerprintHex = '00'.repeat(32); return data; });
+    answer = { accept: false };
+    await assert.rejects(() => service.start({ id: 'changed', name: 'Changed certificate', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' }), /not trusted/u);
+    assert.equal(prompts.length, 2); assert.equal(prompts[1].payload.changed, true);
+    assert.equal(service.list().length, 0, 'A changed certificate must not leave a connected RDP session');
+    // FreeRDP itself is pinned: a fingerprint other than the server's is refused.
+    service.rdpCertificateArgs = async () => ['/cert:deny,fingerprint:sha256:' + Array(32).fill('00').join(':'), '-sec-rdp'];
+    try { await service.start({ id: 'pinned', name: 'Pinned', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' }); }
     catch (error) { assert.match(error.message, /closed|exited/); }
     await delay(2000);
-    assert.equal(service.list().length, 0, 'A changed certificate must not leave a connected RDP session');
+    assert.equal(service.list().length, 0, 'FreeRDP must refuse a certificate that does not match the pin');
     console.log('RDP_CHANGED_CERTIFICATE_REJECTED');
   } finally {
     ws?.terminate(); service.stopAll(); bridge.stopAll(); shadow.kill('SIGTERM');

@@ -13,6 +13,9 @@ const TERMINAL_THEMES = new Set([
   'one-dark', 'catppuccin-mocha', 'tokyo-night', 'gruvbox-dark', 'monokai', 'oceanic-next', 'material'
 ]);
 const TERMINAL_CURSOR_STYLES = new Set(['block', 'underline', 'bar']);
+// Fixed palette so a profile (possibly synced from elsewhere) can only pick a
+// named colour, never inject arbitrary CSS.
+const TAB_COLORS = new Set(['', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'purple', 'pink']);
 
 function fail(message) {
   const error = new Error(message);
@@ -89,6 +92,10 @@ function normalizeProfile(input = {}, existingId = '') {
   if (!TERMINAL_THEMES.has(terminalTheme)) fail(`unsupported terminal theme: ${terminalTheme}`);
   const terminalCursorStyle = cleanString(input.terminalCursorStyle || 'block', 'terminalCursorStyle', { max: 32 }).toLowerCase();
   if (!TERMINAL_CURSOR_STYLES.has(terminalCursorStyle)) fail(`unsupported terminal cursor style: ${terminalCursorStyle}`);
+  // An unknown colour (e.g. from a newer version's export) falls back to none
+  // rather than rejecting the whole profile.
+  const requestedTabColor = String(input.tabColor || '').trim().toLowerCase();
+  const tabColor = TAB_COLORS.has(requestedTabColor) ? requestedTabColor : '';
   const transferMode = cleanString(input.transferMode || 'sftp', 'transferMode', { max: 16 }).toLowerCase();
   if (!TRANSFER_MODES.has(transferMode)) fail(`unsupported transfer mode: ${transferMode}`);
 
@@ -109,6 +116,7 @@ function normalizeProfile(input = {}, existingId = '') {
     credentialKind,
     tags: cleanTags(input.tags),
     favorite: cleanBoolean(input.favorite),
+    tabColor,
     useSshConfig: cleanBoolean(input.useSshConfig, true),
     startupCommand: rejectOptionLike(cleanString(input.startupCommand, 'startupCommand', { max: 2048, allowNewlines: true }).trimStart(), 'startupCommand'),
     proxyJump: rejectOptionLike(cleanString(input.proxyJump, 'proxyJump', { max: 512 }), 'proxyJump', { rejectWhitespace: true }),
@@ -195,6 +203,7 @@ function normalizeRemotePath(value) {
 module.exports = {
   CREDENTIAL_KINDS,
   PROTOCOLS,
+  TAB_COLORS,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_THEMES,
   TRANSFER_MODES,

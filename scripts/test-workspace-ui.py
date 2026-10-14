@@ -37,6 +37,22 @@ try:
  assert c.eval('document.querySelector(".session-tab.active").dataset.sessionId')!=before
  key('Tab','Tab',10);time.sleep(.2)
  assert c.eval('document.querySelector(".session-tab.active").dataset.sessionId')==before
+ # Ctrl+PageUp/PageDown switch tabs; Ctrl+Shift+PageUp/PageDown move the active tab.
+ order=lambda:c.eval('[...document.querySelectorAll(".session-tab")].map(e=>e.dataset.sessionId)')
+ active=lambda:c.eval('document.querySelector(".session-tab.active").dataset.sessionId')
+ key('PageDown','PageDown',2);time.sleep(.2);assert active()!=before
+ key('PageUp','PageUp',2);time.sleep(.2);assert active()==before
+ start=order();moving=active();first=start.index(moving)==0
+ key('PageDown' if first else 'PageUp','PageDown' if first else 'PageUp',10);time.sleep(.2);assert order()==start[::-1],order()
+ key('PageUp' if first else 'PageDown','PageUp' if first else 'PageDown',10);time.sleep(.2);assert order()==start and active()==moving,order()
+ # Ctrl+= / Ctrl+- / Ctrl+0 change only the active terminal's text size.
+ size=lambda sid:c.eval('parseFloat(getComputedStyle(document.querySelector("#terminal-panel-%s .xterm-rows")).fontSize)'%sid)
+ other=[sid for sid in start if sid!=moving][0];base=size(moving);other_base=size(other)
+ key('=','Equal',2);key('=','Equal',2);time.sleep(.2);assert size(moving)==base+2,(size(moving),base)
+ key('-','Minus',2);time.sleep(.2);assert size(moving)==base+1
+ assert size(other)==other_base
+ assert c.eval('document.querySelector("#global-status").textContent').startswith('Text size')
+ key('0','Digit0',2);time.sleep(.2);assert size(moving)==base
  click('#profiles-active');assert c.eval('document.querySelectorAll(".profile-item").length')==1,c.eval('({profiles:document.querySelector("#profile-list").innerText,sessions:[...document.querySelectorAll(".session-tab")].map(e=>({text:e.innerText,classes:e.className}))})')
  click('#palette-button');wait('!!document.querySelector(".palette-shell input")')
  fill('.palette-shell input','switch to:');assert c.eval('document.querySelectorAll(".palette-row").length')==2
@@ -79,5 +95,15 @@ try:
    c.eval('document.querySelector("#profiles-all").click()')
    m.SCREENSHOT_PATH=os.environ.get('AUX_WORKSPACE_SCREENSHOT','/tmp/aux-workspace-after.png');m.capture_screenshot(c)
  c.call('Emulation.clearDeviceMetricsOverride')
+ # A connection's tab colour marks its list entry and its tabs; unknown colours are dropped.
+ saved=c.eval('''(async()=>{const p=(await auxCommand.profiles.list()).find(x=>x.id==="ui-stage");const a=await auxCommand.profiles.save({...p,tabColor:"red"});const b=await auxCommand.profiles.save({...p,id:"ui-bad",name:"Bad colour",tabColor:"url(javascript:x)"});await auxCommand.profiles.delete("ui-bad");return [a.tabColor,b.tabColor];})()''')
+ assert saved==['red',''],saved
+ c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
+ c.eval('document.querySelector("#profiles-all").click()')
+ wait('!!document.querySelector(".profile-item[data-tab-color=red]")')
+ assert 'Staging web' in c.eval('document.querySelector(".profile-item[data-tab-color=red]").textContent')
+ assert c.eval('getComputedStyle(document.querySelector(".profile-item[data-tab-color=red]")).boxShadow').find('255, 92, 119')>=0
+ click('.profile-item[data-tab-color=red] .profile-connect')
+ wait('!!document.querySelector(".session-tab[data-tab-color=red]")')
  print('WORKSPACE_FILTERS_PALETTE_PREFERENCES_KEYBOARD_RESPONSIVE_PASSED')
 finally:c.close()

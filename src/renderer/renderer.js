@@ -857,6 +857,12 @@
     if (!state.profiles.some((profile) => profile.id === state.selectedProfileId)) {
       state.selectedProfileId = state.profiles.find((profile) => profile.protocol !== 'local')?.id || state.profiles[0]?.id || '';
     }
+    // Open tabs keep their profile snapshot, but a colour change in the
+    // editor should show straight away.
+    for (const tab of state.tabs.values()) {
+      const current = state.profiles.find((profile) => profile.id === tab.profile?.id);
+      if (current) { tab.profile.tabColor = current.tabColor; applyTabColor(tab.tabElement, current); }
+    }
     renderProfiles();
   }
 
@@ -1438,6 +1444,7 @@
           className: `profile-item${profile.id === state.selectedProfileId ? ' selected' : ''}`,
           attrs: { role: 'listitem' }
         }, [connectButton, editButton]);
+        applyTabColor(item, profile);
         item.addEventListener('contextmenu', (event) => {
           event.preventDefault();
           openProfileContextMenu(profile, editButton);
@@ -1512,6 +1519,9 @@
         toast(uiText("{p0} session started", { p0: kind }), profile.name, 'success');
         return tab;
       } catch (error) {
+        // A rejected or unreadable server certificate is final: the external
+        // client would hit the same server and ask again.
+        if (/RDP server certificate/u.test(errorMessage(error))) return;
         toast(uiText("Embedded {p0} unavailable, launching external client", { p0: kind }), errorMessage(error), 'info');
       }
       // Fall through to the external native client.
@@ -1574,6 +1584,17 @@
     magenta: { rgb: [180, 139, 234], label: uiText('Magenta') },
     cyan: { rgb: [69, 210, 255], label: uiText('Cyan') }
   };
+  // Per-connection tab colours. Keys match TAB_COLORS in validation.cjs; the
+  // actual colours live in styles.css so themes can adjust them.
+  const TAB_COLORS = [
+    ['', uiText('None')], ['red', uiText('Red')], ['orange', uiText('Orange')], ['amber', uiText('Amber')],
+    ['green', uiText('Green')], ['teal', uiText('Teal')], ['blue', uiText('Blue')], ['purple', uiText('Purple')], ['pink', uiText('Pink')]
+  ];
+  function applyTabColor(element, profile) {
+    const color = TAB_COLORS.some(([key]) => key && key === profile?.tabColor) ? profile.tabColor : '';
+    if (color) element.dataset.tabColor = color;
+    else delete element.dataset.tabColor;
+  }
   const HIGHLIGHT_RESET = '[39;49m';
   const MAX_HIGHLIGHT_MATCHES = 400;
   let compiledHighlightCache = { version: -1, rules: [] };
@@ -2248,6 +2269,7 @@
       node('span', { className: 'tab-title', text: session.title })
     ]);
     const tabElement = node('div', { className: 'session-tab', attrs: { 'data-session-id': session.id } }, [tabButton, closeButton]);
+    applyTabColor(tabElement, profile);
 
     elements.tabbar.insertBefore(tabElement, elements.tabbarSpacer);
     elements.terminalStack.append(view);
@@ -2339,6 +2361,7 @@
       // focus; plain Ctrl combinations (Ctrl+W, Ctrl+K, …) stay with the shell
       // until the session has exited.
       if (event.ctrlKey && event.key === 'Tab' && handleWorkspaceShortcut(event)) return false;
+      if (event.ctrlKey && !event.altKey && ZOOM_AND_TAB_KEYS.has(event.code) && handleWorkspaceShortcut(event)) return false;
       if (event.ctrlKey && event.shiftKey && handleWorkspaceShortcut(event)) return false;
       if (tab.closed && event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'w') {
         event.preventDefault();
@@ -2416,12 +2439,12 @@
       } },
       { label:uiText('Connection timeline'),icon:'◷',run:async()=>{const events=await api.terminal.timeline(tab.id);showModal({title:uiText('Connection timeline'),description:uiText('Observed process events and detected errors. Unreported DNS, network and authentication steps are not inferred as successful.'),body:node('div',{className:'transfer-review-list'},events.map(event=>node('div',{className:'transfer-review-item'},[node('strong',{text:(event.elapsedMs/1000).toFixed(2)+'s · '+event.stage}),node('span',{text:event.message})])))});} },
       { label: uiText('Move to separate window'), icon:'↗', disabled:tab.closed, run:()=>detachTab(tab) },
-      { label: uiText('Move tab left'), icon: '←', run: () => moveSessionTab(tab, -1) },
-      { label: uiText('Move tab right'), icon: '→', run: () => moveSessionTab(tab, 1) },
+      { label: uiText('Move tab left'), icon: '←', hint: 'Ctrl+Shift+PgUp', run: () => moveSessionTab(tab, -1) },
+      { label: uiText('Move tab right'), icon: '→', hint: 'Ctrl+Shift+PgDn', run: () => moveSessionTab(tab, 1) },
       { label: uiText('Duplicate session'), icon: '+', run: () => connectProfile(profile, tab) },
-      { label: uiText('Increase text size'), icon: 'A+', run: () => { terminal.options.fontSize = Math.min(32, terminal.options.fontSize + 1); fitVisibleTerminals(); persistSessions(); } },
-      { label: uiText('Decrease text size'), icon: 'A−', run: () => { terminal.options.fontSize = Math.max(8, terminal.options.fontSize - 1); fitVisibleTerminals(); persistSessions(); } },
-      { label: uiText('Reset text size'), icon: '↺', run: () => { terminal.options.fontSize = terminalOptionsForProfile(profile).fontSize; fitVisibleTerminals(); persistSessions(); } },
+      { label: uiText('Increase text size'), icon: 'A+', hint: 'Ctrl+=', run: () => zoomTerminal(tab, 1) },
+      { label: uiText('Decrease text size'), icon: 'A−', hint: 'Ctrl+−', run: () => zoomTerminal(tab, -1) },
+      { label: uiText('Reset text size'), icon: '↺', hint: 'Ctrl+0', run: () => zoomTerminal(tab, 0) },
       'separator',
       { label: uiText('Close session'), icon: '×', danger: true, run: () => requestCloseTab(tab.id) }
     ], { title: tab.title });
@@ -2642,7 +2665,7 @@
     input.select();
   }
 
-  function moveSessionTab(tab, direction) {
+  function moveSessionTab(tab, direction, focus = true) {
     const ordered = [...state.tabs.values()];
     const index = ordered.indexOf(tab);
     const target = index + direction;
@@ -2654,7 +2677,21 @@
       elements.terminalStack.append(item.view);
     }
     persistSessions();
-    tab.tabButton.focus();
+    if (focus) tab.tabButton.focus();
+  }
+
+  // Ctrl+= / Ctrl+− / Ctrl+0 (and the tab menu) change one terminal's text
+  // size; the size is saved with the session like the pane size.
+  const ZOOM_AND_TAB_KEYS = new Set(['Equal', 'Minus', 'Digit0', 'NumpadAdd', 'NumpadSubtract', 'Numpad0', 'PageUp', 'PageDown']);
+  function zoomTerminal(tab, step) {
+    if (!tab?.terminal) return;
+    const current = tab.terminal.options.fontSize;
+    const next = step === 0 ? terminalOptionsForProfile(tab.profile).fontSize : Math.min(32, Math.max(8, current + step));
+    if (next === current) return;
+    tab.terminal.options.fontSize = next;
+    fitVisibleTerminals();
+    persistSessions();
+    setStatus(uiText('Text size {p0} px', { p0: next }));
   }
 
   function isReopenable(tab) {
@@ -3291,6 +3328,7 @@
       node('span', { className: 'tab-title', text: `${kind}: ${profile.name}` })
     ]);
     const tabElement = node('div', { className: 'session-tab', attrs: { 'data-session-id': sessionId } }, [tabButton, closeButton]);
+    applyTabColor(tabElement, profile);
     elements.tabbar.insertBefore(tabElement, elements.tabbarSpacer);
     elements.terminalStack.append(view);
 
@@ -3326,8 +3364,8 @@
     enableTabDragging(desktopTab);
     const desktopMenu = () => openContextMenu(tabButton, [
       { label: uiText('Rename tab'), icon: '✎', hint: 'F2', run: () => startTabRename(desktopTab) },
-      { label: uiText('Move tab left'), icon: '←', run: () => moveSessionTab(desktopTab, -1) },
-      { label: uiText('Move tab right'), icon: '→', run: () => moveSessionTab(desktopTab, 1) },
+      { label: uiText('Move tab left'), icon: '←', hint: 'Ctrl+Shift+PgUp', run: () => moveSessionTab(desktopTab, -1) },
+      { label: uiText('Move tab right'), icon: '→', hint: 'Ctrl+Shift+PgDn', run: () => moveSessionTab(desktopTab, 1) },
       'separator',
       { label: uiText('Close session'), icon: '×', danger: true, run: () => requestCloseVncTab(sessionId) }
     ], { title: desktopTab.title });
@@ -3613,6 +3651,7 @@
       startupCommand: '',
       notes: '',
       favorite: false,
+      tabColor: '',
       useSshConfig: true,
       compression: false,
       agentForwarding: false,
@@ -3661,6 +3700,7 @@
       ['block', uiText('Block')], ['underline', uiText('Underline')], ['bar', uiText('Bar')]
     ], profile.terminalCursorStyle || 'block');
     const terminalScrollback = textInput('terminalScrollback', profile.terminalScrollback || 20000, { type: 'number', min: 1000, max: 200000 });
+    const tabColor = selectInput('tabColor', TAB_COLORS, profile.tabColor || '');
     const notes = node('textarea', { name: 'notes', placeholder: uiText('Operational notes') });
     notes.value = profile.notes || '';
     const credentialKind = selectInput('credentialKind', [
@@ -3688,6 +3728,7 @@
       field(uiText('Protocol'), protocol),
       field(uiText('Group'), group),
       groupOptions,
+      field(uiText('Tab color'), tabColor, uiText('Marks this connection’s tabs and list entry, e.g. red for production.')),
       field(uiText('Host'), host, '', '',),
       field(uiText('Port'), port),
       field(uiText('Username'), username, '', '',),
@@ -3786,6 +3827,7 @@
         rdpAudio: values.has('rdpAudio'), rdpWidth: Number(values.get('rdpWidth')), rdpHeight: Number(values.get('rdpHeight')),
         notes: String(values.get('notes') || ''),
         favorite: values.has('favorite'),
+        tabColor: String(values.get('tabColor') || ''),
         useSshConfig: values.has('useSshConfig'),
         compression: values.has('compression'),
         agentForwarding: values.has('agentForwarding'),
@@ -5791,18 +5833,30 @@
 
   function showHostKeyPrompt(request) {
     const data = request.payload || {};
-    const message = data.changed
-      ? `The host key for ${data.host}:${data.port} has changed. This can indicate a rebuilt server or a man-in-the-middle attack. Verify the fingerprint through a trusted channel before continuing.`
-      : `Aux Command has not seen the host key for ${data.host}:${data.port}. Verify the fingerprint before trusting this server.`;
+    const rdp = data.kind === 'rdp';
+    const target = `${data.host}:${data.port}`;
+    const message = rdp
+      ? (data.changed
+        ? uiText('The certificate for the RDP server {p0} has changed. This can mean the server was reinstalled or someone is intercepting the connection. Check the fingerprint with the server’s administrator before continuing.', { p0: target })
+        : uiText('Aux Command has not connected to the RDP server {p0} before. Check that this fingerprint matches the server’s certificate before trusting it.', { p0: target }))
+      : (data.changed
+        ? uiText('The host key for {p0} has changed. This can indicate a rebuilt server or a man-in-the-middle attack. Verify the fingerprint through a trusted channel before continuing.', { p0: target })
+        : uiText('Aux Command has not seen the host key for {p0}. Verify the fingerprint before trusting this server.', { p0: target }));
+    const details = rdp ? [
+      data.subject ? [uiText('Issued to'), data.subject] : null,
+      data.issuer ? [uiText('Issued by'), data.issuer] : null,
+      data.validTo ? [uiText('Valid until'), data.validTo] : null
+    ].filter(Boolean) : [];
     const body = node('div', { className: 'prompt-stack' }, [
       node('div', { className: data.changed ? 'warning-box danger-box' : 'warning-box', text: message }),
-      node('div', { className: 'fingerprint', text: data.fingerprint || 'Fingerprint unavailable' }),
+      node('div', { className: 'fingerprint', text: data.fingerprint || uiText('Fingerprint unavailable') }),
+      ...details.map(([label, value]) => node('div', { className: 'previous-fingerprint' }, [node('span', { text: label }), node('code', { text: value })])),
       data.previousFingerprint ? node('div', { className: 'previous-fingerprint' }, [node('span', { text: uiText('Previously trusted') }), node('code', { text: data.previousFingerprint })]) : null
     ]);
     let controller;
     controller = showModal({
-      title: data.changed ? uiText('Host identity changed') : uiText('Trust SSH host?'),
-      description: `${data.profileName || 'SSH profile'} · ${data.host}:${data.port}`,
+      title: data.changed ? (rdp ? uiText('RDP certificate changed') : uiText('Host identity changed')) : (rdp ? uiText('Trust RDP server?') : uiText('Trust SSH host?')),
+      description: `${data.profileName || (rdp ? 'RDP' : 'SSH')} · ${target}`,
       body,
       className: 'narrow',
       closeable: false,
@@ -6145,6 +6199,21 @@
     }
     if (shortcut('reconnect')) {
       run(() => reconnectActiveSession().catch((error) => toast(uiText('Reconnect failed'), errorMessage(error), 'error')));
+    }
+    if (modifier && !event.altKey && ['PageUp', 'PageDown'].includes(event.code) && state.tabs.size) {
+      const direction = event.code === 'PageUp' ? -1 : 1;
+      run(() => {
+        const current = activeTab();
+        if (event.shiftKey) { if (current) moveSessionTab(current, direction, false); return; }
+        const tabs = [...state.tabs.values()];
+        const index = tabs.indexOf(current);
+        activateTab(tabs[(index + direction + tabs.length) % tabs.length].id);
+      });
+    }
+    if (modifier && !event.shiftKey && !event.altKey && activeTab()?.terminal) {
+      if (['Equal', 'NumpadAdd'].includes(event.code)) run(() => zoomTerminal(activeTab(), 1));
+      if (['Minus', 'NumpadSubtract'].includes(event.code)) run(() => zoomTerminal(activeTab(), -1));
+      if (['Digit0', 'Numpad0'].includes(event.code)) run(() => zoomTerminal(activeTab(), 0));
     }
     if (modifier && event.shiftKey && event.code === 'Minus') run(() => adjustPaneSize(-40));
     if (modifier && event.shiftKey && event.code === 'Equal') run(() => adjustPaneSize(40));

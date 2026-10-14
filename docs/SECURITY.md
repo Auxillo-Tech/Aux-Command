@@ -38,7 +38,7 @@ X11 forwarding and SSH agent forwarding expand the remote host's ability to inte
 
 Telnet and VNC can be unencrypted depending on deployment. Prefer SSH, RDP with verified certificates, or a VPN where possible.
 
-RDP uses trust on first use: FreeRDP records the server certificate on the first connection and rejects a changed certificate afterwards, but the first connection is not interactively confirmed. For sensitive hosts, connect first from a trusted network or check the recorded fingerprint in `~/.config/freerdp/`.
+RDP server certificates are confirmed like SSH host keys. Before FreeRDP starts, Aux Command reads the server's TLS certificate and shows its SHA-256 fingerprint; you can reject it, accept it once, or trust and remember it. FreeRDP is then pinned to exactly that certificate (`/cert:deny,fingerprint:sha256:…`) with legacy RDP security turned off, so a different certificate or a downgrade to unencrypted RDP security is refused. A changed certificate is shown as a warning with the previously trusted fingerprint. This applies to embedded RDP, the external FreeRDP window and RDP through an SSH gateway. Servers that offer only legacy RDP security (no TLS) are not supported.
 
 ## Reporting
 
