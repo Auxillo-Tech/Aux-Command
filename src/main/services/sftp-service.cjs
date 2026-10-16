@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
-const { Duplex } = require('node:stream');
+const { Duplex, Writable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
 const { resolveHelper } = require('../lib/command-builder.cjs');
@@ -505,23 +505,42 @@ class SftpService {
   }
 
   async readText(profileInput, remotePath, limit = 1_000_000) {
+    if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Remote text byte limit must be a nonnegative safe integer');
     const connection = await this.connect(profileInput);
     const source = normalizeRemotePath(remotePath);
-    const stat = await callSftp(connection.sftp, 'stat', source);
-    if (isDirectory(stat)) throw new Error('Remote text editor can only open files');
-    const size = Number(stat?.size || 0);
-    if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
-    // A private 0700 staging directory keeps remote file contents away from
-    // other local users while the download lands in the shared temp root.
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-remote-edit-'));
-    const localPath = path.join(tempDir, 'remote-edit');
+    // Preserve the stat preflight (including failures), then inspect the path
+    // itself: stat alone would accept a symlink to a small regular target.
+    for (const method of ['stat', 'lstat']) {
+      const stat = await callSftp(connection.sftp, method, source);
+      if ((stat?.mode & 0o170000) !== 0o100000) throw new Error('Remote text editor can only open regular files');
+      const size = Number(stat?.size || 0);
+      if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
+    }
+    // Stat is only an early check: the remote file may grow or lie about its
+    // size. Bound both storage and the read range, including one overflow byte
+    // (SFTP's end offset is inclusive) so oversized content cannot be truncated
+    // into an apparently successful read.
+    const content = Buffer.alloc(limit);
+    let bytes = 0;
+    const stream = connection.sftp.createReadStream(source, {
+      start: 0, end: limit, highWaterMark: Math.min(64 * 1024, limit + 1)
+    });
     try {
-      await new Promise((resolve, reject) => {
-        connection.sftp.fastGet(source, localPath, (error) => error ? reject(error) : resolve());
-      });
-      return fs.readFileSync(localPath, 'utf8');
+      await pipeline(stream, new Writable({
+        write(chunk, encoding, callback) {
+          if (chunk.length > limit - bytes) {
+            callback(new Error(`Remote file is too large for inline editing (limit ${limit} bytes)`));
+            return;
+          }
+          chunk.copy(content, bytes);
+          bytes += chunk.length;
+          callback();
+        }
+      }));
+      // Decode once, preserving UTF-8 codepoints split across stream chunks.
+      return content.toString('utf8', 0, bytes);
     } finally {
-      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
+      stream.destroy();
     }
   }
 
