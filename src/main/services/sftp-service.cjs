@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
-const { Duplex } = require('node:stream');
+const { Duplex, Writable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
 const { resolveHelper } = require('../lib/command-builder.cjs');
@@ -241,43 +241,103 @@ class SftpService {
     const existing = this.connections.get(profile.id);
     if (existing && existing.signature !== signature) this.disconnect(profile.id);
     else if (existing?.ready) return existing;
-    else if (existing?.promise) return existing.promise;
+    else if (existing?.promise) {
+      const connection = await existing.promise;
+      if (existing.cancelled) throw existing.error;
+      return connection;
+    }
 
-    const holder = { ready: false, client: null, sftp: null, proxy: null, profile, signature, promise: null };
-    holder.promise = this.#connectInternal(holder).then(() => holder);
-    this.connections.set(profile.id, holder);
-    try {
-      return await holder.promise;
-    } catch (error) {
+    const holder = {
+      ready: false, client: null, sftp: null, proxy: null, profile, signature,
+      promise: null, cancelled: false, error: null, cleanupSetup: null
+    };
+    let resolveConnection, rejectConnection;
+    const pending = new Promise((resolve, reject) => {
+      resolveConnection = resolve;
+      rejectConnection = reject;
+    });
+    holder.promise = pending;
+    holder.cancel = (error = new Error('SFTP connection cancelled')) => {
+      if (holder.cancelled) return;
+      // Invalidate and settle before closing anything: close/error events and
+      // external setup callbacks may re-enter the service synchronously.
+      holder.cancelled = true;
+      holder.error = error;
+      holder.ready = false;
       if (this.connections.get(profile.id) === holder) this.connections.delete(profile.id);
+      rejectConnection(error);
+      holder.cleanupSetup?.(error);
+      try { holder.sftp?.end?.(); } catch { /* best effort */ }
       try { holder.client?.destroy?.(); } catch { /* best effort */ }
       try { holder.proxy?.socket?.destroy?.(); } catch { /* best effort */ }
       try { holder.proxy?.child?.kill?.('SIGTERM'); } catch { /* best effort */ }
-      throw error;
-    }
+    };
+    // Publish the shared promise and cancellation path before vault/proxy setup.
+    this.connections.set(profile.id, holder);
+    this.#connectInternal(holder).then(() => {
+      if (holder.cancelled) return;
+      holder.ready = true;
+      holder.promise = null;
+      resolveConnection(holder);
+    }, (error) => holder.cancel(error));
+    const connection = await pending;
+    if (holder.cancelled) throw holder.error;
+    return connection;
   }
 
   async #connectInternal(holder) {
     const profile = holder.profile;
     const client = new Client();
     holder.client = client;
-    let connectionDead = false;
-    client.once('close', () => { connectionDead = true; });
+    const checkActive = () => { if (holder.cancelled) throw holder.error; };
     let promptsOpen = 0;
     let handshakeTimer = null;
-    let failHandshake = () => {};
+    let handshaking = false;
+    let rejectSetup = () => {};
+    let onReady = () => {};
     const armHandshakeTimer = () => {
       clearTimeout(handshakeTimer);
-      if (promptsOpen > 0 || holder.ready) return;
-      handshakeTimer = setTimeout(() => failHandshake(new Error('Timed out while waiting for handshake')), HANDSHAKE_TIMEOUT_MS);
+      if (holder.cancelled || !handshaking || promptsOpen > 0) return;
+      handshakeTimer = setTimeout(() => holder.cancel(new Error('Timed out while waiting for handshake')), HANDSHAKE_TIMEOUT_MS);
       handshakeTimer.unref?.();
     };
     const whilePrompting = async (action) => {
+      checkActive();
       promptsOpen += 1;
       clearTimeout(handshakeTimer);
-      try { return await action(); } finally { promptsOpen -= 1; armHandshakeTimer(); }
+      try {
+        const response = await action();
+        checkActive();
+        return response;
+      } finally { promptsOpen -= 1; armHandshakeTimer(); }
     };
-    client.once('error', () => { connectionDead = true; });
+    const service = this;
+    const onClose = () => holder.cancel(new Error('SFTP connection closed'));
+    const onError = (error) => {
+      if (holder.cancelled) return;
+      // Setup errors belong to connect()'s caller, not a duplicate UI event.
+      if (holder.ready) this.#emit('sftp:error', { profileId: profile.id, message: error.message });
+      holder.cancel(error);
+    };
+    const ignoreLateError = () => {};
+    holder.cleanupSetup = (error) => {
+      handshaking = false;
+      clearTimeout(handshakeTimer);
+      client.off('ready', onReady);
+      client.off('keyboard-interactive', onKeyboardInteractive);
+      if (error) rejectSetup(error);
+      rejectSetup = () => {};
+      if (holder.cancelled) {
+        client.off('close', onClose);
+        client.off('error', onError);
+        // ssh2 may still report an error after destroy; never leave it unhandled.
+        client.on('error', ignoreLateError);
+        holder.proxy?.socket?.off('error', onError);
+        holder.proxy?.socket?.on('error', ignoreLateError);
+      }
+    };
+    client.once('close', onClose);
+    client.on('error', onError);
     const config = {
       host: profile.host,
       port: profile.port,
@@ -294,13 +354,14 @@ class SftpService {
       },
       hostVerifier: createGuardedHostVerifier(
         (fingerprint, hostKey) => whilePrompting(() => this.knownHostService.verify(profile, fingerprint, hostKey)),
-        () => connectionDead
+        () => holder.cancelled
       )
     };
 
     if (profile.proxyJump) {
       holder.proxy = createOpenSshProxy(profile);
       config.sock = holder.proxy.socket;
+      config.sock.on('error', onError);
       delete config.host;
       delete config.port;
     }
@@ -318,19 +379,21 @@ class SftpService {
     }
     if (profile.credentialId && this.vaultService.has(profile.credentialId)) {
       const secret = await this.vaultService.get(profile.credentialId);
+      checkActive();
       if (profile.credentialKind === 'passphrase') config.passphrase = secret;
       else config.password = secret;
     }
 
-    client.on('keyboard-interactive', async (name, instructions, language, prompts, finish) => {
+    async function onKeyboardInteractive(name, instructions, language, prompts, finish) {
+      if (holder.cancelled) return;
       const requestedPrompts = Array.isArray(prompts) ? prompts : [];
       if (requestedPrompts.length > 32) {
-        this.#emit('sftp:error', { profileId: profile.id, message: 'SSH server requested too many authentication prompts' });
+        service.#emit('sftp:error', { profileId: profile.id, message: 'SSH server requested too many authentication prompts' });
         finish([]);
         return;
       }
       try {
-        const response = await whilePrompting(() => this.promptBroker.request('keyboard-interactive', {
+        const response = await whilePrompting(() => service.promptBroker.request('keyboard-interactive', {
           profileName: profile.name,
           host: profile.host,
           name: String(name || '').slice(0, 256),
@@ -341,53 +404,53 @@ class SftpService {
             echo: Boolean(prompt?.echo)
           }))
         }));
+        checkActive();
         const answers = Array.isArray(response?.answers) ? response.answers : [];
         finish(requestedPrompts.map((_, index) => String(answers[index] || '').slice(0, 32_768)));
       } catch {
-        finish([]);
+        if (!holder.cancelled) finish([]);
       }
-    });
-    // Errors while connecting reject connect() and are shown once by the
-    // caller; only errors on an established connection are broadcast.
-    client.on('error', (error) => { if (holder.ready) this.#emit('sftp:error', { profileId: profile.id, message: error.message }); });
+    }
+    checkActive();
+    client.on('keyboard-interactive', onKeyboardInteractive);
 
     try {
       await new Promise((resolve, reject) => {
-        const onError = (error) => {
-          client.off('ready', onReady);
-          reject(error);
-        };
-        const onReady = () => {
-          client.off('error', onError);
+        rejectSetup = reject;
+        onReady = () => {
+          handshaking = false;
+          clearTimeout(handshakeTimer);
           resolve();
         };
-        failHandshake = (error) => {
-          client.off('ready', onReady);
-          client.off('error', onError);
-          try { client.end(); } catch { /* already closed */ }
-          reject(error);
-        };
-        client.once('error', onError);
         client.once('ready', onReady);
+        handshaking = true;
         armHandshakeTimer();
         client.connect(config);
       });
+      checkActive();
     } finally {
+      handshaking = false;
       clearTimeout(handshakeTimer);
-      failHandshake = () => {};
+      client.off('ready', onReady);
+      rejectSetup = () => {};
     }
 
-    const sftp = await new Promise((resolve, reject) => {
-      client.sftp((error, channel) => error ? reject(error) : resolve(channel));
+    await new Promise((resolve, reject) => {
+      rejectSetup = reject;
+      client.sftp((error, channel) => {
+        if (holder.cancelled || error) {
+          try { channel?.end?.(); } catch { /* best effort */ }
+          reject(holder.error || error);
+          return;
+        }
+        // Own the channel immediately, before the await continuation: a
+        // disconnect in that gap must close it too.
+        holder.sftp = channel;
+        resolve();
+      });
     });
-    holder.sftp = sftp;
-    holder.ready = true;
-    holder.promise = null;
-
-    client.on('close', () => {
-      if (this.connections.get(profile.id) === holder) this.connections.delete(profile.id);
-      try { holder.proxy?.socket?.destroy?.(); } catch { /* best effort */ }
-    });
+    checkActive();
+    holder.cleanupSetup();
   }
 
   async list(profileInput, remotePath = '/') {
@@ -442,23 +505,42 @@ class SftpService {
   }
 
   async readText(profileInput, remotePath, limit = 1_000_000) {
+    if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Remote text byte limit must be a nonnegative safe integer');
     const connection = await this.connect(profileInput);
     const source = normalizeRemotePath(remotePath);
-    const stat = await callSftp(connection.sftp, 'stat', source);
-    if (isDirectory(stat)) throw new Error('Remote text editor can only open files');
-    const size = Number(stat?.size || 0);
-    if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
-    // A private 0700 staging directory keeps remote file contents away from
-    // other local users while the download lands in the shared temp root.
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-remote-edit-'));
-    const localPath = path.join(tempDir, 'remote-edit');
+    // Preserve the stat preflight (including failures), then inspect the path
+    // itself: stat alone would accept a symlink to a small regular target.
+    for (const method of ['stat', 'lstat']) {
+      const stat = await callSftp(connection.sftp, method, source);
+      if ((stat?.mode & 0o170000) !== 0o100000) throw new Error('Remote text editor can only open regular files');
+      const size = Number(stat?.size || 0);
+      if (size > limit) throw new Error(`Remote file is too large for inline editing (${size} bytes)`);
+    }
+    // Stat is only an early check: the remote file may grow or lie about its
+    // size. Bound both storage and the read range, including one overflow byte
+    // (SFTP's end offset is inclusive) so oversized content cannot be truncated
+    // into an apparently successful read.
+    const content = Buffer.alloc(limit);
+    let bytes = 0;
+    const stream = connection.sftp.createReadStream(source, {
+      start: 0, end: limit, highWaterMark: Math.min(64 * 1024, limit + 1)
+    });
     try {
-      await new Promise((resolve, reject) => {
-        connection.sftp.fastGet(source, localPath, (error) => error ? reject(error) : resolve());
-      });
-      return fs.readFileSync(localPath, 'utf8');
+      await pipeline(stream, new Writable({
+        write(chunk, encoding, callback) {
+          if (chunk.length > limit - bytes) {
+            callback(new Error(`Remote file is too large for inline editing (limit ${limit} bytes)`));
+            return;
+          }
+          chunk.copy(content, bytes);
+          bytes += chunk.length;
+          callback();
+        }
+      }));
+      // Decode once, preserving UTF-8 codepoints split across stream chunks.
+      return content.toString('utf8', 0, bytes);
     } finally {
-      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
+      stream.destroy();
     }
   }
 
@@ -656,11 +738,7 @@ class SftpService {
   disconnect(profileId) {
     const connection = this.connections.get(profileId);
     if (!connection) return false;
-    this.connections.delete(profileId);
-    try { connection.sftp?.end?.(); } catch { /* already closed */ }
-    try { connection.client?.end?.(); } catch { /* already closed */ }
-    try { connection.proxy?.socket?.destroy?.(); } catch { /* already closed */ }
-    try { connection.proxy?.child?.kill?.('SIGTERM'); } catch { /* already closed */ }
+    connection.cancel();
     return true;
   }
 
