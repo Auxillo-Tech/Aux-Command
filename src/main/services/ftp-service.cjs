@@ -61,31 +61,66 @@ class FtpService {
     // A cached holder is only reusable while its control connection is still
     // open and was built with the profile's current settings.
     if (existing?.ready && existing.signature === signature && !existing.client.closed) return existing;
-    if (existing?.promise && existing.signature === signature) return existing.promise;
+    if (existing?.promise && existing.signature === signature) {
+      await existing.promise;
+      this.#assertCurrent(existing);
+      return existing;
+    }
     this.disconnect(profile.id);
     const holder = {
       profile,
       signature,
       client: new ftp.Client(30_000),
       ready: false,
+      error: null,
+      reject: null,
       promise: null,
       queue: Promise.resolve()
     };
     holder.client.ftp.verbose = false;
-    holder.promise = this.#open(holder).then(() => holder).catch((error) => {
-      if (this.connections.get(profile.id) === holder) this.connections.delete(profile.id);
-      try { holder.client.close(); } catch { /* already closed */ }
-      throw error;
-    });
+    let resolve;
+    const pending = new Promise((yes, no) => { resolve = yes; holder.reject = no; });
+    holder.promise = pending;
+    // Publish cancellation and the shared promise before starting any setup.
     this.connections.set(profile.id, holder);
-    return holder.promise;
+    this.#open(holder).then(() => {
+      this.#assertCurrent(holder);
+      holder.ready = true;
+      holder.promise = null;
+      holder.reject = null;
+      resolve(holder);
+    }).catch((error) => this.#invalidate(holder, error));
+    await pending;
+    this.#assertCurrent(holder);
+    return holder;
+  }
+
+  #assertCurrent(holder) {
+    if (holder.error) throw holder.error;
+    if (this.connections.get(holder.profile.id) !== holder) throw new Error('FTP connection disconnected');
+  }
+
+  #invalidate(holder, error = new Error('FTP connection disconnected')) {
+    holder.error ||= error;
+    holder.ready = false;
+    if (this.connections.get(holder.profile.id) === holder) this.connections.delete(holder.profile.id);
+    holder.reject?.(holder.error);
+    holder.reject = null;
+    holder.promise = null;
+    // Repeat close on late setup completion: access can reopen a closed client.
+    try { holder.client.close(); } catch { /* already closed */ }
   }
 
   // basic-ftp clients cannot run concurrent commands on one control
   // connection; every operation for a profile is serialized through the
   // holder's queue so browsing during a transfer cannot kill either task.
   #enqueue(holder, task) {
-    const run = holder.queue.catch(() => {}).then(() => task());
+    const run = holder.queue.catch(() => {}).then(async () => {
+      this.#assertCurrent(holder);
+      const result = await task();
+      this.#assertCurrent(holder);
+      return result;
+    });
     holder.queue = run.catch(() => {});
     return run;
   }
@@ -109,9 +144,9 @@ class FtpService {
     } else if (profile.protocol === 'ftp' && !profile.username) {
       config.password = 'anonymous@';
     }
+    this.#assertCurrent(holder);
     await client.access(config);
-    holder.ready = true;
-    holder.promise = null;
+    this.#assertCurrent(holder);
   }
 
   #signature(profile) {
@@ -247,7 +282,7 @@ class FtpService {
       await replaceFtpRemoteFile(connection.client, partialPath, target);
     } catch (error) {
       if (options.signal?.aborted) {
-        this.disconnect(profile.id);
+        this.#invalidate(connection);
         throw new DOMException('Aborted', 'AbortError');
       }
       throw error;
@@ -289,7 +324,7 @@ class FtpService {
       fs.chmodSync(localPath, 0o600);
     } catch (error) {
       if (options.signal?.aborted) {
-        this.disconnect(profile.id);
+        this.#invalidate(connection);
         throw new DOMException('Aborted', 'AbortError');
       }
       if (!options.transferId) {
@@ -320,8 +355,7 @@ class FtpService {
   disconnect(profileId) {
     const connection = this.connections.get(profileId);
     if (!connection) return false;
-    this.connections.delete(profileId);
-    try { connection.client.close(); } catch { /* already closed */ }
+    this.#invalidate(connection);
     return true;
   }
 
