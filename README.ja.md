@@ -8,7 +8,7 @@
 
 多数のローカル・リモートシステムをまたいで作業し、ばらばらのツールを使い分けるのではなく一貫したワークスペースを求める技術オペレーター、インフラチーム、セキュリティエンジニアのために作られています。
 
-> 現在のバージョン：Linux x86_64 向け **0.5.0**。リリースには GPG 署名が付いています。
+> 現在のバージョン：Linux x86_64 向け **0.4.0**。リリースには GPG 署名が付いています。
 
 ## 主な機能
 
@@ -28,19 +28,19 @@
 
 ```bash
 # AppImage（ポータブル）
-chmod +x Aux-Command-0.5.0-x86_64.AppImage
-./Aux-Command-0.5.0-x86_64.AppImage
+chmod +x Aux-Command-0.4.0-x86_64.AppImage
+./Aux-Command-0.4.0-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Aux-Command-0.5.0-amd64.deb
+sudo apt install ./Aux-Command-0.4.0-amd64.deb
 aux-command
 
 # Fedora / RHEL / Rocky / AlmaLinux
-sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 
 # openSUSE
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 

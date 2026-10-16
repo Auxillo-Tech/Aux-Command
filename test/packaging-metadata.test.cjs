@@ -34,24 +34,30 @@ test('desktop entry launches the packaged binary with the network category', () 
   assert.match(desktop, /Categories=.*Network.*/u);
 });
 
-test('AUR PKGBUILDs match the current version and hard dependencies', () => {
+test('AUR PKGBUILDs distinguish source and published binary versions', () => {
   for (const rel of ['packaging/aur/aux-command-bin/PKGBUILD', 'packaging/aur/aux-command/PKGBUILD']) {
     const pkgbuild = read(rel);
-    assert.match(pkgbuild, new RegExp(`pkgver=${pkg.version.replace(/\./gu, '\\.')}`, 'u'), `${rel} pkgver`);
+    const expected = rel.includes('aux-command-bin/')
+      ? read('docs/RELEASE_STATUS.md').match(/latest published release is \*\*v(\d+\.\d+\.\d+)\*\*/u)?.[1]
+      : pkg.version;
+    assert.ok(expected, `${rel} version source`);
+    assert.match(pkgbuild, new RegExp(`pkgver=${expected.replace(/\./gu, '\\.')}`, 'u'), `${rel} pkgver`);
     assert.match(pkgbuild, /license=\('AGPL-3\.0-or-later'\)/u, `${rel} license`);
     assert.match(pkgbuild, /depends=\('openssh' 'python'/u, `${rel} depends`);
     assert.match(pkgbuild, /freerdp: RDP sessions/u, `${rel} optdepends`);
   }
 });
 
-test('website kit references bundled assets and current version', () => {
+test('website kit references bundled assets and published downloads', () => {
   const html = read('website/index.html');
   // Every referenced local asset exists.
   for (const match of html.matchAll(/(?:src|href)="((?:assets|screenshots)\/[^"]+)"/gu)) {
     assert.ok(fs.existsSync(path.join(root, 'website', match[1])), `missing website asset ${match[1]}`);
   }
   assert.match(html, /<title>Aux Command/u);
-  assert.match(html, new RegExp(`Aux-Command-${pkg.version.replace(/\./gu, '\\.')}-x86_64\\.AppImage`, 'u'));
+  const published = read('docs/RELEASE_STATUS.md').match(/latest published release is \*\*v(\d+\.\d+\.\d+)\*\*/u)?.[1];
+  assert.ok(published, 'release status must identify a published version');
+  assert.match(html, new RegExp(`Aux-Command-${published.replace(/\./gu, '\\.')}-x86_64\\.AppImage`, 'u'));
   assert.match(html, /auxillo\.tech/u);
   assert.match(html, /AGPL-3\.0/u);
   // Section tags are balanced.

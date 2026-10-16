@@ -8,7 +8,7 @@
 
 Sie richtet sich an technische Betreiber, Infrastrukturteams und Sicherheitsingenieure, die mit vielen lokalen und entfernten Systemen arbeiten und statt vieler einzelner Werkzeuge einen einheitlichen Arbeitsbereich wollen.
 
-> Aktuelle Version: **0.5.0** für Linux x86_64. Releases sind mit GPG signiert.
+> Aktuelle Version: **0.4.0** für Linux x86_64. Releases sind mit GPG signiert.
 
 ## Hauptfunktionen
 
@@ -28,19 +28,19 @@ Sie richtet sich an technische Betreiber, Infrastrukturteams und Sicherheitsinge
 
 ```bash
 # AppImage (portabel)
-chmod +x Aux-Command-0.5.0-x86_64.AppImage
-./Aux-Command-0.5.0-x86_64.AppImage
+chmod +x Aux-Command-0.4.0-x86_64.AppImage
+./Aux-Command-0.4.0-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Aux-Command-0.5.0-amd64.deb
+sudo apt install ./Aux-Command-0.4.0-amd64.deb
 aux-command
 
 # Fedora / RHEL / Rocky / AlmaLinux
-sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 
 # openSUSE
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 

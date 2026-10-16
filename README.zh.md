@@ -8,7 +8,7 @@
 
 它专为技术运维人员、基础设施团队和安全工程师打造，适合需要在众多本地和远程系统之间工作、希望用一个统一的工作区取代多个分散工具的用户。
 
-> 当前版本：适用于 Linux x86_64 的 **0.5.0**。发布版本均经过 GPG 签名。
+> 当前版本：适用于 Linux x86_64 的 **0.4.0**。发布版本均经过 GPG 签名。
 
 ## 主要功能
 
@@ -28,19 +28,19 @@
 
 ```bash
 # AppImage（便携式）
-chmod +x Aux-Command-0.5.0-x86_64.AppImage
-./Aux-Command-0.5.0-x86_64.AppImage
+chmod +x Aux-Command-0.4.0-x86_64.AppImage
+./Aux-Command-0.4.0-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Aux-Command-0.5.0-amd64.deb
+sudo apt install ./Aux-Command-0.4.0-amd64.deb
 aux-command
 
 # Fedora / RHEL / Rocky / AlmaLinux
-sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 
 # openSUSE
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 

@@ -8,7 +8,7 @@
 
 Оно предназначено для технических специалистов, инфраструктурных команд и инженеров по безопасности, которые работают с множеством локальных и удалённых систем и хотят единое рабочее пространство вместо набора разрозненных инструментов.
 
-> Текущая версия: **0.5.0** для Linux x86_64. Релизы подписаны GPG.
+> Текущая версия: **0.4.0** для Linux x86_64. Релизы подписаны GPG.
 
 ## Основные возможности
 
@@ -28,19 +28,19 @@
 
 ```bash
 # AppImage (портативная версия)
-chmod +x Aux-Command-0.5.0-x86_64.AppImage
-./Aux-Command-0.5.0-x86_64.AppImage
+chmod +x Aux-Command-0.4.0-x86_64.AppImage
+./Aux-Command-0.4.0-x86_64.AppImage
 
 # Debian / Ubuntu
-sudo apt install ./Aux-Command-0.5.0-amd64.deb
+sudo apt install ./Aux-Command-0.4.0-amd64.deb
 aux-command
 
 # Fedora / RHEL / Rocky / AlmaLinux
-sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
+sudo dnf install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 
 # openSUSE
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
+sudo zypper install ./Aux-Command-0.4.0-x86_64.rpm
 aux-command
 ```
 
