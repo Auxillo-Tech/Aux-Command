@@ -353,7 +353,7 @@ test('local socat fixture supports bundled serial bridge terminal flows', { skip
         name: 'Local serial fixture',
         protocol: 'serial',
         group: 'Test',
-        device: left,
+        device: fs.realpathSync(left),
         baudRate: 115200
       },
       cols: 80,
