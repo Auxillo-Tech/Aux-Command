@@ -47,6 +47,9 @@ jobs:
       - name: Install JavaScript dependencies deterministically
         run: npm ci
 
+      - name: Install locked Electron runtime
+        run: node node_modules/electron/install.js
+
       - name: Validate source and tests
         run: npm run check
 
