@@ -53,6 +53,39 @@ test('drops incomplete partial tail lines with or without a final newline', () =
   assert.ok(!r2.output.includes('SYNTHETIC_NO_NEWLINE_SECRET'));
 });
 
+test('redacts standalone bearer credentials and URL user information', () => {
+  const r = execute({ electron: `printf '%s\\n' 'Bearer SYNTHETIC_BARE_BEARER' 'https://demo:SYNTHETIC_URL_PASSWORD@example.invalid/failure' >&2; exit 6` });
+  assert.notEqual(r.status, 0);
+  assert.match(r.output, /exit code 6/);
+  for (const secret of ['SYNTHETIC_BARE_BEARER', 'SYNTHETIC_URL_PASSWORD']) {
+    assert.ok(!r.output.includes(secret), `credential leaked: ${secret}`);
+  }
+});
+
+test('caps post-redaction UTF-8 output bytes, not only characters', () => {
+  const r = execute({ electron: `python3 -c 'import sys; sys.stderr.write(("\\U0001F600 token=x\\n"*10000)+"FINAL_UTF8_LOG_LINE\\n")'; exit 8` });
+  assert.notEqual(r.status, 0);
+  assert.match(r.output, /FINAL_UTF8_LOG_LINE/);
+  assert.ok(Buffer.byteLength(r.output, 'utf8') < 12500, `output bytes ${Buffer.byteLength(r.output, 'utf8')}`);
+});
+
+test('log reader bounds each read even if the producer keeps writing', () => {
+  const code = [
+    'import ast, io, pathlib, re, sys',
+    'source = ast.parse(pathlib.Path(sys.argv[1]).read_text())',
+    'nodes = [n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in ("redact", "diagnostic")]',
+    'class GrowingLog(io.BytesIO):',
+    ' def read(self, size=-1):',
+    '  assert 0 <= size <= 8192, "unbounded log read"',
+    '  return super().read(size)',
+    'scope = {"open": lambda *a, **k: GrowingLog(b"final error\\n"), "os": __import__("os"), "re": re, "LOG_TAIL_BYTES": 8192, "LOG_OUTPUT_CHARS": 12000, "LOG_OUTPUT_BYTES": 12000}',
+    'exec(compile(ast.Module(body=nodes, type_ignores=[]), "runner-functions", "exec"), scope)',
+    'assert scope["diagnostic"]("fixture.log") == "final error"'
+  ].join('\n');
+  const r = spawnSync('python3', ['-c', code, runner], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
 test('successful desktop readiness and UI script flow remains intact', () => {
   const r = execute();
   assert.equal(r.status, 0, r.output); assert.match(r.output, /fake-ui.py: passed/);
@@ -71,6 +104,7 @@ test('script timeout reports effective configured timeout', () => {
 test('readiness timeout includes bounded Electron diagnostics', () => {
   const r = execute({ electron: 'echo "readiness diagnostic" >&2; sleep 2' });
   assert.notEqual(r.status, 0); assert.match(r.output, /did not become ready/); assert.match(r.output, /readiness diagnostic/);
+  assert.match(r.output, /last readiness error: URLError/);
 });
 
 test('missing log is explicit and large log retains bounded useful complete tail', () => {
