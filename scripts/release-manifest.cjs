@@ -51,9 +51,17 @@ function artifactKind(name) {
 }
 
 function collectArtifacts(distDir, version) {
-  const allowed = /(?:\.(?:AppImage|deb|rpm|tar\.gz|zip)|-sbom\.cdx\.json)$/u;
+  const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  // Package names, legacy source archives, shipped source archives and SBOMs.
+  // Anchor the whole grammar so stable versions cannot also select prereleases.
+  const versionedArtifact = new RegExp(`^(?:${[
+    `Aux-Command-${escapedVersion}-(?:x64|x86_64|amd64)\\.(?:AppImage|deb|rpm)`,
+    `Aux-Command-${escapedVersion}\\.(?:tar\\.gz|zip)`,
+    `aux-command-${escapedVersion}-source\\.(?:tar\\.gz|zip)`,
+    `aux-command-${escapedVersion}-sbom\\.cdx\\.json`
+  ].join('|')})$`, 'u');
   return fs.readdirSync(distDir)
-    .filter((name) => /^latest.*\.ya?ml$/u.test(name) || (name.includes(version) && allowed.test(name)))
+    .filter((name) => /^latest.*\.ya?ml$/u.test(name) || versionedArtifact.test(name))
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
       const filename = path.join(distDir, name);
