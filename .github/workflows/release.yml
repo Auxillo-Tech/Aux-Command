@@ -75,6 +75,9 @@ jobs:
       - name: Install locked Electron runtime
         run: node node_modules/electron/install.js
 
+      - name: Enable the Electron SUID sandbox helper on the runner
+        run: bash scripts/ci-enable-electron-sandbox.sh
+
       - name: Audit dependency graphs and registry signatures
         run: |
           npm audit --omit=dev --audit-level=moderate
