@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { KnownHostService, displayFingerprint, normalizeFingerprintHex } = require('../src/main/services/known-host-service.cjs');
 
 const profile = { id: 'server-1', name: 'Server', host: 'server.example', port: 22 };
@@ -127,4 +128,37 @@ test('rejects malformed fingerprints and safely stores prototype-like host names
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+
+test('OpenSSH revocation overrides a remembered host key without prompting', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-known-host-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'known_hosts');
+  fs.writeFileSync(file, '');
+  // Synthetic SSH wire-format ed25519 key, never a customer key.
+  const keyBlob = Buffer.concat([
+    Buffer.from([0, 0, 0, 11]), Buffer.from('ssh-ed25519'),
+    Buffer.from([0, 0, 0, 32]), Buffer.alloc(32, 0x42)
+  ]);
+  const fingerprint = createHash('sha256').update(keyBlob).digest('hex');
+  let promptCount = 0;
+  const service = new KnownHostService(directory, {
+    request: async () => {
+      promptCount += 1;
+      assert.equal(promptCount, 1, 'only initial trust may prompt');
+      return { accept: true, remember: true };
+    }
+  }, { knownHostsFiles: () => [file] });
+
+  assert.equal(await service.verify(profile, fingerprint, keyBlob), true);
+  assert.equal(promptCount, 1);
+  const persisted = JSON.parse(fs.readFileSync(path.join(directory, 'known-hosts.json'), 'utf8'));
+  assert.equal(persisted.hosts['server.example:22'].fingerprintHex, fingerprint);
+  assert.equal(await service.verify(profile, fingerprint, keyBlob), true);
+  assert.equal(promptCount, 1, 'a non-revoked cached match remains trusted');
+
+  fs.writeFileSync(file, `@revoked ${profile.host} ssh-ed25519 ${keyBlob.toString('base64')}\n`);
+  await assert.rejects(service.verify(profile, fingerprint, keyBlob), /@revoked/u);
+  assert.equal(promptCount, 1, 'revocation must not offer a trust prompt');
 });

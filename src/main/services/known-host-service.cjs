@@ -43,9 +43,9 @@ class KnownHostService {
       && Object.prototype.hasOwnProperty.call(hosts, key)
       ? hosts[key]
       : undefined;
-    if (known?.fingerprintHex === fingerprintHex) return true;
     const openssh = keyBlob ? checkOpenSshKnownHosts(profile.host, profile.port, keyBlob, this.knownHostsFiles(profile)) : { trusted: false, revoked: false, conflicts: [] };
     if (openssh.revoked) throw new Error('This host key is marked @revoked in OpenSSH known_hosts');
+    if (known?.fingerprintHex === fingerprintHex) return true;
     if (openssh.trusted && !known) return true;
     const previousHex = known?.fingerprintHex || openssh.conflicts[0] || '';
 

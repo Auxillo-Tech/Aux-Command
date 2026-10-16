@@ -68,3 +68,12 @@ test('release-pinned packaging carries a real AppImage checksum, not a placehold
   // The from-source AUR build legitimately uses SKIP (git tag provides integrity).
   assert.match(read('packaging/aur/aux-command/PKGBUILD'), /sha256sums=\('SKIP'\)/u);
 });
+
+
+test('flatpak pins the published v0.4.0 AppImage independently of the source version', () => {
+  const manifest = read('packaging/flatpak/tech.auxillo.command.yml');
+  const source = manifest.match(/url: (\S+)\s+sha256: ([0-9a-f]{64})\s+dest-filename: Aux-Command\.AppImage/u);
+  assert.ok(source, 'AppImage URL and digest must be pinned together');
+  assert.equal(source[1], 'https://github.com/Auxillo-Tech/Aux-Command/releases/download/v0.4.0/Aux-Command-0.4.0-x86_64.AppImage');
+  assert.equal(source[2], '8cde5ab68c9186ffe52d86eedb6525b1f1a1cb3bad15f3f0c886ceda9ddd044a');
+});
