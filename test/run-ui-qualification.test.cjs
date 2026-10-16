@@ -6,7 +6,9 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const runner = path.resolve(__dirname, '../scripts/run-ui-qualification.py');
 
-function execute({ electron, script = 'raise SystemExit(0)', serverPrelude = '', env = {} } = {}) {
+// Only the timeout test needs a tight script budget; interpreter start-up on a
+// loaded runner can take longer than 100 ms, so every other case gets 30 s.
+function execute({ electron, script = 'raise SystemExit(0)', serverPrelude = '', env = {}, scriptTimeout = '30' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ui-qualification-test-'));
   const bin = path.join(dir, 'bin'); fs.mkdirSync(bin);
   const fakeElectron = path.join(bin, 'fake-electron');
@@ -28,7 +30,7 @@ function execute({ electron, script = 'raise SystemExit(0)', serverPrelude = '',
   const result = spawnSync('python3', [runner], {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 5000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, AUX_PACKAGE_EXECUTABLE: fakeElectron,
-      AUX_UI_SCRIPTS: scriptPath, AUX_UI_SCRIPT_TIMEOUT: '0.1', AUX_UI_READY_TIMEOUT: '0.5',
+      AUX_UI_SCRIPTS: scriptPath, AUX_UI_SCRIPT_TIMEOUT: scriptTimeout, AUX_UI_READY_TIMEOUT: '0.5',
       AUX_TEST_PID_PATH: path.join(dir, 'child.json'), ...env }
   });
   const output = result.stdout + result.stderr;
@@ -108,13 +110,19 @@ test('successful desktop readiness and UI script flow remains intact', () => {
   assert.equal(r.status, 0, r.output); assert.match(r.output, /fake-ui.py: passed/);
 });
 
+test('a slow-starting but passing UI script is not mistaken for a timeout', () => {
+  // 300 ms exceeds the old fixed 100 ms budget that made this flow flake on busy runners.
+  const r = execute({ script: 'import time; time.sleep(0.3)' });
+  assert.equal(r.status, 0, r.output); assert.match(r.output, /fake-ui.py: passed/);
+});
+
 test('script failure reports applicable log and preserves nonzero result', () => {
   const r = execute({ script: 'raise SystemExit(9)' });
   assert.notEqual(r.status, 0); assert.match(r.output, /fake-ui.py failed/); assert.match(r.output, /fake-ui.py.log/);
 });
 
 test('script timeout reports effective configured timeout', () => {
-  const r = execute({ script: 'import time; time.sleep(2)' });
+  const r = execute({ script: 'import time; time.sleep(2)', scriptTimeout: '0.1' });
   assert.notEqual(r.status, 0); assert.match(r.output, /timed out after 0\.1 seconds/i); assert.match(r.output, /fake-ui.py.log/);
 });
 
@@ -137,13 +145,13 @@ function spawnStubbornChild(detached) {
   ].join('\n');
 }
 
-for (const [name, script, expectedStatus] of [
-  ['success', 'raise SystemExit(0)', 0],
-  ['script failure', 'raise SystemExit(9)', 1],
-  ['script timeout', 'import time; time.sleep(2)', 1]
+for (const [name, script, expectedStatus, scriptTimeout] of [
+  ['success', 'raise SystemExit(0)', 0, '30'],
+  ['script failure', 'raise SystemExit(9)', 1, '30'],
+  ['script timeout', 'import time; time.sleep(2)', 1, '0.1']
 ]) {
   test(`reaps stubborn Electron descendants after ${name}`, () => {
-    const r = execute({ serverPrelude: spawnStubbornChild(false), script });
+    const r = execute({ serverPrelude: spawnStubbornChild(false), script, scriptTimeout });
     assert.equal(r.status, expectedStatus, r.output);
     assert.deepEqual(r.childState, { exists: false }, 'Electron descendant survived cleanup');
   });
