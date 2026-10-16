@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -65,6 +66,41 @@ def fail(message, log_path):
     raise RuntimeError(message)
 
 
+def start_guarded(command, output):
+    """Use the existing subreaper so detached test children remain owned."""
+    executable = shutil.which(command[0]) or command[0]
+    return subprocess.Popen(
+        [
+            sys.executable,
+            str(root / "src/main/helpers/process_guard.py"),
+            "--parent-pid",
+            str(os.getpid()),
+            "--",
+            executable,
+            *command[1:],
+        ],
+        cwd=root,
+        env=env,
+        stdout=output,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def stop_guarded(process):
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=5)
+        raise RuntimeError(
+            "Process guard did not finish cleanup within 5 seconds"
+        ) from exc
+
+
 with socket.socket() as sock:
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -98,18 +134,14 @@ script_timeout = float(os.environ.get("AUX_UI_SCRIPT_TIMEOUT", "240"))
 ready_timeout = float(os.environ.get("AUX_UI_READY_TIMEOUT", "20"))
 process = None
 with log_path.open("w") as log:
-    process = subprocess.Popen(
+    process = start_guarded(
         ["xvfb-run", "-a"]
         + command
         + [
             "--remote-debugging-port=" + str(port),
             "--remote-allow-origins=http://127.0.0.1:" + str(port),
         ],
-        cwd=root,
-        env=env,
-        stdout=log,
-        stderr=log,
-        start_new_session=True,
+        log,
     )
 try:
     deadline = time.monotonic() + ready_timeout
@@ -145,15 +177,11 @@ try:
         script_log = logdir / (name + ".log")
         try:
             with script_log.open("w") as output:
-                result = subprocess.run(
-                    [sys.executable, str(script_path)],
-                    cwd=root,
-                    env=env,
-                    stdout=output,
-                    stderr=subprocess.STDOUT,
-                    timeout=script_timeout,
-                    check=False,
-                )
+                result = start_guarded([sys.executable, str(script_path)], output)
+                try:
+                    result.wait(timeout=script_timeout)
+                finally:
+                    stop_guarded(result)
         except subprocess.TimeoutExpired:
             fail(
                 name + " timed out after " + str(script_timeout) + " seconds",
@@ -167,13 +195,5 @@ except RuntimeError:
     sys.exit(1)
 finally:
     if process is not None:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+        stop_guarded(process)
 print("Evidence: " + str(logdir))
