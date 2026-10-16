@@ -31,7 +31,7 @@
     "@xterm/xterm": "6.0.0",
     "basic-ftp": "6.2.3",
     "electron-updater": "6.8.9",
-    "openpgp": "6.3.1",
+    "openpgp": "6.3.2",
     "ssh2": "1.17.0",
     "ws": "^8.21.1"
   },
