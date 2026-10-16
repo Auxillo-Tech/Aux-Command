@@ -60,14 +60,22 @@ class RemoteStream extends Readable {
   }
 }
 
-function fixture(t, { chunks = [], size = 0, mode = 0o100644, statError, openError } = {}) {
+function attributesFor(size, mode) {
+  return { size, mode, isDirectory: () => (mode & 0o170000) === 0o040000,
+    isFile: () => (mode & 0o170000) === 0o100000 };
+}
+
+// linkMode/linkSize describe what lstat reports for the path itself; stat follows
+// symbolic links like a real SFTP server, so by default both agree.
+function fixture(t, { chunks = [], size = 0, mode = 0o100644, linkMode = mode, linkSize = size, statError, openError } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-sftp-read-test-'));
   const streams = [];
-  const calls = { stat: [], stream: [], fastGet: [] };
-  const attrs = { size, mode, isDirectory: () => (mode & 0o170000) === 0o040000,
-    isFile: () => (mode & 0o170000) === 0o100000 };
+  const calls = { stat: [], lstat: [], stream: [], fastGet: [] };
+  const attrs = attributesFor(size, mode);
+  const linkAttrs = attributesFor(linkSize, linkMode);
   const sftp = {
     stat(remote, callback) { calls.stat.push(remote); callback(statError || null, attrs); },
+    lstat(remote, callback) { calls.lstat.push(remote); callback(statError || null, linkAttrs); },
     createReadStream(remote, options) {
       calls.stream.push(remote);
       if (openError) throw openError;
@@ -199,6 +207,16 @@ for (const [kind, mode] of [
     f.clean();
   });
 }
+
+test('symlink to a small regular file rejects: stat follows the link, lstat must not', async (t) => {
+  // A conforming server returns the regular target from stat and the link from
+  // lstat. Only checking stat would download and return the target's content.
+  const f = fixture(t, { size: 1, mode: 0o100644, linkMode: 0o120777, linkSize: 11, chunks: [Buffer.from('x')] });
+  await assert.rejects(f.read(4), /regular|only.*files|not.*file/iu);
+  assert.deepEqual(f.calls.lstat, ['/remote/text.txt'], 'the path itself must be inspected with lstat');
+  f.notDownloaded();
+  f.clean();
+});
 
 test('stat failure rejects before opening a remote stream', async (t) => {
   const f = fixture(t, { statError: new Error('synthetic stat failure') });
