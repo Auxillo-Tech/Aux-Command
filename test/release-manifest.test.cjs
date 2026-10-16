@@ -73,6 +73,133 @@ test('release manifest script writes deterministic artifact metadata and checksu
   }
 });
 
+// Exercise selection through the public CLI, with unique bytes for every input.
+function versionedManifestFixtures(version) {
+  const artifacts = {};
+  const add = (name, kind) => {
+    artifacts[name] = { kind, bytes: Buffer.from(`fixture: ${name}\nπ\0payload\n`) };
+  };
+  for (const arch of ['x64', 'x86_64', 'amd64']) {
+    for (const [extension, kind] of [['AppImage', 'appimage'], ['deb', 'deb'], ['rpm', 'rpm']]) {
+      add(`Aux-Command-${version}-${arch}.${extension}`, kind);
+    }
+  }
+  add(`Aux-Command-${version}.tar.gz`, 'source-tarball');
+  add(`Aux-Command-${version}.zip`, 'source-zip');
+  // Shipped source archive names from scripts/source-archives.sh, alongside legacy fixtures.
+  add(`aux-command-${version}-source.tar.gz`, 'source-tarball');
+  add(`aux-command-${version}-source.zip`, 'source-zip');
+  add(`aux-command-${version}-sbom.cdx.json`, 'cyclonedx-sbom');
+  return artifacts;
+}
+
+function writeManifestFixtures(directory, artifacts) {
+  for (const [name, { bytes }] of Object.entries(artifacts)) {
+    fs.writeFileSync(path.join(directory, name), bytes);
+  }
+}
+
+function runManifestCli(directory, version) {
+  return spawnSync(process.execPath, [
+    path.join(root, 'scripts/release-manifest.cjs'),
+    '--dist', directory, '--version', version, '--no-sign'
+  ], { encoding: 'utf8', timeout: 10000 });
+}
+
+function assertManifestSelection(directory, version, expected) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'release-manifest.json'), 'utf8'));
+  const names = Object.keys(expected).sort((a, b) => a.localeCompare(b));
+  assert.equal(manifest.version, version);
+  assert.deepEqual(manifest.artifacts.map((artifact) => artifact.name), names);
+  for (const artifact of manifest.artifacts) {
+    assert.equal(artifact.kind, expected[artifact.name].kind, artifact.name);
+    assert.equal(artifact.size, expected[artifact.name].bytes.length, artifact.name);
+    assert.equal(artifact.sha256, sha256(expected[artifact.name].bytes), artifact.name);
+  }
+  assert.equal(fs.readFileSync(path.join(directory, 'SHA256SUMS'), 'utf8'),
+    names.map((name) => `${sha256(expected[name].bytes)}  ${name}\n`).join(''));
+}
+
+function assertManifestInputsUnchanged(directory, inputs) {
+  for (const [name, { bytes }] of Object.entries(inputs)) {
+    assert.ok(fs.readFileSync(path.join(directory, name)).equals(bytes), `${name} must remain unchanged`);
+  }
+}
+
+const selectionVersions = ['0.5.0', '10.5.0', '0.5.01', '0.5.0-beta.1', '0.5.0-beta.1+build.2'];
+for (const version of selectionVersions) {
+  test(`release manifest selects exactly ${version} from mixed-version artifacts`, () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-exact-version-'));
+    try {
+      const inputs = Object.assign({}, ...selectionVersions.map(versionedManifestFixtures),
+        // These catch unescaped dots and incomplete prerelease boundaries.
+        versionedManifestFixtures('0x5x0'),
+        versionedManifestFixtures('0.5.0-beta.10'),
+        versionedManifestFixtures('0.5.0-betaX1'));
+      for (const name of [
+        `backup-Aux-Command-${version}-x64.AppImage`,
+        `Aux-Command-${version}-x64.AppImage.zip`,
+        `Aux-Command-${version}.tar.gz.zip`,
+        `aux-command-${version}-sbom.cdx.json.zip`,
+        `notes-${version}.zip`,
+        `Aux-Command-${version}-x64.AppImage.blockmap`,
+        'unrelated.txt'
+      ]) inputs[name] = { bytes: Buffer.from(`unrelated: ${name}\n`) };
+      writeManifestFixtures(directory, inputs);
+      const result = runManifestCli(directory, version);
+      // Check preservation even when a selection assertion fails on the old CLI.
+      assertManifestInputsUnchanged(directory, inputs);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assertManifestSelection(directory, version, versionedManifestFixtures(version));
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const includeMatchingArtifacts of [true, false]) {
+  test(`release manifest includes updater metadata ${includeMatchingArtifacts ? 'alongside exact-version artifacts' : 'without matching versioned artifacts'}`, () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-updater-selection-'));
+    try {
+      const metadata = {};
+      for (const name of ['latest.yml', 'latest-linux.yml', 'latest-linux.yaml', 'latest-other.yaml']) {
+        metadata[name] = { kind: 'updater-metadata', bytes: Buffer.from('version: 10.5.0\n') };
+      }
+      const expected = { ...metadata, ...(includeMatchingArtifacts ? versionedManifestFixtures('0.5.0') : {}) };
+      const inputs = { ...expected, ...versionedManifestFixtures('0.5.0-beta.1') };
+      writeManifestFixtures(directory, inputs);
+      const result = runManifestCli(directory, '0.5.0');
+      assertManifestInputsUnchanged(directory, inputs);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assertManifestSelection(directory, '0.5.0', expected);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const includeWrongVersionArtifacts of [true, false]) {
+  test(`release manifest preserves existing outputs on empty selection (${includeWrongVersionArtifacts ? 'wrong-version inputs' : 'no artifacts'})`, () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-empty-selection-'));
+    try {
+      const inputs = includeWrongVersionArtifacts
+        ? Object.assign({}, ...selectionVersions.filter((version) => version !== '0.5.0').map(versionedManifestFixtures))
+        : {};
+      inputs['unrelated.txt'] = { bytes: Buffer.from('keep this file\0\n') };
+      inputs['release-manifest.json'] = { bytes: Buffer.from('{"previous":"manifest"}\n') };
+      inputs.SHA256SUMS = { bytes: Buffer.from('previous checksum bytes\r\n') };
+      writeManifestFixtures(directory, inputs);
+      const result = runManifestCli(directory, '0.5.0');
+      assertManifestInputsUnchanged(directory, inputs);
+      assert.equal(result.error, undefined);
+      assert.equal(result.signal, null);
+      assert.notEqual(result.status, 0, 'an empty selection must fail');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
 test('package exposes release manifest script', () => {
   assert.equal(packageJson.scripts['release:manifest'], 'AUX_COMMAND_GPG_KEY=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/release-metadata.cjs && bash scripts/source-archives.sh && node scripts/release-manifest.cjs');
   assert.equal(packageJson.scripts['release:metadata'], 'node scripts/release-metadata.cjs');
