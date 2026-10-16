@@ -6,7 +6,7 @@ const http = require('node:http');
 const https = require('node:https');
 const { randomUUID } = require('node:crypto');
 const { JsonStore } = require('../lib/json-store.cjs');
-const { expandHome, normalizeProfile } = require('../lib/validation.cjs');
+const { cleanString, expandHome, normalizeProfile } = require('../lib/validation.cjs');
 
 const MAX_SYNC_BYTES = 5_000_000;
 const MAX_SYNC_PROFILES = 1000;
@@ -115,10 +115,16 @@ class ProfileSync {
       const localProfiles = [...this.profileStore.list()];
       // Stage every entry first so one invalid profile aborts the sync before
       // anything is written, instead of leaving a half-applied import.
-      const staged = [];
+      // The first persisted match wins; older duplicate records are left alone.
+      // Each tuple is saved once, and conflicting normalized updates abort the
+      // whole batch. total remains the source row count for API compatibility.
+      const staged = new Map();
       for (const [index, remote] of remoteProfiles.entries()) {
         if (!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new Error(`Sync profile entry ${index + 1} must be an object`);
         const {
+          id: _id,
+          createdAt: _createdAt,
+          updatedAt: _updatedAt,
           credentialId: _credentialId,
           credentialKind: _credentialKind,
           password: _password,
@@ -127,37 +133,49 @@ class ProfileSync {
           privateKey: _privateKey,
           ...cleanRemote
         } = remote;
-        // Stored profiles hold normalized (trimmed) values; the remote entry
-        // must be matched the same way or every cycle re-imports it as new.
-        const remoteName = String(cleanRemote.name || '').trim();
-        const remoteHost = String(cleanRemote.host || '').trim();
-        const remoteProtocol = String(cleanRemote.protocol || '').trim();
-        if (remoteProtocol === 'local') throw new Error(`Sync profile entry ${index + 1} is a local shell; local shells are never synchronized`);
         for (const field of LOCAL_ONLY_FIELDS) delete cleanRemote[field];
-        const existing = localProfiles.find((profile) =>
-          profile.id !== 'local-shell'
-          && profile.name === remoteName
-          && profile.host === remoteHost
-          && profile.protocol === remoteProtocol
-        );
-        const candidate = {
-          ...(existing || {}),
-          ...cleanRemote,
-          id: existing?.id || randomUUID(),
-          credentialId: existing?.credentialId || '',
-          credentialKind: existing?.credentialKind || 'password'
-        };
+        let candidate;
+        let existing;
+        let key;
         try {
-          normalizeProfile(candidate, candidate.id);
+          // Use the same defaults, trimming and protocol case as persistence,
+          // while retaining partial-update semantics for non-identity fields.
+          const name = cleanString(cleanRemote.name || cleanRemote.host, 'name', { required: true, max: 120 });
+          const host = cleanString(cleanRemote.host, 'host', { max: 255 });
+          const protocol = cleanString(cleanRemote.protocol || 'ssh', 'protocol', { required: true, max: 16 }).toLowerCase();
+          if (protocol === 'local') throw new Error('local shells are never synchronized');
+          key = JSON.stringify([name, host, protocol]);
+          existing = localProfiles.find((profile) =>
+            profile.id !== 'local-shell'
+            && profile.name === name
+            && profile.host === host
+            && profile.protocol === protocol
+          );
+          candidate = normalizeProfile({
+            ...(existing || {}),
+            ...cleanRemote,
+            name, host, protocol,
+            id: existing?.id || staged.get(key)?.candidate.id || randomUUID(),
+            credentialId: existing?.credentialId || '',
+            credentialKind: existing?.credentialKind || 'password'
+          });
         } catch (error) {
-          throw new Error(`Sync profile entry ${index + 1} (${remoteName || 'unnamed'}) is invalid: ${error?.message || error}`);
+          throw new Error(`Sync profile entry ${index + 1} is invalid: ${error?.message || error}`);
         }
-        staged.push({ candidate, existing });
+        // IDs and timestamps are local persistence metadata, not shared data.
+        const { id: _candidateId, createdAt: _candidateCreatedAt, updatedAt: _candidateUpdatedAt, ...shared } = candidate;
+        const fingerprint = JSON.stringify(shared);
+        const previous = staged.get(key);
+        if (previous) {
+          if (previous.fingerprint !== fingerprint) throw new Error(`Sync profile entry ${index + 1} conflicts with an earlier entry for ${candidate.name}`);
+          continue;
+        }
+        staged.set(key, { candidate, existing, fingerprint });
       }
 
       let added = 0;
       let updated = 0;
-      for (const { candidate, existing } of staged) {
+      for (const { candidate, existing } of staged.values()) {
         const saved = this.profileStore.save(candidate);
         if (existing) {
           Object.assign(existing, saved);
