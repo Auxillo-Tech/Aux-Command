@@ -119,6 +119,17 @@
   // "untracked" whenever the shell might have rewritten the line in a way we
   // cannot see (history recall, tab completion, cursor movement), and recovers
   // on the next Enter, Ctrl+C or Ctrl+U.
+  // Ctrl+W: drop the last word and the whitespace after it. One scan from the
+  // end does this; the old /\S+\s*$/ expression re-walked a long word from every
+  // start position.
+  function dropLastWord(line) {
+    let end = line.length;
+    while (end > 0 && /\s/u.test(line[end - 1])) end -= 1;
+    const wordEnd = end;
+    while (end > 0 && !/\s/u.test(line[end - 1])) end -= 1;
+    return end === wordEnd ? line : line.slice(0, end);
+  }
+
   class CommandLineMirror {
     constructor() {
       this.line = '';
@@ -144,7 +155,7 @@
           this.line = '';
           this.tracked = true;
         } else if (char === '\x17') { // Ctrl+W
-          this.line = this.line.replace(/\S+\s*$/u, '');
+          this.line = dropLastWord(this.line);
         } else if (char === '\x03') { // Ctrl+C
           this.line = '';
           this.tracked = true;
@@ -179,14 +190,66 @@
     }
   }
 
+  // The rm and dd rules are matched by small single-pass functions rather than
+  // one regular expression: a regex starts a fresh match at every `rm` or `dd`
+  // in the line and re-walks the same option run each time, so pasted input such
+  // as "-rm -rm -rm ..." took seconds. These functions tokenise the line once and
+  // answer every start from precomputed suffix tables, so the work stays linear
+  // in the length of the line. They accept exactly what the old expressions did.
+  const RM_WORD = /\brm$/iu;
+  const RM_STRONG_OPTION = /^(?:-(?=[a-eg-qs-z]*[rf])[a-z]+|--[a-z-]+)$/iu;
+  const RM_PROTECTED_TARGET = /^(?:"?\/"?\*?|~\/?\*?|"?\$\{?HOME\}?"?\/?\*?)$/iu;
+  const RM_NO_PRESERVE_ROOT = /^--no-preserve-root/iu;
+
+  function matchesRmRoot(text) {
+    const tokens = text.match(/\S+/gu) || [];
+    const count = tokens.length;
+    // An option is a "-" word followed by more text; the last word has nothing
+    // after it, so it can only be a target.
+    const isOption = (index) => index < count - 1 && tokens[index].charCodeAt(0) === 45;
+    // runEnd[k]: first word at or after k that is not an option.
+    // nextStrong[k] / nextNoPreserve[k]: first qualifying word at or after k.
+    const runEnd = new Array(count + 1);
+    const nextStrong = new Array(count + 2);
+    const nextNoPreserve = new Array(count + 2);
+    runEnd[count] = count;
+    nextStrong[count] = nextStrong[count + 1] = count;
+    nextNoPreserve[count] = nextNoPreserve[count + 1] = count;
+    for (let index = count - 1; index >= 0; index -= 1) {
+      runEnd[index] = isOption(index) ? runEnd[index + 1] : index;
+      nextStrong[index] = isOption(index) && RM_STRONG_OPTION.test(tokens[index]) ? index : nextStrong[index + 1];
+      nextNoPreserve[index] = RM_NO_PRESERVE_ROOT.test(tokens[index]) ? index : nextNoPreserve[index + 1];
+    }
+    for (let index = 0; index < count - 1; index += 1) {
+      if (!RM_WORD.test(tokens[index])) continue;
+      const end = runEnd[index + 1];
+      if (end < index + 2) continue; // needs at least one option after rm
+      if (nextStrong[index + 1] >= end) continue; // needs a recursive, forced or long option
+      if (RM_PROTECTED_TARGET.test(tokens[end])) return true;
+      if (nextNoPreserve[index + 2] <= end) return true;
+    }
+    return false;
+  }
+
+  const DD_WORD = /\bdd\b/iu;
+  const DD_DEVICE_TARGET = /\bof=\/dev\//giu;
+
+  function matchesDdToDevice(text) {
+    // Within one command segment, a dd word followed later by of=/dev/.
+    for (const segment of text.split(/[|;&]/u)) {
+      const dd = DD_WORD.exec(segment);
+      if (!dd) continue;
+      DD_DEVICE_TARGET.lastIndex = dd.index + dd[0].length;
+      if (DD_DEVICE_TARGET.test(segment)) return true;
+    }
+    return false;
+  }
+
   const DANGER_RULES = [
     // Targets must be the whole root or home path (`rm -rf /tmp/x` is fine);
-    // the options are consumed once, with a lookahead checking that one of them
-    // is recursive, forced or a long option, so matching stays linear however
-    // long the line is.
     // short, combined and long options are all recognised.
-    { pattern: /\brm\s+(?=(?:-\S*\s+)*?(?:-(?=[a-eg-qs-z]*[rf])[a-z]+|--[a-z-]+)\s)(?:-\S*\s+)+(?:"?\/"?\*?(?=\s|$)|~\/?\*?(?=\s|$)|"?\$\{?HOME\}?"?\/?\*?(?=\s|$)|--no-preserve-root)/iu, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
-    { pattern: /\bdd\b[^|;&]*\bof=\/dev\//iu, reason: 'Writes raw data directly over a block device.' },
+    { pattern: { test: matchesRmRoot }, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
+    { pattern: { test: matchesDdToDevice }, reason: 'Writes raw data directly over a block device.' },
     { pattern: /\bmkfs(\.[a-z0-9]+)?\b/iu, reason: 'Creates a new filesystem, destroying everything on the target device.' },
     { pattern: /(^|[|;&]\s*)>(\s*)\/dev\/sd[a-z]/iu, reason: 'Truncates a raw disk device.' },
     { pattern: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/u, reason: 'Fork bomb — exhausts the machine until it hangs.' },

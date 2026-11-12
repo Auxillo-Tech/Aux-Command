@@ -387,3 +387,59 @@ test('dangerCheck recognises option spellings and stays fast on very long input'
   const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
   assert.ok(elapsedMs < 1000, `checking took ${elapsedMs} ms`);
 });
+
+test('dangerCheck stays linear on repeated rm and dd starts and keeps its verdicts', () => {
+  // Every "-rm" or ".rm" is a word boundary and so a new place for an rm match
+  // to start; a pattern that re-walks the option run each time takes seconds.
+  const repeated = [
+    `${'-rm '.repeat(40000)}x`,
+    `${'-rm -x '.repeat(40000)}x`,
+    `${'.rm '.repeat(40000)}x`,
+    `${'dd '.repeat(40000)}x`,
+    `${'of=x dd '.repeat(40000)}x`
+  ];
+  for (const command of repeated) {
+    const started = process.hrtime.bigint();
+    assert.equal(dangerCheck(command), null, 'false positive for a long repeated line');
+    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.ok(elapsedMs < 500, `checking ${command.slice(0, 12)}... took ${elapsedMs} ms`);
+  }
+  // The same repetition with a real target at the end is still caught, quickly.
+  const started = process.hrtime.bigint();
+  assert.ok(dangerCheck(`${'-rm -x '.repeat(40000)}; rm -rf /`), 'missed rm -rf / after a long repeated run');
+  assert.ok(dangerCheck(`rm ${'-v '.repeat(40000)}-rf /`), 'missed rm -rf / after a long option run');
+  assert.ok(dangerCheck(`${'dd '.repeat(40000)}of=/dev/sda`), 'missed dd to a device after many dd words');
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 1500, `checking caught lines took ${elapsedMs} ms`);
+  for (const command of [
+    'rm -v -rf /', 'rm -Rf /', 'rm --recursive --force /', 'sudo rm -rf /', 'rm -rf / --no-preserve-root',
+    'echo ok && rm -rf ~/', 'rm -rf "$HOME"', 'rm -r -v "/"*', '/bin/rm -rf /', 'RM -RF /',
+    'dd of=/dev/sda', 'dd if=x | dd of=/dev/sda', 'dd if=/dev/zero bs=1M of=/dev/nvme0n1'
+  ]) {
+    assert.ok(dangerCheck(command), `missed: ${command}`);
+  }
+  for (const command of [
+    'rm -rf /tmp/x', 'rm -v /', 'chmod -R 777 /var', 'chown -R root:root /home', 'rm -rf ~x', 'rm /',
+    'dd if=x; of=/dev/sda', 'of=/dev/sda dd', 'echo rm', 'rm'
+  ]) {
+    assert.equal(dangerCheck(command), null, `false positive for: ${command}`);
+  }
+});
+
+test('Ctrl+W removes the last word in one pass, however long the line is', () => {
+  const cases = [['ls -la /tmp', 'ls -la '], ['ls  ', ''], ['word', ''], ['   ', '   '], ['', ''], ['a b \t', 'a ']];
+  for (const [before, after] of cases) {
+    const mirror = new CommandLineMirror();
+    mirror.line = before;
+    mirror.feed('\x17');
+    assert.equal(mirror.line, after, `Ctrl+W on ${JSON.stringify(before)}`);
+  }
+  for (const line of [`${'a'.repeat(40000)} x`, `${'a'.repeat(40000)} `]) {
+    const mirror = new CommandLineMirror();
+    mirror.line = line;
+    const started = process.hrtime.bigint();
+    mirror.feed('\x17');
+    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.ok(elapsedMs < 200, `Ctrl+W took ${elapsedMs} ms`);
+  }
+});
