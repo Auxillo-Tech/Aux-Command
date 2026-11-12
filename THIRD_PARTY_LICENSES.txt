@@ -163,7 +163,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE
 
 ==============================================================================
-basic-ftp@6.2.2
+basic-ftp@6.2.6
 ==============================================================================
 Copyright (c) 2019 Patrick Juchli
 
@@ -302,7 +302,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 ==============================================================================
-electron-updater@6.8.9
+electron-updater@6.8.11
 ==============================================================================
 The MIT License (MIT)
 
@@ -442,7 +442,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-openpgp@6.3.1
+openpgp@6.3.2
 ==============================================================================
 GNU LESSER GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
@@ -731,7 +731,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 
 ==============================================================================
-ws@8.21.1
+ws@8.22.2
 ==============================================================================
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
 Copyright (c) 2013 Arnout Kazemier and contributors

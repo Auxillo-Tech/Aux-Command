@@ -158,18 +158,18 @@ function initializeServices() {
   const tunnelService = new TunnelService(profileStore, getWindow);
   const sftpService = new SftpService(vaultService, knownHostService, promptBroker, getWindow);
   const ftpService = new FtpService(vaultService, getWindow);
-  const externalService = new ExternalService({ knownHostService });
+  const externalService = new ExternalService({ knownHostService, vaultService, promptBroker });
   const systemService = new SystemService();
   const updateService = new UpdateService(app, getWindow, { recoveryService });
   const transferQueue = new TransferQueue(getWindow);
   const vncBridge = new VncBridgeService();
-  const rdpEmbed = new RdpEmbedService({ vaultService, vncBridge, knownHostService });
+  const rdpEmbed = new RdpEmbedService({ vaultService, vncBridge, knownHostService, promptBroker });
   const networkTools = new NetworkToolService();
   const reachabilityService = new ReachabilityService();
   const sshKeyService = new SshKeyService();
   const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
   const liveMonitor = new LiveMonitorService();
-  const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow, knownHostService });
+  const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow, knownHostService, promptBroker });
   const aiAssist = new AiAssistService(settingsStore, vaultService);
 
   // Route managed transfers through the correct protocol service with full profile data.

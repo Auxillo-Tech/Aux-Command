@@ -1521,6 +1521,9 @@
       } catch (error) {
         // A rejected or unreadable server certificate is final: the external
         // client would hit the same server and ask again.
+        // So is a cancelled or refused sign-in: say why instead of opening a
+        // second client that would fail the same way.
+        if (/RDP sign-in/u.test(errorMessage(error))) { toast(uiText('RDP'), errorMessage(error).replace(/^.*?(RDP sign-in)/u, '$1'), 'error'); return; }
         if (/RDP server certificate/u.test(errorMessage(error))) return;
         toast(uiText("Embedded {p0} unavailable, launching external client", { p0: kind }), errorMessage(error), 'info');
       }
@@ -3709,6 +3712,16 @@
     const secret = textInput('secret', '', { type: 'password', autocomplete: 'new-password', placeholder: hasCredential ? uiText('Stored credential exists — leave blank to keep') : uiText('Optional file-transfer credential') });
     const persistentAvailable = Boolean(state.vault?.persistentEncryptionAvailable);
 
+    // RDP has its own password row; the hidden row's controls are disabled,
+    // so the shared field names only ever submit one value.
+    const rdpSecret = textInput('secret', '', { type: 'password', autocomplete: 'new-password', placeholder: hasCredential ? uiText('Stored credential exists — leave blank to keep') : '' });
+    const rdpCredentialRow = node('div', { className: 'credential-grid full', attrs: { 'data-when': 'rdp' } }, [
+      field(uiText('Password'), rdpSecret, uiText('Used to sign in to this RDP server. Leave blank to be asked each time you connect.')),
+      node('div', { className: 'checkbox-column' }, [
+        checkbox('persistentSecret', persistentAvailable ? uiText('Store encrypted on this desktop') : uiText('Encrypted storage unavailable'), persistentAvailable, !persistentAvailable),
+        hasCredential ? checkbox('clearSecret', uiText('Remove stored credential'), false) : null
+      ])
+    ]);
     const optionsRow = node('div', { className: 'checkbox-row full', attrs: { 'data-when': 'ssh,mosh' } }, [
       checkbox('useSshConfig', uiText('Use ~/.ssh/config'), profile.useSshConfig !== false),
       checkbox('compression', uiText('Compression'), profile.compression),
@@ -3758,6 +3771,7 @@
       field(uiText('Scrollback lines'), terminalScrollback, uiText('1,000–200,000 lines.')),
       node('div', { className: 'checkbox-column', attrs: { 'data-terminal-only': '' } }, checkbox('terminalCursorBlink', uiText('Blinking cursor'), profile.terminalCursorBlink !== false)),
       credentialRow,
+      rdpCredentialRow,
       node('div', { className: 'checkbox-row full' }, checkbox('favorite', uiText('Favorite connection'), profile.favorite)),
       field(uiText('Notes'), notes, '', 'full')
     ]);
@@ -3833,7 +3847,7 @@
         agentForwarding: values.has('agentForwarding'),
         x11Forwarding: values.has('x11Forwarding'),
         credentialId: existing?.credentialId || '',
-        credentialKind: String(values.get('credentialKind') || 'password'),
+        credentialKind: values.get('protocol') === 'rdp' ? 'password' : String(values.get('credentialKind') || 'password'),
         inheritTerminalDefaults: values.has('inheritTerminalDefaults'),
         terminalTheme: String(values.get('terminalTheme') || 'aux-dark'),
         terminalFontFamily: String(values.get('terminalFontFamily') || defaultTerminalFont).trim(),
@@ -5495,7 +5509,7 @@
         field(uiText('Target host'), hostInput),
         field(uiText('Target port'), portInput),
         field(uiText('Local forwarding port'), localPortInput, uiText('Leave empty to choose a free local port.')),
-        field(uiText('Remote desktop username'), usernameInput, uiText('The native client handles any password prompt.')),
+        field(uiText('Remote desktop username'), usernameInput, uiText('Aux Command asks for the password when the connection opens.')),
         field(uiText('RDP domain'), domainInput, uiText('Windows logon domain passed to FreeRDP as /d:.'))
       ]),
       node('div', { className: 'button-row' }, connectButton),

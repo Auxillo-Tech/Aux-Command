@@ -49,7 +49,7 @@ test('CDP smoke keeps screenshot capture diagnostic-only', () => {
 });
 
 test('package exposes GitHub release update configuration', () => {
-  assert.equal(packageJson.dependencies['electron-updater'], '6.8.9');
+  assert.equal(packageJson.dependencies['electron-updater'], '6.8.11');
   assert.deepEqual(packageJson.build.publish, [{
     provider: 'github',
     owner: 'Auxillo-Tech',
@@ -81,7 +81,9 @@ test('main process hardening from the pre-release security review stays in place
   const windowsSource = fs.readFileSync(path.join(root, 'src/main/services/terminal-windows.cjs'), 'utf8');
   const rdpSource = fs.readFileSync(path.join(root, 'src/main/services/rdp-embed.cjs'), 'utf8');
   // Identity files are checked before reading so /dev/zero or a FIFO cannot hang the app.
-  assert.match(sftpSource, /if \(!stat\.isFile\(\)\) throw new Error\('not a regular file'\);\s*if \(stat\.size > 65_536\)/u);
+  const sshAuthSource = fs.readFileSync(path.join(root, 'src/main/lib/ssh-auth.cjs'), 'utf8');
+  assert.match(sshAuthSource, /if \(!stat\.isFile\(\)\) throw new Error\('not a regular file'\);\s*if \(stat\.size > 65_536\)/u);
+  assert.match(sftpSource, /readKeyFile\(keyPath\)/u);
   // Workspace backups list their startup commands before a restore.
   assert.match(ipcSource, /startupCommands \};/u);
   // Static and detached windows expose no developer tools in normal use; print has no script.

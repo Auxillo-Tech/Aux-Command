@@ -44,10 +44,27 @@ function quotePosixShellArgument(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+// Variables the AppImage launcher and Chromium add to this process. They
+// describe Aux Command, not the user's session, and would leak into every
+// shell and program started from a terminal tab.
+const APP_ONLY_ENVIRONMENT = ['APPDIR', 'APPIMAGE', 'ARGV0', 'OWD', 'CHROME_DESKTOP', 'ELECTRON_RUN_AS_NODE'];
+
+function sessionEnvironment(source = process.env) {
+  const env = { ...source };
+  // Chromium overrides the desktop name and keeps the original alongside it.
+  if (env.ORIGINAL_XDG_CURRENT_DESKTOP !== undefined) {
+    if (env.ORIGINAL_XDG_CURRENT_DESKTOP === 'undefined') delete env.XDG_CURRENT_DESKTOP;
+    else env.XDG_CURRENT_DESKTOP = env.ORIGINAL_XDG_CURRENT_DESKTOP;
+    delete env.ORIGINAL_XDG_CURRENT_DESKTOP;
+  }
+  for (const name of APP_ONLY_ENVIRONMENT) delete env[name];
+  return env;
+}
+
 function buildTerminalCommand(profileInput, { remoteCwd = '' } = {}) {
   const profile = normalizeProfile(profileInput, profileInput?.id);
   const env = {
-    ...process.env,
+    ...sessionEnvironment(),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor'
   };
@@ -183,5 +200,6 @@ module.exports = {
   defaultInfraSnippets,
   defaultLocalProfile,
   resolveHelper,
+  sessionEnvironment,
   sshBaseArgs
 };

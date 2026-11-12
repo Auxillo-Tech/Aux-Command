@@ -52,8 +52,18 @@ class JsonStore {
     fs.mkdirSync(path.dirname(this.filename), { recursive: true, mode: 0o700 });
     const temp = `${this.filename}.${process.pid}.${Date.now()}.tmp`;
     try {
-      fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+      // Flush the new contents before the rename and the rename itself after
+      // it: without this a power cut can leave an empty or missing store.
+      const fd = fs.openSync(temp, 'w', 0o600);
+      try {
+        fs.writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`);
+        fs.fsyncSync(fd);
+      } finally { fs.closeSync(fd); }
       fs.renameSync(temp, this.filename);
+      try {
+        const directory = fs.openSync(path.dirname(this.filename), 'r');
+        try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+      } catch { /* directory sync is unsupported on some filesystems */ }
       try { fs.chmodSync(this.filename, 0o600); } catch { /* best effort on non-POSIX filesystems */ }
     } catch (error) {
       try { fs.rmSync(temp, { force: true }); } catch { /* best effort cleanup */ }

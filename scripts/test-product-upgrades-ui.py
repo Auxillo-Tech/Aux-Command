@@ -71,5 +71,34 @@ try:
  c.eval('document.querySelector("input[name=rdpWidth]").value="1280";document.querySelector("input[name=rdpHeight]").value="720";document.querySelector("input[name=rdpAudio]").checked=true')
  click('.modal-footer .primary');wait('!document.querySelector(".modal")')
  rdp=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="rdp-options"))()');assert rdp['rdpWidth']==1280 and rdp['rdpHeight']==720 and rdp['rdpAudio'] is True
- print('TASK_RESULTS_CANCEL_DETACHED_REATTACH_DRAG_SPLIT_BULK_NESTED_FOLDERS_RDP_OPTIONS_PASSED')
+ # An RDP profile has its own password field; the file-transfer credential row is hidden for it.
+ def edit(name):
+  c.eval("document.querySelector('[aria-label=\"Actions for "+name+"\"]').click()")
+  c.eval("[...document.querySelectorAll('.context-menu-item')].find(b=>b.textContent.includes('Edit')).click()")
+  wait('!!document.querySelector(".modal input[name=secret]")')
+ rdp_row='.modal .credential-grid[data-when="rdp"]';ssh_row='.modal .credential-grid[data-when="ssh,ftp,ftps"]'
+ edit('RDP options fixture')
+ assert c.eval('!document.querySelector('+json.dumps(rdp_row)+').hidden && !document.querySelector('+json.dumps(rdp_row+' input[name=secret]')+').disabled')
+ assert c.eval('document.querySelector('+json.dumps(ssh_row)+').hidden && document.querySelector('+json.dumps(ssh_row+' input[name=secret]')+').disabled')
+ assert c.eval('!document.querySelector('+json.dumps(rdp_row+' select[name=credentialKind]')+')')
+ c.eval('document.querySelector('+json.dumps(rdp_row+' input[name=secret]')+').value="rdp-fixture-password"')
+ click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ rdp=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="rdp-options"))()')
+ assert rdp['credentialId'] and rdp['credentialKind']=='password' and rdp['rdpWidth']==1280
+ assert c.eval('auxCommand.vault.has('+json.dumps(rdp['credentialId'])+')') is True
+ # Reopening shows that a password is stored and lets it be removed.
+ edit('RDP options fixture')
+ assert c.eval('!!document.querySelector('+json.dumps(rdp_row+' input[name=clearSecret]')+')')
+ c.eval('document.querySelector('+json.dumps(rdp_row+' input[name=clearSecret]')+').checked=true')
+ click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ cleared=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="rdp-options"))()');assert cleared['credentialId']==''
+ assert c.eval('auxCommand.vault.has('+json.dumps(rdp['credentialId'])+')') is False
+ # An SSH profile keeps its file-transfer credential row, and saving still stores exactly one secret.
+ edit('bulk-one')
+ assert c.eval('document.querySelector('+json.dumps(rdp_row)+').hidden && !document.querySelector('+json.dumps(ssh_row)+').hidden')
+ c.eval('document.querySelector('+json.dumps(ssh_row+' input[name=secret]')+').value="ssh-fixture-password"')
+ click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ ssh=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="bulk-one"))()')
+ assert ssh['credentialId'] and c.eval('auxCommand.vault.has('+json.dumps(ssh['credentialId'])+')') is True
+ print('TASK_RESULTS_CANCEL_DETACHED_REATTACH_DRAG_SPLIT_BULK_NESTED_FOLDERS_RDP_OPTIONS_AND_PASSWORD_PASSED')
 finally:c.close()

@@ -51,3 +51,18 @@ test('does not change in-memory state when persistence fails', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('JsonStore flushes the file and its directory entry before reporting a save', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-json-store-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filename = path.join(directory, 'store.json');
+  const synced = [];
+  const original = fs.fsyncSync;
+  t.mock.method(fs, 'fsyncSync', (fd) => { synced.push(fs.fstatSync(fd).isDirectory() ? 'directory' : 'file'); return original(fd); });
+  const store = new JsonStore(filename, { value: 1 });
+  store.replace({ value: 2 });
+  assert.deepEqual(synced, ['file', 'directory']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(filename, 'utf8')), { value: 2 });
+  assert.equal(fs.statSync(filename).mode & 0o777, 0o600);
+  assert.deepEqual(fs.readdirSync(directory), ['store.json'], 'no temporary file is left behind');
+});

@@ -13,6 +13,7 @@ const { buildTerminalCommand } = require('../lib/command-builder.cjs');
 const { normalizeTerminalRequest } = require('../lib/validation.cjs');
 
 const MAX_TRANSCRIPT_BYTES = 1_048_576;
+const TRANSCRIPT_TRIM_SLACK = 262_144;
 const MAX_RECORDING_CHUNKS = 5000;
 const MAX_RECORDING_BYTES = 2_000_000;
 
@@ -32,17 +33,36 @@ function appendRecordingChunk(recording, data, offsetMs) {
   return recording;
 }
 
-function appendTranscript(session, data) {
-  const text = typeof data === 'string' ? data : String(data || '');
-  if (!text) return;
-  session.transcript = `${session.transcript}${text}`;
-  if (Buffer.byteLength(session.transcript, 'utf8') > MAX_TRANSCRIPT_BYTES) {
-    const bytes = Buffer.from(session.transcript, 'utf8');
+// The transcript keeps the most recent MAX_TRANSCRIPT_BYTES of output. Its
+// size is tracked incrementally and it is trimmed only after it has grown
+// TRANSCRIPT_TRIM_SLACK past the limit, so busy sessions do not re-encode the
+// whole megabyte for every chunk of output.
+function trimTranscript(session) {
+  const bytes = Buffer.from(session.transcript, 'utf8');
+  if (bytes.length > MAX_TRANSCRIPT_BYTES) {
     let offset = bytes.length - MAX_TRANSCRIPT_BYTES;
     while ((bytes[offset] & 0xc0) === 0x80) offset += 1;
     session.transcript = bytes.subarray(offset).toString('utf8');
+    session.transcriptBytes = bytes.length - offset;
     session.transcriptTruncated = true;
+  } else {
+    session.transcriptBytes = bytes.length;
   }
+}
+
+// Readers get the bounded transcript; any slack is trimmed on demand.
+function transcriptText(session) {
+  if (Number.isFinite(session.transcriptBytes) && session.transcriptBytes > MAX_TRANSCRIPT_BYTES) trimTranscript(session);
+  return session.transcript || '';
+}
+
+function appendTranscript(session, data) {
+  const text = typeof data === 'string' ? data : String(data || '');
+  if (!text) return;
+  if (!Number.isFinite(session.transcriptBytes)) session.transcriptBytes = Buffer.byteLength(session.transcript || '', 'utf8');
+  session.transcript = `${session.transcript || ''}${text}`;
+  session.transcriptBytes += Buffer.byteLength(text, 'utf8');
+  if (session.transcriptBytes > MAX_TRANSCRIPT_BYTES + TRANSCRIPT_TRIM_SLACK) trimTranscript(session);
   if (session.logging?.stream && !session.logging.stream.destroyed) {
     // Bound queued log data if the destination disk cannot keep up.
     if (session.logging.stream.writableLength > 4 * MAX_TRANSCRIPT_BYTES) {
@@ -127,7 +147,7 @@ class TerminalService {
           protocol: session.protocol,
           profileId: session.profileId,
           startedAt: session.startedAt,
-          transcript: session.transcript,
+          transcript: transcriptText(session),
           timeline: session.timeline,
           transcriptTruncated: session.transcriptTruncated,
           logging: session.logging ? { filePath: session.logging.filePath, active: false } : null,
@@ -136,7 +156,7 @@ class TerminalService {
       }
       this.#closeLogStream(session);
       this.sessions.delete(id);
-      this.#send('terminal:exit', { id, exitCode, signal, diagnosis: exitCode !== 0 && !session.userClosed ? diagnoseConnection(session.protocol, session.transcript) : null });
+      this.#send('terminal:exit', { id, exitCode, signal, diagnosis: exitCode !== 0 && !session.userClosed ? diagnoseConnection(session.protocol, transcriptText(session)) : null });
     });
 
     return { id, title: session.title, protocol: session.protocol, profileId: session.profileId };
@@ -168,6 +188,7 @@ class TerminalService {
   exportTranscript(id) {
     const session = this.sessions.get(id) || this.closedTranscripts.get(id);
     if (!session) throw new Error('Terminal session not found');
+    const text = transcriptText(session);
     return {
       id: session.id,
       title: session.title,
@@ -177,7 +198,7 @@ class TerminalService {
       exportedAt: new Date().toISOString(),
       truncated: Boolean(session.transcriptTruncated),
       sequence: session.outputSequence || 0,
-      text: session.transcript
+      text
     };
   }
 
@@ -201,7 +222,7 @@ class TerminalService {
     const target = safeLogPath(filePath);
     if (session.logging?.stream) this.#closeLogStream(session);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, session.transcript || '', { mode: 0o600 });
+    fs.writeFileSync(target, transcriptText(session), { mode: 0o600 });
     const stream = fs.createWriteStream(target, { flags: 'a', mode: 0o600 });
     session.logging = { filePath: target, stream };
     stream.on('error', (error) => {
@@ -264,4 +285,4 @@ class TerminalService {
   }
 }
 
-module.exports = { TerminalService, appendRecordingChunk, appendTranscript };
+module.exports = { TerminalService, appendRecordingChunk, appendTranscript, transcriptText };

@@ -71,3 +71,39 @@ test('SFTP trusts keys OpenSSH already trusts and warns about OpenSSH conflicts'
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('a host known under another key type is flagged as changed and asked for its recorded type', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-known-hosts-'));
+  try {
+    const { knownHostKeyTypes, preferredHostKeyAlgorithms } = require('../src/main/lib/openssh-known-hosts.cjs');
+    const recorded = keyBlob('ssh-ed25519'); const offered = keyBlob('ecdsa-sha2-nistp256');
+    const file = path.join(directory, 'known_hosts');
+    fs.writeFileSync(file, [
+      `server.example ssh-ed25519 ${recorded.toString('base64')}`,
+      `[legacy.example]:2222 ssh-rsa ${keyBlob('ssh-rsa').toString('base64')}`,
+      `@revoked server.example ecdsa-sha2-nistp384 ${keyBlob('ecdsa-sha2-nistp384').toString('base64')}`
+    ].join('\n'));
+    const hex = (blob) => createHash('sha256').update(blob).digest('hex');
+    const result = checkOpenSshKnownHosts('server.example', 22, offered, [file]);
+    assert.equal(result.trusted, false);
+    assert.deepEqual(result.conflicts, [hex(recorded)], 'the recorded key of the other type is the previous identity');
+    assert.deepEqual(checkOpenSshKnownHosts('new.example', 22, offered, [file]).conflicts, [], 'an unknown host stays a first-use prompt');
+
+    assert.deepEqual(knownHostKeyTypes('server.example', 22, [file]), ['ssh-ed25519']);
+    assert.equal(preferredHostKeyAlgorithms('new.example', 22, [file]), null);
+    const legacy = preferredHostKeyAlgorithms('legacy.example', 2222, [file]);
+    assert.deepEqual(legacy.slice(0, 3), ['rsa-sha2-512', 'rsa-sha2-256', 'ssh-rsa']);
+    assert.equal(new Set(legacy).size, legacy.length);
+    assert.ok(legacy.includes('ssh-ed25519'), 'other algorithms stay available as a fallback');
+
+    const prompts = [];
+    const service = new KnownHostService(directory, { request: async (_kind, payload) => { prompts.push(payload); return { accept: false }; } }, { knownHostsFiles: () => [file] });
+    const profile = { id: 'p', name: 'Server', host: 'server.example', port: 22 };
+    assert.deepEqual(service.preferredHostKeyAlgorithms(profile).slice(0, 1), ['ssh-ed25519']);
+    assert.equal(await service.verify(profile, hex(offered), offered), false);
+    assert.equal(prompts[0].changed, true, 'an unrecorded key type must not look like a first connection');
+    assert.equal(prompts[0].previousFingerprint.startsWith('SHA256:'), true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

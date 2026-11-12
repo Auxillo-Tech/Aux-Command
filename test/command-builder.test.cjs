@@ -117,3 +117,13 @@ test('startup commands can never become local ssh or mosh options', () => {
   const mosh = buildTerminalCommand({ ...sshProfile, protocol: 'mosh', startupCommand: 'tmux attach' });
   assert.deepEqual(mosh.args.slice(1), ['--', 'deploy@prod', 'tmux attach']);
 });
+
+test('terminal sessions do not inherit AppImage and Chromium launcher variables', () => {
+  const { sessionEnvironment } = require('../src/main/lib/command-builder.cjs');
+  const source = { PATH: '/usr/bin', HOME: '/home/op', APPIMAGE: '/opt/Aux.AppImage', APPDIR: '/tmp/.mount_Aux', ARGV0: 'Aux', OWD: '/home/op', CHROME_DESKTOP: 'aux-command.desktop', XDG_CURRENT_DESKTOP: 'Unity', ORIGINAL_XDG_CURRENT_DESKTOP: 'KDE' };
+  const env = sessionEnvironment(source);
+  assert.deepEqual(env, { PATH: '/usr/bin', HOME: '/home/op', XDG_CURRENT_DESKTOP: 'KDE' });
+  assert.equal(source.APPIMAGE, '/opt/Aux.AppImage', 'the application environment itself is untouched');
+  assert.equal('XDG_CURRENT_DESKTOP' in sessionEnvironment({ XDG_CURRENT_DESKTOP: 'Unity', ORIGINAL_XDG_CURRENT_DESKTOP: 'undefined' }), false);
+  assert.deepEqual(sessionEnvironment({ XDG_CURRENT_DESKTOP: 'GNOME' }), { XDG_CURRENT_DESKTOP: 'GNOME' });
+});

@@ -7987,16 +7987,16 @@ const messages = {
     "ru": "Хост не вернул данных мониторинга.",
     "zh": "主机未返回监视数据。"
   },
-  "The native client handles any password prompt.": {
-    "en": "The native client handles any password prompt.",
-    "de": "Der native Client verarbeitet jede Passwortaufforderung.",
-    "es": "El cliente nativo gestiona cualquier solicitud de contraseña.",
-    "fr": "Le client natif gère toute invite de mot de passe.",
-    "it": "Il client nativo gestisce eventuali richieste di password.",
-    "ja": "パスワードの入力はネイティブクライアントが処理します。",
-    "pt": "O cliente nativo trata de qualquer pedido de palavra-passe.",
-    "ru": "Любой запрос пароля обрабатывает нативный клиент.",
-    "zh": "原生客户端会处理所有密码提示。"
+  "Aux Command asks for the password when the connection opens.": {
+    "en": "Aux Command asks for the password when the connection opens.",
+    "de": "Aux Command fragt beim Öffnen der Verbindung nach dem Passwort.",
+    "es": "Aux Command solicita la contraseña al abrir la conexión.",
+    "fr": "Aux Command demande le mot de passe à l’ouverture de la connexion.",
+    "it": "Aux Command chiede la password all’apertura della connessione.",
+    "ja": "接続を開くときに Aux Command がパスワードを尋ねます。",
+    "pt": "O Aux Command pede a palavra-passe ao abrir a ligação.",
+    "ru": "Aux Command запрашивает пароль при открытии соединения.",
+    "zh": "打开连接时，Aux Command 会询问密码。"
   },
   "The previous profile data is available under Import / Export → Recovery points.": {
     "en": "The previous profile data is available under Import / Export → Recovery points.",
@@ -11440,6 +11440,17 @@ const messages = {
     "pt": "Confiar no servidor RDP?",
     "ru": "Доверять RDP-серверу?",
     "zh": "信任 RDP 服务器？"
+  },
+  "Used to sign in to this RDP server. Leave blank to be asked each time you connect.": {
+    "en": "Used to sign in to this RDP server. Leave blank to be asked each time you connect.",
+    "de": "Wird für die Anmeldung an diesem RDP-Server verwendet. Leer lassen, um bei jeder Verbindung gefragt zu werden.",
+    "es": "Se usa para iniciar sesión en este servidor RDP. Déjelo en blanco para que se le pida en cada conexión.",
+    "fr": "Utilisé pour se connecter à ce serveur RDP. Laissez vide pour qu’il soit demandé à chaque connexion.",
+    "it": "Usata per accedere a questo server RDP. Lasciare vuoto per riceverne la richiesta a ogni connessione.",
+    "ja": "この RDP サーバーへのサインインに使用します。空欄にすると接続のたびに尋ねます。",
+    "pt": "Usada para iniciar sessão neste servidor RDP. Deixe em branco para ser pedida em cada ligação.",
+    "ru": "Используется для входа на этот RDP-сервер. Оставьте пустым, чтобы пароль запрашивался при каждом подключении.",
+    "zh": "用于登录此 RDP 服务器。留空则每次连接时询问。"
   }
 };
 if(typeof module==='object' && module.exports) module.exports=messages; else root.AuxDialogMessages=messages;

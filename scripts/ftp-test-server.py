@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disposable loopback FTP/implicit-FTPS server for test-ftp.cjs."""
+"""Disposable loopback FTP, implicit-FTPS and explicit-FTPS (AUTH TLS) server for test-ftp.cjs."""
 import json, sys
 from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler, TLS_FTPHandler
@@ -12,9 +12,9 @@ class ImplicitTLSHandler(TLS_FTPHandler):
         self.secure_connection(self.ssl_context)
     def handle_ssl_established(self):
         FTPHandler.handle(self)
-handler = ImplicitTLSHandler if mode == 'ftps' else FTPHandler
+handler = ImplicitTLSHandler if mode == 'ftps' else TLS_FTPHandler if mode == 'ftps-explicit' else FTPHandler
 handler.authorizer = auth
-if mode == 'ftps':
+if mode in ('ftps', 'ftps-explicit'):
     handler.certfile = cert
     handler.keyfile = key
     handler.tls_control_required = True

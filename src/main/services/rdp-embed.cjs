@@ -11,11 +11,15 @@ const { normalizeProfile } = require('../lib/validation.cjs');
 const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
+const { credentialArgs, describeRdpFailure, resolveRdpCredentials, sendCredentials } = require('../lib/rdp-credentials.cjs');
 
 const XVFB_SETTLE_TIMEOUT = 8000;
 const X11VNC_SETTLE_TIMEOUT = 10_000;
 const DISPLAY_SEARCH_START = 90;
 const DISPLAY_SEARCH_END = 999;
+// How long a fresh FreeRDP client is watched for a refused sign-in before the
+// session is handed to the viewer.
+const SIGN_IN_SETTLE_TIMEOUT = 3000;
 
 // Toolchain that turns an RDP target into an in-app VNC surface:
 //   xfreerdp renders into a headless Xvfb display, x11vnc exports that display,
@@ -56,6 +60,8 @@ function validateRdpTarget(profile) {
 class RdpEmbedService {
   constructor(options = {}) {
     this.vaultService = options.vaultService || null;
+    this.promptBroker = options.promptBroker || null;
+    this.signInSettleTimeout = Number.isFinite(options.signInSettleTimeout) ? options.signInSettleTimeout : SIGN_IN_SETTLE_TIMEOUT;
     this.vncBridge = options.vncBridge || null;
     this.useGuard = options.useGuard !== false;
     this.knownHostService = options.knownHostService || null;
@@ -91,6 +97,9 @@ class RdpEmbedService {
     // Confirm the server certificate before starting anything, so the trust
     // prompt can wait for the user without display timeouts running.
     const certificateArgs = await this.rdpCertificateArgs({ probeHost: host, probePort: port, name: profile.name }, rdpBin);
+    // The password comes from the profile's stored credential or is asked for
+    // now, also before any display is started.
+    const credentials = await resolveRdpCredentials(profile, { vaultService: this.vaultService, promptBroker: this.promptBroker });
 
     const id = randomUUID();
     const session = {
@@ -106,6 +115,8 @@ class RdpEmbedService {
       x11vnc: null,
       x11vncSocket: null,
       xauthority: null,
+      rdpLog: '',
+      rdpExited: false,
       bridgeId: null,
       workDir: fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-rdp-')),
       stopping: false,
@@ -115,8 +126,9 @@ class RdpEmbedService {
 
     try {
       await this.#startXvfb(session, xvfbBin);
-      await this.#startXfreerdp(session, rdpBin, profile, certificateArgs);
+      await this.#startXfreerdp(session, rdpBin, profile, certificateArgs, credentials);
       await this.#startX11vnc(session, x11vncBin);
+      await this.#settleSignIn(session);
       if (session.stopping) throw new Error('RDP connection closed before its display was ready');
       const bridge = await this.vncBridge.start({ protocol: 'vnc', host: '127.0.0.1', port: 5900 }, { socketPath: session.x11vncSocket });
       session.bridgeId = bridge.id;
@@ -129,8 +141,19 @@ class RdpEmbedService {
       };
     } catch (error) {
       this.stop(id);
+      // When FreeRDP gave up (wrong password, unreachable server) its own
+      // reason is more useful than the display error that followed.
+      if (session.rdpExited) throw new Error(describeRdpFailure(session.rdpLog) || 'The RDP client closed the connection before the desktop appeared');
       throw error;
     }
+  }
+
+  // A refused sign-in makes FreeRDP exit within a moment of connecting. Wait
+  // for that moment so the caller gets the reason instead of an empty tab.
+  async #settleSignIn(session) {
+    const deadline = session.rdpStartedAt + this.signInSettleTimeout;
+    while (Date.now() < deadline && !session.rdpExited && !session.stopping) await delay(100);
+    if (session.rdpExited) throw new Error('RDP client exited');
   }
 
   async #startXvfb(session, xvfbBin) {
@@ -155,7 +178,7 @@ class RdpEmbedService {
     throw new Error('Xvfb did not create its display in time');
   }
 
-  async #startXfreerdp(session, rdpBin, profile, certificateArgs) {
+  async #startXfreerdp(session, rdpBin, profile, certificateArgs, credentials) {
     const args = [
       `/v:${session.host}:${session.port}`,
       `/size:${session.width}x${session.height}`,
@@ -168,21 +191,20 @@ class RdpEmbedService {
     if (profile.username) args.push(`/u:${profile.username}`);
     if (profile.rdpDomain) args.push(`/d:${profile.rdpDomain}`);
     if (profile.rdpAudio) args.push('/sound');
-    if (this.vaultService && profile.credentialId && this.vaultService.has(profile.credentialId)) {
-      const secret = await this.vaultService.get(profile.credentialId);
-      // FreeRDP reads the password from standard input so it never
-      // appears in the process argument list.
-      session.xfreerdp = this.#spawnGuarded(rdpBin, [...args, '/from-stdin'], session, {
-        DISPLAY: `:${session.display}`,
-        XAUTHORITY: session.xauthority,
-        FREERDP_ASKPASS: '0'
-      });
-      try { session.xfreerdp.stdin.write(`${secret}\n`); session.xfreerdp.stdin.end(); }
-      catch { /* xfreerdp reads credentials interactively if stdin is unavailable */ }
-    } else {
-      session.xfreerdp = this.#spawnGuarded(rdpBin, args, session, { DISPLAY: `:${session.display}`, XAUTHORITY: session.xauthority });
+    // FreeRDP reads the password from standard input so it never appears in
+    // the process argument list.
+    session.xfreerdp = this.#spawnGuarded(rdpBin, [...args, ...credentialArgs(profile, credentials)], session, {
+      DISPLAY: `:${session.display}`,
+      XAUTHORITY: session.xauthority
+    }, { captureLog: true });
+    session.rdpStartedAt = Date.now();
+    for (const stream of [session.xfreerdp.stdout, session.xfreerdp.stderr]) {
+      stream?.setEncoding('utf8');
+      stream?.on('data', (chunk) => { session.rdpLog = `${session.rdpLog}${chunk}`.slice(-16_384); });
     }
-    session.xfreerdp.once('exit', () => { if (!session.stopping) this.stop(session.id); });
+    sendCredentials(session.xfreerdp, credentials);
+    session.xfreerdp.once('error', () => { session.rdpExited = true; });
+    session.xfreerdp.once('exit', () => { session.rdpExited = true; if (!session.stopping) this.stop(session.id); });
   }
 
   async #startX11vnc(session, x11vncBin) {
@@ -248,9 +270,10 @@ class RdpEmbedService {
     return false;
   }
 
-  #spawnGuarded(executable, args, session, extraEnv = {}) {
+  #spawnGuarded(executable, args, session, extraEnv = {}, { captureLog = false } = {}) {
     const env = { ...process.env, ...extraEnv };
-    if (!this.useGuard) return spawn(executable, args, { stdio: ['pipe', 'ignore', 'ignore'], env, shell: false });
+    const output = captureLog ? 'pipe' : 'ignore';
+    if (!this.useGuard) return spawn(executable, args, { stdio: ['pipe', output, output], env, shell: false });
     const python = findExecutable(['python3']);
     if (!python) throw new Error('Python 3 is required for guarded embedded RDP processes');
     const child = spawn(python, [
@@ -258,7 +281,7 @@ class RdpEmbedService {
       '--parent-pid', String(process.pid),
       '--ready-fd', '3',
       '--', executable, ...args
-    ], { stdio: ['pipe', 'ignore', 'ignore', 'pipe'], env, shell: false });
+    ], { stdio: ['pipe', output, output, 'pipe'], env, shell: false });
     child.stdio[3]?.resume();
     return child;
   }

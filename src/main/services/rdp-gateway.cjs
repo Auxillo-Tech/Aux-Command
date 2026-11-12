@@ -9,6 +9,7 @@ const { buildExternalCommand, resolveHelper, sshBaseArgs } = require('../lib/com
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { validateHost } = require('./network-tools.cjs');
 const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
+const { credentialArgs, resolveRdpCredentials, sendCredentials } = require('../lib/rdp-credentials.cjs');
 
 class RemoteDesktopGateway {
   constructor(options = {}) {
@@ -17,6 +18,7 @@ class RemoteDesktopGateway {
     this.clientExecutable = options.clientExecutable || null;
     this.useGuard = options.useGuard !== false;
     this.knownHostService = options.knownHostService || null;
+    this.promptBroker = options.promptBroker || null;
     this.rdpCertificateArgs = options.rdpCertificateArgs
       || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.connectTimeout = Math.max(1000, Number(options.connectTimeout) || 20_000);
@@ -113,19 +115,28 @@ class RemoteDesktopGateway {
         clearTimeout(timer);
         if (protocol === 'rdp') {
           this.rdpCertificateArgs({ probeHost: '127.0.0.1', probePort: localPort, trustHost: targetHost, trustPort: targetPort, name: `${targetHost} via ${gatewayProfile.name}` }, clientExecutable)
-            .then((certificateArgs) => { if (!settled && !session.stopping) startClient(buildExternalCommand(localProfile, { certificateArgs }).args); })
+            // FreeRDP's X11 client cannot ask for a password in a window, so
+            // it is asked for here and passed on standard input.
+            .then(async (certificateArgs) => {
+              const signIn = { name: `${targetHost} via ${gatewayProfile.name}`, host: targetHost, username: localProfile.username };
+              const credentials = await resolveRdpCredentials(signIn, { promptBroker: this.promptBroker });
+              if (settled || session.stopping) return;
+              startClient([...buildExternalCommand(localProfile, { certificateArgs }).args, ...credentialArgs(signIn, credentials)], credentials);
+            })
             .catch((error) => finishError(error));
           return;
         }
         startClient(clientSpec.args);
       };
-      const startClient = (clientArgs) => {
+      const startClient = (clientArgs, credentials = null) => {
         const clientLaunch = this.#guardedCommand(clientExecutable, clientArgs);
+        const input = credentials ? 'pipe' : 'ignore';
         const client = spawn(clientLaunch.command, clientLaunch.args, {
-          stdio: this.useGuard ? ['ignore', 'ignore', 'ignore', 'pipe'] : 'ignore',
+          stdio: this.useGuard ? [input, 'ignore', 'ignore', 'pipe'] : [input, 'ignore', 'ignore'],
           shell: false
         });
         if (this.useGuard) client.stdio[3].resume();
+        if (credentials) sendCredentials(client, credentials);
         session.client = client;
         client.once('error', (error) => finishError(new Error(`Could not start native client: ${error.message}`)));
         client.once('spawn', () => {

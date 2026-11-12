@@ -12,12 +12,14 @@ const { VncBridgeService } = require('../src/main/services/vnc-bridge.cjs');
 const { RdpEmbedService } = require('../src/main/services/rdp-embed.cjs');
 const { KnownHostService } = require('../src/main/services/known-host-service.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// FreeRDP 3 packages name the test server freerdp-shadow-cli3.
+const shadowServer = require('../src/main/lib/executable-finder.cjs').findExecutable(['freerdp-shadow-cli', 'freerdp-shadow-cli3']) || 'freerdp-shadow-cli';
 async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-rdp-integration-'));
   process.env.XDG_CONFIG_HOME = directory;
   const listener = net.createServer(); await new Promise((resolve) => listener.listen(0, '127.0.0.1', resolve));
   const port = listener.address().port; await new Promise((resolve) => listener.close(resolve));
-  const shadow = spawn('freerdp-shadow-cli', [`/port:${port}`, '/bind-address:127.0.0.1', '-auth', '/sec:tls']);
+  const shadow = spawn(shadowServer, [`/port:${port}`, '/bind-address:127.0.0.1', '-auth', '/sec:tls']);
   let shadowLog = ''; for (const pipe of [shadow.stdout, shadow.stderr]) pipe.on('data', (chunk) => { shadowLog = (shadowLog + chunk).slice(-8000); });
   const bridge = new VncBridgeService();
   const prompts = [];
@@ -76,7 +78,7 @@ async function main() {
     // FreeRDP itself is pinned: a fingerprint other than the server's is refused.
     service.rdpCertificateArgs = async () => ['/cert:deny,fingerprint:sha256:' + Array(32).fill('00').join(':'), '-sec-rdp'];
     try { await service.start({ id: 'pinned', name: 'Pinned', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' }); }
-    catch (error) { assert.match(error.message, /closed|exited/); }
+    catch (error) { assert.match(error.message, /closed|exited|secure connection/); }
     await delay(2000);
     assert.equal(service.list().length, 0, 'FreeRDP must refuse a certificate that does not match the pin');
     console.log('RDP_CHANGED_CERTIFICATE_REJECTED');

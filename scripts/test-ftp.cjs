@@ -20,9 +20,12 @@ async function main() {
     return;
   }
   const directory = process.env.AUX_FTP_TEST_ROOT;
-  for (const protocol of ['ftp', 'ftps']) {
-    const root = path.join(directory, protocol); fs.mkdirSync(root);
-    const server = spawn(process.env.AUX_FTP_TEST_PYTHON || 'python3', [path.join(__dirname, 'ftp-test-server.py'), root, path.join(directory, 'cert.pem'), path.join(directory, 'key.pem'), protocol]);
+  // 'ftps-explicit' is an FTPS profile whose server expects AUTH TLS (the
+  // form most hosting providers use) instead of TLS from the first byte.
+  for (const mode of ['ftp', 'ftps', 'ftps-explicit']) {
+    const protocol = mode === 'ftp' ? 'ftp' : 'ftps';
+    const root = path.join(directory, mode); fs.mkdirSync(root);
+    const server = spawn(process.env.AUX_FTP_TEST_PYTHON || 'python3', [path.join(__dirname, 'ftp-test-server.py'), root, path.join(directory, 'cert.pem'), path.join(directory, 'key.pem'), mode]);
     let errors = ''; server.stderr.on('data', (chunk) => { errors = (errors + chunk).slice(-4000); });
     const service = new FtpService({ has: () => true, get: async () => 'test-only-password' }, () => null);
     try {
@@ -31,15 +34,15 @@ async function main() {
         server.stdout.on('data', (chunk) => { output += chunk; if (output.includes('\n')) resolve(JSON.parse(output.split('\n')[0]).port); });
         server.once('error', reject); server.once('exit', () => reject(new Error(errors)));
       });
-      const profile = { id: protocol, name: protocol, protocol, host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' };
+      const profile = { id: mode, name: mode, protocol, host: '127.0.0.1', port, username: 'fixture', credentialId: 'test' };
       const original = Buffer.from('round-trip content\n');
-      const local = path.join(directory, `${protocol}-upload`); fs.writeFileSync(local, original);
+      const local = path.join(directory, `${mode}-upload`); fs.writeFileSync(local, original);
       await service.mkdir(profile, '/remote');
       await service.upload(profile, local, '/remote/file');
       assert.equal((await service.list(profile, '/remote')).some((entry) => entry.name === 'file'), true);
       assert.equal(await service.readText(profile, '/remote/file'), original.toString());
       await service.writeText(profile, '/remote/file', 'edited');
-      const downloaded = path.join(directory, `${protocol}-download`);
+      const downloaded = path.join(directory, `${mode}-download`);
       await service.download(profile, '/remote/file', downloaded);
       assert.equal(fs.readFileSync(downloaded, 'utf8'), 'edited');
       assert.equal(fs.statSync(downloaded).mode & 0o777, 0o600);
@@ -52,7 +55,11 @@ async function main() {
         await assert.rejects(() => service.list({ ...profile, id: 'untrusted', host: 'localhost' }, '/'), /certificate|altname|Hostname|IP does not match/i);
       }
       await service.remove(profile, '/remote/renamed'); await service.remove(profile, '/remote', true);
-      console.log(`${protocol.toUpperCase()}_ROUNDTRIP_RECONNECT_CANCELLATION_PASSED`);
+      if (mode === 'ftps-explicit') {
+        // The login was refused in plain text and accepted only after AUTH TLS.
+        assert.equal(service.connections.get(profile.id).client.ftp.hasTLS, true, 'explicit FTPS must be encrypted');
+      }
+      console.log(`${mode.toUpperCase().replace('-', '_')}_ROUNDTRIP_RECONNECT_CANCELLATION_PASSED`);
     } finally {
       service.disconnectAll(); server.kill('SIGTERM');
       if (server.exitCode === null) await once(server, 'exit');

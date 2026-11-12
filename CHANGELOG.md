@@ -16,9 +16,18 @@
 - Workspace backup restores list every startup command first. SSH identity files must be regular files under 64 KB. Executables resolve only from absolute `PATH` entries. The print window runs without JavaScript, and detached windows have no developer tools outside `--dev`.
 - The updater verifies downloaded AppImage bytes against the GPG-signed manifest, rechecks them immediately before installation, prevents overlapping update operations, ignores unsolicited download events and bounds authentication response sizes. A checksum-verified previous AppImage is kept for rollback.
 - RDP connections (embedded, external window and SSH gateway) show the server certificate's fingerprint for confirmation on first use, like SSH host keys, then pin FreeRDP to that certificate with legacy RDP security disabled. Changed certificates are reported and refused.
+- SFTP no longer treats a server that OpenSSH knows under one key type as a brand-new host when it presents a different type: the recorded key is shown as the previous identity and the changed-key warning appears. The connection also asks the server for the key type already on record.
+- RDP passwords are passed to FreeRDP on standard input for embedded, external and gateway connections, so they never appear in the process list.
 
 ### Fixed
 
+- RDP can sign in with a password. The connection editor has a password field for RDP profiles (stored in the encrypted vault), and when none is saved Aux Command asks for the user name and password as the connection opens. Previously there was nowhere to enter one and servers requiring network level authentication showed an empty screen. Sign-in works the same on FreeRDP 2 and FreeRDP 3, and a password that cannot be sent as a single line is refused with a message instead of being altered. A refused or cancelled sign-in is reported instead of opening a second client.
+- The SFTP file browser signs in like OpenSSH: SSH agent, then the profile's key or the standard `~/.ssh/id_ed25519`, `id_ecdsa` and `id_rsa` keys, then the password. A passphrase-protected key asks for its passphrase instead of failing the connection, a key that cannot be used is skipped, and a password is asked for when the server accepts one and none is saved.
+- FTPS works with providers that use explicit TLS: port 990 uses implicit FTPS as before, port 21 upgrades with `AUTH TLS` before the login is sent, and on any other port the form is detected. The login never travels unencrypted in either form.
+- Sessions with heavy output no longer slow the whole application: the transcript buffer is trimmed in batches instead of being re-encoded for every chunk of output.
+- Profiles, settings, saved credentials and trusted host keys are flushed to disk before a save is reported, so a power cut cannot leave an empty file.
+- File transfer progress is sent to the window at most ten times a second instead of once per data chunk.
+- Local shells and SSH sessions no longer inherit AppImage and Chromium launcher variables (`APPIMAGE`, `APPDIR`, `CHROME_DESKTOP`, a replaced `XDG_CURRENT_DESKTOP`).
 - Input typed at password prompts (sudo, ssh, `read -s`) or while the terminal is not echoing is never shown in the assist bar, suggested, saved in command history or recorded into macros.
 - Tunnels are reported ready only when no bind failure follows, and failures show the real ssh error instead of the verbose debug log.
 - SFTP trusts host keys already in OpenSSH `known_hosts` (plain, hashed, `[host]:port`, wildcards; `@revoked` keys refused) and warns when OpenSSH has a different key; the connection timeout pauses while a trust or password prompt is open, and connection errors are shown once.
@@ -64,7 +73,7 @@
 ### Changed
 
 - CI runs protocol qualification, UI/recovery/soak checks and Debian/Ubuntu/Fedora installer tests; tagged releases refuse to publish without the signing key.
-- Dependencies: Electron 43.7.7, basic-ftp 6.2.2, brace-expansion 5.0.12 and a global-agent 4.1.3 override.
+- Dependencies: Electron 43.8.8, electron-builder 26.18.0, electron-updater 6.8.11, basic-ftp 6.2.6, ws 8.22.2, and overrides for glob 14.0.5, minimatch 11.0.8, rimraf 6.1.4, brace-expansion 5.0.12 and global-agent 4.1.3. The full dependency audit reports no known vulnerabilities.
 
 ## 0.4.0 - 2026-08-20
 

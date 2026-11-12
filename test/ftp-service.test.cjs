@@ -300,3 +300,39 @@ for (const protocol of ['ftp', 'ftps']) {
     assert.equal(f.commands.every(command => command.client === holder.client), true);
   });
 }
+
+test('FTPS uses implicit TLS on port 990, AUTH TLS on port 21 and detects the form elsewhere', () => {
+  const { ftpsModes, isTlsProtocolMismatch } = require('../src/main/services/ftp-service.cjs');
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 990 }), ['implicit']);
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 21 }), [true]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 2121 }), ['implicit', true]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftp', port: 21 }), [false]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftp', port: 990 }), [false], 'plain FTP is never silently upgraded');
+  // Only a server that was not speaking TLS selects the explicit form.
+  assert.equal(isTlsProtocolMismatch(Object.assign(new Error('write EPROTO 00:error:0A00010B:SSL routines:ssl3_get_record:wrong version number'), { code: 'EPROTO' })), true);
+  assert.equal(isTlsProtocolMismatch(new ftp.FTPError({ code: 530, message: '530 Login incorrect.' })), false, 'a refused login is final');
+  assert.equal(isTlsProtocolMismatch(Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' })), false, 'an untrusted certificate is final');
+  assert.equal(isTlsProtocolMismatch(Object.assign(new Error("Hostname/IP does not match certificate's altnames"), { code: 'ERR_TLS_CERT_ALTNAME_INVALID' })), false);
+  assert.equal(isTlsProtocolMismatch(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })), false);
+});
+
+for (const [name, failure, attempts] of [
+  ['falls back to AUTH TLS when the server is not an implicit-TLS server', Object.assign(new Error('wrong version number'), { code: 'EPROTO' }), ['implicit', true]],
+  ['does not retry in another form after a refused login', new ftp.FTPError({ code: 530, message: '530 Login incorrect.' }), ['implicit']]
+]) {
+  test(`FTPS on a non-standard port ${name}`, async (t) => {
+    const seen = [];
+    t.mock.getter(ftp.Client.prototype, 'closed', () => false);
+    t.mock.method(ftp.Client.prototype, 'close', () => {});
+    t.mock.method(ftp.Client.prototype, 'access', async (config) => {
+      seen.push(config.secure);
+      if (config.secure === 'implicit') throw failure;
+    });
+    const service = new FtpService({ has: () => false, get: async () => '' }, () => null);
+    const profile = { id: 'detect', name: 'Detect', protocol: 'ftps', host: '127.0.0.1', port: 2121, username: 'tester' };
+    if (attempts.length === 2) assert.equal((await service.connect(profile)).ready, true);
+    else await assert.rejects(() => service.connect(profile), /530/u);
+    assert.deepEqual(seen, attempts);
+    service.disconnectAll();
+  });
+}

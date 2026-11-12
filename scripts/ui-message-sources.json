@@ -858,7 +858,7 @@
   "The empty group is removed from the sidebar.",
   "The host key for {p0} has changed. This can indicate a rebuilt server or a man-in-the-middle attack. Verify the fingerprint through a trusted channel before continuing.",
   "The host returned no monitor data.",
-  "The native client handles any password prompt.",
+  "Aux Command asks for the password when the connection opens.",
   "The previous profile data is available under Import / Export → Recovery points.",
   "The remote file is read through this saved SSH profile.",
   "The reply contained control characters.",
@@ -994,5 +994,6 @@
   "{queued} queued · {folders} folders created · {skipped} skipped",
   "“Did you mean” fixes after command-not-found errors",
   "…and {p0} more",
-  "← Download selection"
+  "← Download selection",
+  "Used to sign in to this RDP server. Leave blank to be asked each time you connect."
 ]

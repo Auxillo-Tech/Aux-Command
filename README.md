@@ -238,7 +238,8 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 ### SFTP
 
 - Graphical SFTP browser backed by `ssh2`.
-- Explicit host-key fingerprint confirmation.
+- Explicit host-key fingerprint confirmation; a server OpenSSH knows under a different key is reported as changed.
+- Signs in like OpenSSH: SSH agent, the profile's key or the standard `~/.ssh` keys, then a saved or typed password. A passphrase-protected key asks for its passphrase.
 - Upload, drag-and-drop upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
 - Two-pane local/remote browsing supports selected files and recursive folders,
   including empty folders, with review before upload/download. Existing folders
@@ -271,7 +272,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 ### FTP / FTPS
 
 - FTP and FTPS file-browser profiles backed by `basic-ftp`.
-- FTPS uses encrypted TLS transport.
+- FTPS uses encrypted TLS transport in both forms: implicit TLS on port 990 and explicit `AUTH TLS` on port 21 (the form most hosting providers use). On other ports the form is detected. The login is never sent unencrypted.
 - Plain FTP is guarded by an explicit insecure-transport warning because credentials and file contents are not encrypted.
 - FTP/FTPS reuse the graphical file-browser operations for browse, upload, drag-and-drop upload, download, inline UTF-8 text edit, mkdir, rename, and delete.
 - Persistent FTP/FTPS secrets use the same encrypted Linux safe-storage checks as SFTP secrets.
@@ -290,6 +291,11 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 - Mosh launcher with safely constructed SSH transport options.
 - RDP launcher through FreeRDP. Profiles include an opt-in audio setting and
   bounded initial embedded desktop resolution (800–3840 × 600–2160).
+- RDP sign-in: save a password in the profile (encrypted vault) or type it
+  when the connection opens. The password reaches FreeRDP on standard input,
+  never on its command line, and a refused sign-in is reported in plain words.
+  Works with FreeRDP 2 and FreeRDP 3. Connections through the SSH gateway
+  have no saved profile, so they always ask for the password.
 - Embedded RDP/VNC controls include fit/actual size, view-only mode,
   Ctrl+Alt+Delete, and an explicit clipboard panel. Ctrl+Alt+Shift releases
   keyboard focus. Clipboard contents are not automatically copied locally.

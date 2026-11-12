@@ -10,6 +10,7 @@ const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
 const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
+const { createSshAuthHandler, defaultKeyFiles, readKeyFile } = require('../lib/ssh-auth.cjs');
 const { expandHome, normalizeProfile, normalizeRemotePath } = require('../lib/validation.cjs');
 const {
   connectionSignature, formatHostPort, formatProxyJumpHop, isDirectory, modeToString, parseProxyJumpChain, safeTimestampToIso
@@ -103,6 +104,19 @@ function runScp(profile, args, options = {}, command = 'scp') {
       else finish(new Error((describeScpError(stderr) || `${command} exited with ${signal || `code ${code}`}`).replaceAll(profile.identityFile || '\0', '[identity-file]')));
     });
   });
+}
+
+// Transfers read thousands of chunks a second on a fast link; progress goes to
+// the window at most every PROGRESS_INTERVAL_MS, plus the first and last value.
+const PROGRESS_INTERVAL_MS = 100;
+function progressReporter(send) {
+  let last = 0;
+  return (force = false) => {
+    const now = Date.now();
+    if (!force && now - last < PROGRESS_INTERVAL_MS) return;
+    last = now;
+    send();
+  };
 }
 
 function callSftp(sftp, method, ...args) {
@@ -231,6 +245,7 @@ class SftpService {
     this.promptBroker = promptBroker;
     this.getWindow = getWindow;
     this.connections = new Map();
+    this.defaultKeyFiles = defaultKeyFiles;
   }
 
   async connect(profileInput) {
@@ -338,10 +353,11 @@ class SftpService {
     };
     client.once('close', onClose);
     client.on('error', onError);
+    const username = profile.username || process.env.USER || os.userInfo().username;
     const config = {
       host: profile.host,
       port: profile.port,
-      username: profile.username || process.env.USER,
+      username,
       agent: process.env.SSH_AUTH_SOCK || undefined,
       keepaliveInterval: Math.max(0, profile.keepAliveSeconds * 1000),
       keepaliveCountMax: 3,
@@ -366,23 +382,56 @@ class SftpService {
       delete config.port;
     }
 
+    // Ask for the host key type OpenSSH already has on record, so a known
+    // server is checked against that key instead of an unrecorded type.
+    const hostKeyAlgorithms = this.knownHostService.preferredHostKeyAlgorithms?.(profile);
+    if (hostKeyAlgorithms) config.algorithms.serverHostKey = hostKeyAlgorithms;
+
+    let keys;
     if (profile.identityFile) {
       // Profiles can be imported, so the key path is checked before reading:
       // a device or FIFO (/dev/zero, a pipe) would hang or exhaust the app.
-      try {
-        const keyPath = expandHome(profile.identityFile);
-        const stat = fs.statSync(keyPath);
-        if (!stat.isFile()) throw new Error('not a regular file');
-        if (stat.size > 65_536) throw new Error('file is larger than 64 KB');
-        config.privateKey = fs.readFileSync(keyPath);
-      } catch (error) { throw new Error(`Could not read SSH identity file: ${error.message}`); }
+      const keyPath = expandHome(profile.identityFile);
+      try { keys = [{ filename: keyPath, data: readKeyFile(keyPath) }]; }
+      catch (error) { throw new Error(`Could not read SSH identity file: ${error.message}`); }
+    } else {
+      // Like OpenSSH, fall back to the standard key files when none is set.
+      keys = this.defaultKeyFiles();
     }
+    let keyPassphrase = '';
     if (profile.credentialId && this.vaultService.has(profile.credentialId)) {
       const secret = await this.vaultService.get(profile.credentialId);
       checkActive();
-      if (profile.credentialKind === 'passphrase') config.passphrase = secret;
+      if (profile.credentialKind === 'passphrase') { config.passphrase = secret; keyPassphrase = secret; }
       else config.password = secret;
     }
+    const askSecret = async (label, instructions) => {
+      const response = await whilePrompting(() => this.promptBroker.request('keyboard-interactive', {
+        profileName: profile.name,
+        host: profile.host,
+        name: 'SSH sign-in',
+        instructions,
+        language: '',
+        prompts: [{ prompt: label, echo: false }]
+      }));
+      return String(response?.answers?.[0] || '').slice(0, 32_768);
+    };
+    // Keys are parsed when their turn comes: a passphrase-protected key asks
+    // for its passphrase and an unusable key is skipped, instead of either
+    // one failing the connection before the agent or a password is tried.
+    config.authHandler = createSshAuthHandler({
+      username,
+      agent: config.agent || '',
+      keys,
+      keyPassphrase,
+      password: config.password || '',
+      isCancelled: () => holder.cancelled,
+      askPassphrase: (filename, attempt) => askSecret(
+        `Passphrase for ${path.basename(filename)}`,
+        attempt > 1 ? `That passphrase did not unlock ${filename}. Try again, or cancel to skip this key.` : `The SSH key ${filename} is protected by a passphrase.`
+      ).catch(() => ''),
+      askPassword: () => askSecret(`Password for ${username}@${profile.host}`, '').catch(() => '')
+    });
 
     async function onKeyboardInteractive(name, instructions, language, prompts, finish) {
       if (holder.cancelled) return;
@@ -589,7 +638,7 @@ class SftpService {
       start: offset,
       mode: stat.mode & 0o777
     });
-    const report = () => {
+    const report = progressReporter(() => {
       options.onProgress?.(transferred, stat.size);
       this.#emit('sftp:progress', {
         profileId: connection.profile.id,
@@ -598,11 +647,12 @@ class SftpService {
         transferred,
         total: stat.size
       });
-    };
-    report();
+    });
+    report(true);
     source.on('data', (chunk) => { transferred += chunk.length; report(); });
     try {
       await pipeline(source, destination, { signal: options.signal });
+      report(true);
       await replaceRemoteFile(connection.sftp, partialPath, target);
     } catch (error) {
       if (!options.transferId) {
@@ -633,7 +683,7 @@ class SftpService {
         start: offset,
         mode: 0o600
       });
-      const report = () => {
+      const report = progressReporter(() => {
         options.onProgress?.(transferred, total);
         this.#emit('sftp:progress', {
           profileId: connection.profile.id,
@@ -642,10 +692,11 @@ class SftpService {
           transferred,
           total
         });
-      };
-      report();
+      });
+      report(true);
       remote.on('data', (chunk) => { transferred += chunk.length; report(); });
       await pipeline(remote, local, { signal: options.signal });
+      report(true);
       fs.chmodSync(partialPath, 0o600);
       fs.renameSync(partialPath, localPath);
       fs.chmodSync(localPath, 0o600);
@@ -752,4 +803,4 @@ class SftpService {
   }
 }
 
-module.exports = { SftpService, createGuardedHostVerifier, createOpenSshProxy, isDirectory, modeToString, replaceRemoteFile };
+module.exports = { SftpService, createGuardedHostVerifier, createOpenSshProxy, isDirectory, modeToString, progressReporter, replaceRemoteFile };

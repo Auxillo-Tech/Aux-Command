@@ -2,7 +2,7 @@
 
 const path = require('node:path');
 const { JsonStore } = require('../lib/json-store.cjs');
-const { checkOpenSshKnownHosts, defaultKnownHostsFiles } = require('../lib/openssh-known-hosts.cjs');
+const { checkOpenSshKnownHosts, defaultKnownHostsFiles, preferredHostKeyAlgorithms } = require('../lib/openssh-known-hosts.cjs');
 
 function normalizeFingerprintHex(value) {
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/iu.test(value)) {
@@ -31,6 +31,13 @@ class KnownHostService {
 
   key(profile) {
     return `${profile.host}:${profile.port}`;
+  }
+
+  // Host key algorithm order that asks a server OpenSSH already knows for the
+  // key type on record; null when OpenSSH has no entry for it.
+  preferredHostKeyAlgorithms(profile) {
+    try { return preferredHostKeyAlgorithms(profile.host, profile.port, this.knownHostsFiles(profile)); }
+    catch { return null; }
   }
 
   // `keyBlob` is the raw host key; with it, OpenSSH known_hosts entries are

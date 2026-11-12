@@ -28,15 +28,20 @@ The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI 
 - FTP replacement preserves the original through a backup and attempts rollback if replacement fails. If rollback fails, the error identifies the retained original file.
 - Partial FTP downloads have private permissions from creation. Resumed files cannot retain stale trailing bytes. Cancelled queued transfers do not start data transfer, and the inline editor stops at its byte limit.
 - RDP asks you to confirm the server certificate on the first connection, pins FreeRDP to it, refuses changed certificates and never falls back to legacy RDP security.
+- RDP signs in with a password saved in the profile or typed as the connection opens; the password is passed on standard input, and a refused or cancelled sign-in is reported.
+- The SFTP file browser signs in like OpenSSH (agent, profile key or standard `~/.ssh` keys, password), asks for the passphrase of a protected key, and reports a server that OpenSSH knows under a different key type as changed.
+- FTPS supports explicit `AUTH TLS` (port 21, and detected on other ports) as well as implicit TLS on port 990.
+- Heavy terminal output no longer slows the application, and profiles, settings, credentials and trusted host keys are flushed to disk on every save.
 
 ## Evidence
 
 - `npm run check`: the full automated suite passes with no failures or skips.
 - Full `npm audit`: **0 reported vulnerabilities**.
 - Actual signed public-release check, AppImage download and installer replacement in an isolated directory using the real electron-updater implementation. Installation handoff is intercepted to avoid opening a normal desktop session; packaged launch is tested separately.
-- FTP and implicit FTPS: listing, upload/download, editing, rename/remove, reconnect, cancellation and TLS hostname rejection against disposable loopback servers.
+- FTP, implicit FTPS and explicit FTPS: listing, upload/download, editing, rename/remove, reconnect, cancellation and TLS hostname rejection against disposable loopback servers.
 - Mosh startup command and actual data transfer through local, remote and SOCKS SSH tunnels against a disposable OpenSSH server.
 - RDP TLS connection through FreeRDP, virtual display and VNC bridge: client window, RFB handshake/framebuffer update, cleanup and changed-certificate rejection.
+- RDP sign-in against a server requiring network level authentication (stored, typed, refused and cancelled passwords), and SFTP sign-in against a disposable OpenSSH server (protected key, standard keys, different host key type).
 - SSH/SFTP/SCP, Telnet and simulated serial flows in the automated suite.
 - Keyring unavailability and decryption failures preserve existing encrypted credentials; malformed JSON files are quarantined and failed persistence does not replace in-memory state.
 - Debian 12 and Fedora 44 installer upgrades preserve profile/vault fixture files and resolve required runtime libraries.

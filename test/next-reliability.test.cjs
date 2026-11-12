@@ -5,17 +5,33 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { SettingsStore } = require('../src/main/lib/settings-store.cjs');
-const { appendTranscript, TerminalService } = require('../src/main/services/terminal-service.cjs');
+const { appendTranscript, transcriptText, TerminalService } = require('../src/main/services/terminal-service.cjs');
 const { buildTerminalCommand } = require('../src/main/lib/command-builder.cjs');
 const { shortcuts, matches } = require('../src/shared/preferences.js');
 test('UTF-8 transcript stays within byte limit without broken characters', () => {
   const session = { transcript: '' };
   appendTranscript(session, '😀日本語'.repeat(200000));
   appendTranscript(session, 'END');
-  assert.ok(Buffer.byteLength(session.transcript) <= 1048576);
-  assert.equal(session.transcript.includes('\ufffd'), false);
-  assert.ok(session.transcript.endsWith('END'));
+  const text = transcriptText(session);
+  assert.ok(Buffer.byteLength(text) <= 1048576);
+  assert.equal(text.includes('\ufffd'), false);
+  assert.ok(text.endsWith('END'));
   assert.equal(session.transcriptTruncated, true);
+});
+test('transcript appends stay cheap once the buffer is full and never exceed the slack', () => {
+  const session = { transcript: '' };
+  const chunk = 'é'.repeat(2048);
+  const started = process.hrtime.bigint();
+  for (let index = 0; index < 4096; index += 1) {
+    appendTranscript(session, chunk);
+    assert.ok(session.transcriptBytes <= 1048576 + 262144 + 4096);
+  }
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(session.transcriptBytes, Buffer.byteLength(session.transcript));
+  assert.ok(Buffer.byteLength(transcriptText(session)) <= 1048576);
+  assert.equal(transcriptText(session).includes('\ufffd'), false);
+  // 16 MB of output; the previous implementation needed several seconds.
+  assert.ok(elapsedMs < 2000, `appending took ${elapsedMs} ms`);
 });
 test('SSH working directory is shell-quoted independently of commands', () => {
   const command = buildTerminalCommand({ name: 'test', protocol: 'ssh', host: 'example.invalid' }, { remoteCwd: "/tmp/a'$(touch /tmp/no)" });

@@ -24,6 +24,34 @@ function ftpEntryMode(entry) {
   return bits | (entry?.isDirectory ? 0o040000 : 0);
 }
 
+// FTPS comes in two forms. Implicit FTPS starts TLS before any FTP command
+// and owns port 990. Explicit FTPS connects in plain text and upgrades with
+// AUTH TLS before the login is sent; it normally runs on port 21 and is what
+// most hosting providers offer. Either way the login only travels inside
+// TLS: basic-ftp refuses to continue when the upgrade fails.
+//
+// Returns the basic-ftp `secure` values to try, in order. On other ports the
+// form is detected: an explicit server answers the implicit TLS handshake
+// with its plain-text greeting, which fails at once and selects explicit.
+const IMPLICIT_FTPS_PORT = 990;
+const EXPLICIT_FTPS_PORT = 21;
+function ftpsModes(profile) {
+  if (profile.protocol !== 'ftps') return [false];
+  const port = Number(profile.port);
+  if (port === IMPLICIT_FTPS_PORT) return ['implicit'];
+  if (port === EXPLICIT_FTPS_PORT) return [true];
+  return ['implicit', true];
+}
+
+// True when an implicit-TLS attempt failed because the server was not
+// speaking TLS yet, as opposed to a refused login or an untrusted certificate.
+function isTlsProtocolMismatch(error) {
+  if (!error || error instanceof ftp.FTPError) return false;
+  const text = `${error.code || ''} ${error.message || ''}`;
+  if (/CERT|altname|self[- ]signed|unable to verify|Hostname\/IP/iu.test(text)) return false;
+  return /ERR_SSL_|EPROTO|wrong version number|packet length too long|unknown protocol|record layer|unexpected message|tls_get_more_records|ssl3_get_record/iu.test(text);
+}
+
 async function replaceFtpRemoteFile(client, partialPath, targetPath) {
   try {
     await client.rename(partialPath, targetPath);
@@ -132,11 +160,12 @@ class FtpService {
 
   async #open(holder) {
     const { profile, client } = holder;
+    const modes = ftpsModes(profile);
     const config = {
       host: profile.host,
       port: profile.port,
       user: profile.username || 'anonymous',
-      secure: profile.protocol === 'ftps' ? 'implicit' : false,
+      secure: modes[0],
       secureOptions: { rejectUnauthorized: true }
     };
     if (profile.credentialId && this.vaultService.has(profile.credentialId)) {
@@ -145,7 +174,15 @@ class FtpService {
       config.password = 'anonymous@';
     }
     this.#assertCurrent(holder);
-    await client.access(config);
+    try {
+      await client.access(config);
+    } catch (error) {
+      this.#assertCurrent(holder);
+      if (modes.length < 2 || !isTlsProtocolMismatch(error)) throw error;
+      // Not an implicit-TLS server: reconnect and upgrade with AUTH TLS.
+      try { client.close(); } catch { /* already closed */ }
+      await client.access({ ...config, secure: modes[1] });
+    }
     this.#assertCurrent(holder);
   }
 
@@ -364,4 +401,4 @@ class FtpService {
   }
 }
 
-module.exports = { FtpService, replaceFtpRemoteFile };
+module.exports = { FtpService, ftpsModes, isTlsProtocolMismatch, replaceFtpRemoteFile };

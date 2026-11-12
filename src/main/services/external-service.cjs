@@ -5,11 +5,14 @@ const { buildExternalCommand, resolveHelper } = require('../lib/command-builder.
 const { findExecutable } = require('../lib/executable-finder.cjs');
 const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
 const { normalizeProfile } = require('../lib/validation.cjs');
+const { credentialArgs, resolveRdpCredentials, sendCredentials } = require('../lib/rdp-credentials.cjs');
 
 class ExternalService {
   constructor(options = {}) {
     this.useGuard = options.useGuard !== false;
     this.knownHostService = options.knownHostService || null;
+    this.vaultService = options.vaultService || null;
+    this.promptBroker = options.promptBroker || null;
     this.rdpCertificateArgs = options.rdpCertificateArgs
       || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.children = new Map();
@@ -24,14 +27,22 @@ class ExternalService {
       ? await this.rdpCertificateArgs({ probeHost: profile.host, probePort: profile.port, name: profile.name }, executable)
       : undefined;
     const spec = buildExternalCommand(profile, { certificateArgs });
-    const launch = this.#guardedCommand(executable, spec.args);
+    // FreeRDP's X11 client cannot ask for a password in a window, so the
+    // sign-in is resolved here and passed on standard input.
+    const credentials = profile.protocol === 'rdp'
+      ? await resolveRdpCredentials(profile, { vaultService: this.vaultService, promptBroker: this.promptBroker })
+      : null;
+    const args = credentials ? [...spec.args, ...credentialArgs(profile, credentials)] : spec.args;
+    const launch = this.#guardedCommand(executable, args);
+    const input = credentials ? 'pipe' : 'ignore';
     return new Promise((resolve, reject) => {
       const child = spawn(launch.command, launch.args, {
-        stdio: this.useGuard ? ['ignore', 'ignore', 'ignore', 'pipe'] : 'ignore',
+        stdio: this.useGuard ? [input, 'ignore', 'ignore', 'pipe'] : [input, 'ignore', 'ignore'],
         shell: false,
         env: process.env
       });
       if (this.useGuard) child.stdio[3].resume();
+      if (credentials) sendCredentials(child, credentials);
       const cleanup = () => this.children.delete(child.pid);
       child.once('error', (error) => { cleanup(); reject(error); });
       child.once('exit', cleanup);

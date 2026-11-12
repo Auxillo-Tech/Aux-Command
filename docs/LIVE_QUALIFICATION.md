@@ -11,7 +11,9 @@ This checklist tracks the gap between automated local fixture coverage and produ
 - Actual loopback data transfer through OpenSSH local, remote and dynamic SOCKS tunnels.
 - Actual Mosh connection and startup command against a disposable OpenSSH/Mosh server.
 - Embedded RDP TLS connection, virtual desktop/VNC framebuffer, cleanup and changed-certificate rejection. External launcher argument construction is also covered.
-- FTP and implicit FTPS round trips, reconnect, cancellation and hostname verification.
+- FTP, implicit FTPS and explicit (`AUTH TLS`) FTPS round trips, reconnect, cancellation and hostname verification.
+- RDP sign-in against a loopback server requiring network level authentication: stored, typed, refused and cancelled passwords.
+- SFTP sign-in with a passphrase-protected key, the standard key fallback and a server recorded under a different host key type.
 - Real signed GitHub updater check/download and isolated AppImage installation.
 - Packaged AppImage CDP smoke for local terminal, snippets, tiled layout, broadcast input, command palette, reconnect, and diagnostics. Screenshot capture is diagnostic-only because compositor/CDP timing can hang after the functional smoke has already passed.
 

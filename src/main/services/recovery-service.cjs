@@ -30,7 +30,7 @@ class RecoveryService {
   list() {
     if (!fs.existsSync(this.directory)) return [];
     return fs.readdirSync(this.directory).filter(name => /^\d+-[a-f0-9-]+\.json$/u.test(name)).flatMap(name => {
-      try { const data = JSON.parse(fs.readFileSync(path.join(this.directory, name), 'utf8')); return [{ id: name.slice(0, -5), reason: data.reason, createdAt: data.createdAt }]; }
+      try { const data = JSON.parse(fs.readFileSync(path.join(this.directory, name), 'utf8')); return [{ id: name.slice(0, -5), reason: String(data.reason || ''), createdAt: String(data.createdAt || '') }]; }
       catch { return []; }
     }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
