@@ -125,3 +125,84 @@ test('asks once per RDP certificate, remembers it and flags a changed one', asyn
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+// A fake RDP server whose certificate has the key-usage field Windows gives
+// its self-signed Remote Desktop certificates (key and data encipherment, no
+// digital signature). Electron's TLS library refuses such a certificate with
+// modern ciphers, so the handshake path cannot read it.
+function windowsStyleServer(t, tlsOptions = {}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-rdp-cert-'));
+  const key = path.join(directory, 'key.pem');
+  const cert = path.join(directory, 'cert.pem');
+  const generated = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=WINDOWS-PC',
+    '-addext', 'keyUsage=critical,keyEncipherment,dataEncipherment', '-addext', 'extendedKeyUsage=serverAuth', '-keyout', key, '-out', cert], { stdio: 'ignore' });
+  if (generated.status !== 0) { fs.rmSync(directory, { recursive: true, force: true }); return null; }
+  const context = { key: fs.readFileSync(key), cert: fs.readFileSync(cert), ...tlsOptions };
+  const server = net.createServer((socket) => {
+    socket.on('error', () => {});
+    socket.once('data', () => {
+      socket.write(confirm(0x02, 0x02));
+      const secure = new tls.TLSSocket(socket, { isServer: true, ...context });
+      secure.on('error', () => {});
+    });
+  });
+  t.after(() => { server.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  const expected = createHash('sha256').update(new X509Certificate(context.cert).raw).digest('hex');
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ port: server.address().port, expected })));
+}
+
+test('reads a Windows-style certificate straight from the TLS records', async (t) => {
+  const { certificateFromRecords } = require('../src/main/lib/rdp-certificate.cjs');
+  for (const options of [{}, { maxVersion: 'TLSv1.2' }]) {
+    const fixture = await windowsStyleServer(t, options);
+    if (!fixture) { t.skip('openssl is not available'); return; }
+    const result = await certificateFromRecords('127.0.0.1', fixture.port, Date.now() + 5000);
+    assert.equal(result.fingerprintHex, fixture.expected, 'the fingerprint is that of the certificate the server sent');
+    assert.equal(result.subject, 'WINDOWS-PC');
+    assert.equal(result.protocol, 0x02);
+    assert.ok(result.validTo);
+  }
+});
+
+test('falls back to the TLS records when the handshake refuses the certificate', async (t) => {
+  const fixture = await windowsStyleServer(t);
+  if (!fixture) { t.skip('openssl is not available'); return; }
+  // What Electron reports for a Windows Remote Desktop certificate.
+  const refused = async () => { throw new Error('error:1000012e:SSL routines:OPENSSL_internal:KEY_USAGE_BIT_INCORRECT'); };
+  const result = await fetchRdpCertificate('127.0.0.1', fixture.port, { certificateFromHandshake: refused });
+  assert.equal(result.fingerprintHex, fixture.expected);
+  // A server that is simply not there is reported as such, without a second attempt.
+  let attempts = 0;
+  const unreachable = async () => { attempts += 1; throw Object.assign(new Error('connect ECONNREFUSED 127.0.0.1'), { code: 'ECONNREFUSED' }); };
+  await assert.rejects(() => fetchRdpCertificate('127.0.0.1', fixture.port, { certificateFromHandshake: unreachable }), /Could not read the RDP server certificate: connect ECONNREFUSED/u);
+  assert.equal(attempts, 1);
+});
+
+test('the TLS record reader waits for more data and rejects anything that is not a TLS 1.2 server flight', () => {
+  const { certificateFromTlsRecords, tlsClientHello } = require('../src/main/lib/rdp-certificate.cjs');
+  const record = (type, body) => { const head = Buffer.from([type, 3, 3, 0, 0]); head.writeUInt16BE(body.length, 3); return Buffer.concat([head, body]); };
+  const message = (type, body) => { const head = Buffer.alloc(4); head[0] = type; head.writeUIntBE(body.length, 1, 3); return Buffer.concat([head, body]); };
+  const der = Buffer.from('30820100aabbccdd', 'hex');
+  const length3 = (value) => { const b = Buffer.alloc(3); b.writeUIntBE(value, 0, 3); return b; };
+  const certificate = message(11, Buffer.concat([length3(der.length + 3 + 5), length3(der.length), der, length3(2), Buffer.from([1, 2])]));
+  const serverHello = message(2, Buffer.concat([Buffer.from([3, 3]), Buffer.alloc(40)]));
+  const flight = Buffer.concat([serverHello, certificate]);
+  assert.deepEqual(certificateFromTlsRecords(record(22, flight)), der, 'the first certificate in the list is the server\'s own');
+  // Split across records and across reads.
+  const split = Buffer.concat([record(22, flight.subarray(0, 50)), record(22, flight.subarray(50))]);
+  assert.deepEqual(certificateFromTlsRecords(split), der);
+  assert.equal(certificateFromTlsRecords(split.subarray(0, 30)), null);
+  assert.equal(certificateFromTlsRecords(record(22, serverHello)), null);
+  assert.throws(() => certificateFromTlsRecords(record(21, Buffer.from([2, 40]))), /refused the TLS handshake/u);
+  assert.throws(() => certificateFromTlsRecords(Buffer.from('SSH-2.0-OpenSSH\r\n')), /did not answer with TLS/u);
+  assert.throws(() => certificateFromTlsRecords(record(22, message(2, Buffer.concat([Buffer.from([3, 4]), Buffer.alloc(40)])))), /TLS 1\.2/u);
+  assert.throws(() => certificateFromTlsRecords(record(22, Buffer.concat([serverHello, message(14, Buffer.alloc(0))]))), /no certificate/u);
+  assert.throws(() => certificateFromTlsRecords(record(22, Buffer.concat([serverHello, message(11, length3(0))]))), /no certificate/u);
+  // The hello is a well-formed TLS 1.2 record with no supported_versions extension.
+  const hello = tlsClientHello('pc.example');
+  assert.equal(hello[0], 22);
+  assert.equal(hello.readUInt16BE(3), hello.length - 5);
+  assert.equal(hello.includes(Buffer.from([0x00, 0x2b])) && hello.indexOf(Buffer.from('pc.example')) < 0, false);
+  assert.ok(hello.indexOf(Buffer.from('pc.example')) > 0, 'a host name is sent as the server name');
+  assert.equal(tlsClientHello('192.168.1.10').indexOf(Buffer.from('192.168.1.10')), -1, 'an IP address is not sent as a server name');
+});
