@@ -73,6 +73,8 @@
 ### Changed
 
 - CI runs protocol qualification, UI/recovery/soak checks and Debian/Ubuntu/Fedora installer tests; tagged releases refuse to publish without the signing key.
+- A release is built as a draft and published only once every file, including the signed manifest, is attached, so installed copies never see a half-uploaded release; an already published release is never modified.
+- `scripts/build-in-container.sh` builds the packages in an Ubuntu 24.04 container for hosts whose compiler is too old for the current Electron.
 - Dependencies: Electron 43.8.8, electron-builder 26.18.0, electron-updater 6.8.11, basic-ftp 6.2.6, ws 8.22.2, and overrides for glob 14.0.5, minimatch 11.0.8, rimraf 6.1.4, brace-expansion 5.0.12 and global-agent 4.1.3. The full dependency audit reports no known vulnerabilities.
 
 ## 0.4.0 - 2026-08-20

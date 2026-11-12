@@ -206,10 +206,25 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           tag="v${version}"
           title="Aux Command ${tag}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --title "$title" || true
+          # The release stays a draft until every file is attached, then is
+          # published in one step. Installed copies check the latest published
+          # release for updates, so they never see a release without its
+          # signed manifest, and a published release is never modified
+          # (release immutability can be enabled on the repository).
+          # One lookup decides the path. Only gh's "release not found" means
+          # there is no release; any other failure stops the run, so a lookup
+          # error can never lead to a published release being modified.
+          view_err="${RUNNER_TEMP}/release-view.err"
+          if draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>"$view_err")"; then
+            if [ "$draft" != "true" ]; then
+              echo "::error::Release ${tag} is already published. Published releases are not modified; publish a new version instead." >&2
+              exit 1
+            fi
+          elif grep -q 'release not found' "$view_err"; then
+            gh release create "$tag" --verify-tag --draft --title "$title" --generate-notes
           else
-            gh release create "$tag" --verify-tag --title "$title" --generate-notes
+            cat "$view_err" >&2
+            exit 1
           fi
           # Upload only files that were actually produced. The detached
           # signature (.asc) files exist only for signed releases, and literal
@@ -232,6 +247,7 @@ jobs:
           done
           [ "${#assets[@]}" -gt 0 ] || { echo "No release assets were produced" >&2; exit 1; }
           gh release upload "$tag" "${assets[@]}" --clobber
+          gh release edit "$tag" --draft=false --latest
 
       - name: Remove release signing key
         if: always()

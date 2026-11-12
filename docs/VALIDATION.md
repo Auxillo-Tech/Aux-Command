@@ -70,3 +70,15 @@ bash scripts/test-installers.sh /path/to/candidate-packages
 The UI runner starts a disposable Electron profile and uses fixture file dialogs. It checks the actual SSH and JSON import buttons, repeat imports, workspace backup/restore and undo, keyboard focus, a doubled display scale, desktop smoke, and twenty session/reload cycles. It prints an evidence directory with logs and screenshots. Installer checks require Docker and pull Debian 12, Ubuntu 24.04 and Fedora 44 images; only the candidate package directory is mounted read-only, and test containers are removed after use.
 
 The Linux build and release workflows run these checks automatically. Public tag builds must have the configured signing secret; manual unsigned engineering artifacts remain permitted without publication.
+
+## Building packages on hosts with an older compiler
+
+Rebuilding the native modules for the current Electron needs a recent C++ compiler. On hosts where `npm run dist:x64` fails for that reason (Debian 12, for example), build inside the same Ubuntu 24.04 base the release workflow uses:
+
+```bash
+scripts/build-in-container.sh            # packages land in dist/
+scripts/build-in-container.sh /tmp/out   # or in a directory of your choice
+```
+
+It needs Docker, copies only git-tracked files into a scratch directory and produces unsigned development packages. Do not publish them; signed releases come only from the tagged release workflow. The build container is limited to 6 GB of memory and 2 CPUs; set `AUX_BUILD_MEMORY` and `AUX_BUILD_CPUS` to change that.
+
