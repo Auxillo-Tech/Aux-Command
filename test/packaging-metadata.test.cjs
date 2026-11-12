@@ -11,7 +11,7 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 test('flatpak manifest uses the canonical app id and Electron base app', () => {
   const manifest = read('packaging/flatpak/tech.auxillo.command.yml');
-  assert.match(manifest, new RegExp(`app-id: ${pkg.build.appId.replace(/\./gu, '\\.')}`, 'u'));
+  assert.match(manifest, new RegExp(`app-id: ${pkg.build.appId.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`, 'u'));
   assert.match(manifest, /base: org\.electronjs\.Electron2\.BaseApp/u);
   assert.match(manifest, /command: aux-command/u);
   // SSH config access and the secret-service credential store are declared.
@@ -41,7 +41,7 @@ test('AUR PKGBUILDs distinguish source and published binary versions', () => {
       ? read('docs/RELEASE_STATUS.md').match(/latest published release is \*\*v(\d+\.\d+\.\d+)\*\*/u)?.[1]
       : pkg.version;
     assert.ok(expected, `${rel} version source`);
-    assert.match(pkgbuild, new RegExp(`pkgver=${expected.replace(/\./gu, '\\.')}`, 'u'), `${rel} pkgver`);
+    assert.match(pkgbuild, new RegExp(`pkgver=${expected.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`, 'u'), `${rel} pkgver`);
     assert.match(pkgbuild, /license=\('AGPL-3\.0-or-later'\)/u, `${rel} license`);
     assert.match(pkgbuild, /depends=\('openssh' 'python'/u, `${rel} depends`);
     assert.match(pkgbuild, /freerdp: RDP sessions/u, `${rel} optdepends`);
@@ -57,7 +57,7 @@ test('website kit references bundled assets and published downloads', () => {
   assert.match(html, /<title>Aux Command/u);
   const published = read('docs/RELEASE_STATUS.md').match(/latest published release is \*\*v(\d+\.\d+\.\d+)\*\*/u)?.[1];
   assert.ok(published, 'release status must identify a published version');
-  assert.match(html, new RegExp(`Aux-Command-${published.replace(/\./gu, '\\.')}-x86_64\\.AppImage`, 'u'));
+  assert.match(html, new RegExp(`Aux-Command-${published.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}-x86_64\\.AppImage`, 'u'));
   assert.match(html, /auxillo\.tech/u);
   assert.match(html, /AGPL-3\.0/u);
   // Section tags are balanced.

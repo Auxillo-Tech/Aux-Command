@@ -367,3 +367,23 @@ test('system stats report sane values on linux', () => {
   assert.ok(stats.diskUsedPct >= 0 && stats.diskUsedPct <= 100);
   assert.ok(stats.uptimeSec > 0);
 });
+
+test('dangerCheck recognises option spellings and stays fast on very long input', () => {
+  for (const command of ['rm -Rf /', 'rm -vrf /', 'rm -r -f /', 'rm --recursive --force /', 'rm -rfv ~', 'rm -v -rf /', 'chmod -R 777 /', 'chmod -vR 000 /', 'chown -R root /', 'chown -hR nobody:nogroup /']) {
+    assert.ok(dangerCheck(command), `missed: ${command}`);
+  }
+  for (const command of ['rm -v /', 'rm -i notes.txt', 'chmod -v 644 /', 'chmod 755 /', 'chown -h root /', 'rm -rf ./build']) {
+    assert.equal(dangerCheck(command), null, `false positive for: ${command}`);
+  }
+  // Pasted or generated lines can be huge; no option run may slow the check.
+  const long = [
+    `rm -${'r'.repeat(40000)}`,
+    `rm ${'-r '.repeat(20000)}x`,
+    `chmod -${'R'.repeat(40000)} 777`,
+    `chown ${'-R '.repeat(20000)}x`
+  ];
+  const started = process.hrtime.bigint();
+  for (const command of long) dangerCheck(command);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 1000, `checking took ${elapsedMs} ms`);
+});

@@ -181,14 +181,17 @@
 
   const DANGER_RULES = [
     // Targets must be the whole root or home path (`rm -rf /tmp/x` is fine);
+    // the options are consumed once, with a lookahead checking that one of them
+    // is recursive, forced or a long option, so matching stays linear however
+    // long the line is.
     // short, combined and long options are all recognised.
-    { pattern: /\brm\s+((?:-[a-z]*[rf][a-z]*|--[a-z-]+)\s+)+(?:-\S*\s+)*(?:"?\/"?\*?(?=\s|$)|~\/?\*?(?=\s|$)|"?\$\{?HOME\}?"?\/?\*?(?=\s|$)|--no-preserve-root)/iu, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
+    { pattern: /\brm\s+(?=(?:-\S*\s+)*?(?:-(?=[a-eg-qs-z]*[rf])[a-z]+|--[a-z-]+)\s)(?:-\S*\s+)+(?:"?\/"?\*?(?=\s|$)|~\/?\*?(?=\s|$)|"?\$\{?HOME\}?"?\/?\*?(?=\s|$)|--no-preserve-root)/iu, reason: 'Recursively deletes the filesystem root or the entire home directory.' },
     { pattern: /\bdd\b[^|;&]*\bof=\/dev\//iu, reason: 'Writes raw data directly over a block device.' },
     { pattern: /\bmkfs(\.[a-z0-9]+)?\b/iu, reason: 'Creates a new filesystem, destroying everything on the target device.' },
     { pattern: /(^|[|;&]\s*)>(\s*)\/dev\/sd[a-z]/iu, reason: 'Truncates a raw disk device.' },
     { pattern: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/u, reason: 'Fork bomb — exhausts the machine until it hangs.' },
-    { pattern: /\bchmod\s+(-[a-z]*R[a-z]*\s+)+[0-7]{3,4}\s+"?\/"?\s*$/iu, reason: 'Recursively rewrites permissions from the filesystem root.' },
-    { pattern: /\bchown\s+(-[a-z]*R[a-z]*\s+)+\S+\s+"?\/"?\s*$/iu, reason: 'Recursively rewrites ownership from the filesystem root.' },
+    { pattern: /\bchmod\s+(-(?=[a-qs-z]*r)[a-z]+\s+)+[0-7]{3,4}\s+"?\/"?\s*$/iu, reason: 'Recursively rewrites permissions from the filesystem root.' },
+    { pattern: /\bchown\s+(-(?=[a-qs-z]*r)[a-z]+\s+)+\S+\s+"?\/"?\s*$/iu, reason: 'Recursively rewrites ownership from the filesystem root.' },
     { pattern: /\b(iptables|nft)\s+(-F|flush)\b/iu, reason: 'Flushes firewall rules — on a remote host this can lock you out.', anchored: true },
     { pattern: /^(shutdown|poweroff|halt)\b/iu, reason: 'Powers the machine off.', anchored: true },
     { pattern: /^reboot\b/iu, reason: 'Reboots the machine.', anchored: true },

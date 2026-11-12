@@ -613,3 +613,26 @@ test('QA pass: UI state, tools and dialogs behave as labelled', () => {
   assert.match(renderer, /statusResetTimer = window\.setTimeout/u);
   assert.match(styles, /\.sftp-panel > :not\(\.panel-resizer\) \{ grid-column: 1; \}/u);
 });
+
+test('terminal report matching stays fast on hostile terminal output', () => {
+  const start = renderer.indexOf('const terminalReportPattern');
+  const end = renderer.indexOf('function dispatchTerminalInput', start);
+  const isTerminalReport = new Function(`${renderer.slice(start, end)}; return isTerminalReport;`)();
+  // Device control strings and colour reports still count as terminal replies.
+  assert.equal(isTerminalReport('\x1bP1$r0m\x1b\\'), true);
+  assert.equal(isTerminalReport('\x1bP>|xterm\x1b\\\x1b[?1;2c'), true);
+  assert.equal(isTerminalReport('\x1b]4;1;rgb:ffff/0000/0000\x07'), true);
+  assert.equal(isTerminalReport('\x1bPunterminated'), false);
+  // A server can print anything: many control strings followed by text that
+  // never matches used to make the old pattern try every way of pairing them.
+  const hostile = [
+    `${'\x1bPx\x1b\\'.repeat(5000)}!`,
+    `\x1b]${';'.repeat(50000)}x`,
+    `${'\x1bP'.repeat(20000)}`,
+    `${'\x1b[<1;1;1M'.repeat(8000)}\x1b[<`
+  ];
+  const started = process.hrtime.bigint();
+  for (const input of hostile) assert.equal(isTerminalReport(input), false);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 1000, `matching took ${elapsedMs} ms`);
+});

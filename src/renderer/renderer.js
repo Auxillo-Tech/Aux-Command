@@ -1987,7 +1987,10 @@
     tab.assist.bar.classList.add('visible');
   }
 
-  const terminalReportPattern = /^(?:\x1b\[[?>=]?[\d;]*[cnRyt]|\x1b\[\?[\d;]*\$y|\x1b\][\d;]*;?rgb:[^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[\s\S]*?\x1b\\|\x1b\[[IO]|\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3})+$/u;
+  // Terminal output is untrusted, so every alternative matches in exactly one
+  // way: a DCS body cannot contain its own terminator and the OSC prefix has
+  // no overlapping parts. That keeps matching linear on hostile input.
+  const terminalReportPattern = /^(?:\x1b\[[?>=]?[\d;]*[cnRyt]|\x1b\[\?[\d;]*\$y|\x1b\][\d;]*rgb:[^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP(?:[^\x1b]|\x1b(?!\\))*\x1b\\|\x1b\[[IO]|\x1b\[<[\d;]+[Mm]|\x1b\[M[\s\S]{3})+$/u;
   function isTerminalReport(data) {
     return typeof data === 'string' && data.startsWith('\x1b') && terminalReportPattern.test(data);
   }
