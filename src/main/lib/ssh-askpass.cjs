@@ -101,9 +101,15 @@ function usableAnswer(value) {
 // client passes it on unmarked, so a server or jump host could send the
 // exact wording of the password or passphrase prompt and be handed the
 // secret. The prefix arrived in OpenSSH 8.5 (sshconnect2.c, release notes).
-// The gate stays at 8.7 on purpose: 8.5 and 8.6 have not been run as real
-// binaries here, only read from source, and a gate that is too strict only
-// costs a dialog, while one that is too loose hands a secret to a server.
+// The gate stays at 8.7 for 0.5.0 by decision. Real clients have been run:
+// scripts/qualify-ssh-version-gate.sh builds OpenSSH 8.4p1, 8.5p1, 8.6p1 and
+// 8.7p1 from the official tarballs and runs this policy against a server that
+// words keyboard-interactive prompts like OpenSSH's own. With the gate off,
+// 8.4 handed the saved secret to the imitation and 8.5, 8.6 and 8.7 did not,
+// so 8.5 and 8.6 look safe and are candidates for a later release. Only those
+// four builds and that server were run: not 9.x, not distribution builds with
+// backported patches. A gate that is too strict only costs a dialog, while
+// one that is too loose hands a secret to a server.
 const FORCED_ASKPASS_VERSION = [8, 4];
 const SAVED_CREDENTIAL_VERSION = [8, 7];
 const clientVersions = new Map();
