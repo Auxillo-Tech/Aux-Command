@@ -136,6 +136,14 @@ test('the editor translates validation text from its parts and the error path us
 });
 
 test('saving an edited stored profile never sends the invalid marker back', () => {
+  // The editor sends only what its form holds: no copy of the stored profile,
+  // so neither the marker nor a display copy's value can reach the store.
+  // scripts/test-profile-editor-ui.py checks the payload through the real form.
   const renderer = fs.readFileSync(path.join(__dirname, '..', 'src/renderer/renderer.js'), 'utf8');
-  assert.match(renderer, /const \{ invalid: _invalid, \.\.\.existingFields \} = existing \|\| \{\};\s+const next = \{\s+\.\.\.existingFields,/u);
+  const start = renderer.indexOf('const saveProfile = async () => {');
+  const end = renderer.indexOf('const saved = await api.profiles.save(next);', start);
+  assert.ok(start > 0 && end > start, 'saveProfile and its save call are found');
+  const body = renderer.slice(start, end);
+  assert.match(body, /const next = \{\s+id: existing\?\.id,/u);
+  assert.doesNotMatch(body, /\.\.\.\s*existing|\.\.\.\s*profile\b|Object\.assign\(\s*next/u);
 });

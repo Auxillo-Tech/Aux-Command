@@ -17,12 +17,13 @@ spec.loader.exec_module(m)
 c = m.CDP(m.get_ws_url())
 
 
-def wait(expr):
-    for _ in range(100):
+def wait(expr, seconds=30):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
         if c.eval(expr):
             return
         time.sleep(.1)
-    raise AssertionError(expr)
+    raise AssertionError('not reached within %ss: %s' % (seconds, expr))
 
 
 def click(selector):
@@ -38,7 +39,7 @@ def key(name, code, modifiers=0):
 
 try:
     wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
-    c.eval('document.querySelector("#tour-skip")?.click()')
+    c.dismiss_tour()
     click('#local-button')
     wait('document.querySelectorAll(".session-tab").length>=1')
 

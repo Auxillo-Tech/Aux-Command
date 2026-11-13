@@ -4,13 +4,15 @@ import importlib.util,json,time
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('smoke',Path(__file__).with_name('e2e-cdp-smoke.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 c=m.CDP(m.get_ws_url())
-def wait(expr):
- for _ in range(200):
+def wait(expr,seconds=30):
+ end=time.monotonic()+seconds
+ while time.monotonic()<end:
   if c.eval(expr):return
   time.sleep(.1)
- raise AssertionError(expr)
+ raise AssertionError('not reached within %ss: %s'%(seconds,expr))
 try:
  wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.dismiss_tour()
+ c.clear_sessions()
  c.eval("(async()=>{for(let i=0;i<600;i++)await auxCommand.profiles.save({id:'scale-'+i,name:'Scale target '+String(i).padStart(4,'0'),protocol:'local',group:'Scale / Saved',tags:['benchmark']});})()",timeout=120)
  start=time.monotonic();c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  loaded=time.monotonic()-start;rows=c.eval('document.querySelectorAll(".profile-item").length');assert rows<=201

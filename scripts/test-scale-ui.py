@@ -14,7 +14,7 @@ def wait(expr,seconds=30):
 try:
  wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.dismiss_tour()
- c.eval("(async()=>{for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);await auxCommand.app.saveSessions([]);})()")
+ c.clear_sessions()
  c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.call('Performance.enable')
  results=[]
@@ -46,7 +46,7 @@ try:
   print(json.dumps(results[-1]),flush=True)
   # Switching tabs remains interactive with all sessions open.
   start=time.monotonic();c.eval("document.querySelector('.tab-select').click()");assert time.monotonic()-start<5
- c.eval("(async()=>{for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);await auxCommand.app.saveSessions([]);})()",timeout=30)
+ c.clear_sessions()
  wait('(async()=>(await auxCommand.terminal.list()).length===0)()')
  print('SCALE_20_50_HEAVY_OUTPUT_BOUNDED_TRANSCRIPTS_CLEANUP_PASSED')
 finally:c.close()

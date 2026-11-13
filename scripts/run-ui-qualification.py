@@ -168,7 +168,7 @@ try:
         )
     for script in os.environ.get(
         "AUX_UI_SCRIPTS",
-        "e2e-cdp-smoke.py,test-recovery-ui.py,test-workspace-ui.py,test-tab-rename-focus-ui.py,test-file-browser-ui.py,test-panels-ui.py,test-named-workspaces-ui.py,test-product-upgrades-ui.py,test-desktop-controls-ui.py,test-languages-ui.py,soak-cdp.py",
+        "e2e-cdp-smoke.py,test-recovery-ui.py,test-workspace-ui.py,test-tab-rename-focus-ui.py,test-file-browser-ui.py,test-panels-ui.py,test-named-workspaces-ui.py,test-product-upgrades-ui.py,test-desktop-controls-ui.py,test-languages-ui.py,test-profile-editor-ui.py,soak-cdp.py",
     ).split(","):
         script_path = Path(script)
         if not script_path.is_absolute():

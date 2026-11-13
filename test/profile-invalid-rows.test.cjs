@@ -30,6 +30,10 @@ function fixture(t, rows = LEGACY) {
   return { directory, file, store: new ProfileStore(directory), storedRows, legacyOnDisk, expected: rows.map((row) => JSON.parse(JSON.stringify(row))) };
 }
 
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 test('legacy-invalid rows stay in the list, marked with the wrong field and a plain fix', (t) => {
   const f = fixture(t);
   const all = f.store.listAll();
@@ -170,6 +174,206 @@ test('fixing only the username keeps every other field when the payload is only 
       x11Forwarding: view.x11Forwarding, terminalFontSize: Number(view.terminalFontSize), credentialId: view.credentialId
     });
   });
+});
+
+// The longest value normalizeProfile accepts per text field (src/main/lib/validation.cjs).
+const VALIDATION_MAX = {
+  name: 120, protocol: 16, group: 80, host: 255, username: 128, identityFile: 4096, knownHostsFile: 4096,
+  sshAlias: 255, transferMode: 16, credentialId: 128, credentialKind: 16, tabColor: 32, startupCommand: 2048,
+  proxyJump: 512, sftpRoot: 4096, ftpsMode: 16, device: 4096, rdpDomain: 128, terminalTheme: 32,
+  terminalFontFamily: 240, terminalCursorStyle: 32, notes: 4096, createdAt: 64, updatedAt: 64
+};
+
+test('the view of a hand-edited row with oversized values is cut at the validation maximum, the stored row is not', (t) => {
+  const huge = (letter) => letter.repeat(20_000);
+  const row = { id: 'oversized', protocol: 'ssh', tags: Array.from({ length: 300 }, () => 't'.repeat(2000)), sshAliases: Array.from({ length: 300 }, () => 'a'.repeat(2000)) };
+  for (const field of Object.keys(VALIDATION_MAX)) if (field !== 'protocol') row[field] = huge(field[0]);
+  const f = fixture(t, [row]);
+  const before = fs.readFileSync(f.file);
+  const view = f.store.listAll().find((p) => p.id === 'oversized');
+  assert.ok(view.invalid, 'the row is shown as invalid');
+  for (const [field, max] of Object.entries(VALIDATION_MAX)) {
+    if (typeof view[field] !== 'string') continue;
+    assert.ok(view[field].length <= max, `${field} is ${view[field].length} characters, over ${max}`);
+  }
+  for (const field of Object.keys(VALIDATION_MAX)) {
+    if (field === 'protocol') continue;
+    assert.equal(view[field], field[0].repeat(VALIDATION_MAX[field]), `${field} keeps its own text up to the maximum`);
+  }
+  assert.ok(view.tags.length <= 24 && view.tags.every((tag) => tag.length <= 48));
+  assert.ok(view.sshAliases.length <= 128 && view.sshAliases.every((alias) => alias.length <= 255));
+  assert.ok(JSON.stringify(view).length < 64 * 1024, 'the whole view stays small');
+  assert.deepEqual(fs.readFileSync(f.file), before, 'reading never changes the stored row');
+});
+
+test('an oversized id reaches the window exactly, so the row can still be deleted', (t) => {
+  const id = 'i'.repeat(5000);
+  const f = fixture(t, [{ ...RICH, id }]);
+  const view = f.store.listAll().find((p) => p.invalid && p.host === RICH.host);
+  assert.equal(view.id, id, 'the id is the stored key, never cut');
+  assert.equal(f.store.delete(view.id), true);
+  assert.equal(f.storedRows().some((row) => row.id === id), false);
+});
+
+test('a row invalid only for an oversized value is never rewritten from its cut view', (t) => {
+  const name = 'n'.repeat(500);
+  const f = fixture(t, [{ ...RICH, id: 'long-name', name, username: 'jd', rdpDomain: 'KEEP' }]);
+  const raw = fs.readFileSync(f.file);
+  const view = f.store.listAll().find((p) => p.id === 'long-name');
+  assert.ok(view.invalid, 'a 500-character name fails validation');
+  assert.equal(view.name.length, 120);
+  // What Favourite, Move to group and a bulk edit send for this row.
+  assert.throws(() => f.store.save({ ...view, favorite: !view.favorite }), new RegExp(escapeRegExp(view.invalid.message)));
+  assert.throws(() => f.store.save({ ...view, group: 'Elsewhere' }), new RegExp(escapeRegExp(view.invalid.message)));
+  // The same holds for a list entry that was cut: a 60-character tag.
+  const g = fixture(t, [{ ...RICH, id: 'long-tag', username: 'jd', tags: ['ok', 'x'.repeat(60)] }]);
+  const tagRaw = fs.readFileSync(g.file);
+  const tagView = g.store.listAll().find((p) => p.id === 'long-tag');
+  assert.ok(tagView.invalid);
+  assert.deepEqual(tagView.tags, ['ok', 'x'.repeat(48)]);
+  assert.throws(() => g.store.save({ ...tagView, favorite: !tagView.favorite }), new RegExp(escapeRegExp(tagView.invalid.message)));
+  assert.deepEqual(fs.readFileSync(g.file), tagRaw);
+  assert.throws(() => f.store.bulkUpdate(['long-name'], { group: 'Bulk' }), new RegExp(escapeRegExp(view.invalid.message)));
+  assert.deepEqual(fs.readFileSync(f.file), raw, 'nothing was written');
+  // The editor's own fields can still fix it.
+  const fixed = f.store.save({ id: 'long-name', name: 'Short again', protocol: 'ssh', host: RICH.host, username: 'jd' });
+  assert.equal(fixed.name, 'Short again');
+  assert.equal(f.storedRows().find((row) => row.id === 'long-name').rdpDomain, 'KEEP');
+});
+
+test('an editor save over an invalid row never stores the cut text of a field it did not change', (t) => {
+  // Two faults: a username that fails validation and a startup command over the maximum.
+  // The editor sends the fields it shows, as shown (cut), and never the `invalid` marker.
+  const tail = '; rm -rf /';
+  const command = `echo ${'a'.repeat(2048 - 5 - tail.length)}${tail}tmp/build-cache-keepme`;
+  assert.equal(command.length, 2070);
+  const f = fixture(t, [{ ...RICH, id: 'two-faults', username: 'CORP\\jd', startupCommand: command, notes: 'n'.repeat(5000) }]);
+  const raw = fs.readFileSync(f.file);
+  const view = f.store.listAll().find((p) => p.id === 'two-faults');
+  assert.ok(view.invalid && view.invalid.field === 'username', 'validation stops at the username first');
+  assert.equal(view.startupCommand.length, 2048, 'the window shows the command cut');
+  assert.ok(view.startupCommand.endsWith(tail), 'the cut copy ends in a different command');
+  const { invalid: _invalid, ...shown } = view;
+  assert.throws(() => f.store.save({ ...shown, username: 'jd@corp' }), /Startup command is too long/u);
+  assert.deepEqual(fs.readFileSync(f.file), raw, 'a refused save writes nothing');
+  // Fixing the command as well saves, and only then.
+  const fixedCommand = 'echo fixed';
+  assert.throws(() => f.store.save({ ...shown, username: 'jd@corp', startupCommand: fixedCommand }), /Notes are too long|notes/iu);
+  assert.deepEqual(fs.readFileSync(f.file), raw, 'the notes cut is refused as well');
+  const saved = f.store.save({ ...shown, username: 'jd@corp', startupCommand: fixedCommand, notes: 'short' });
+  assert.equal(saved.startupCommand, fixedCommand);
+  const row = f.storedRows().find((r) => r.id === 'two-faults');
+  assert.equal(row.username, 'jd@corp');
+  assert.equal(row.notes, 'short');
+});
+
+// What the editor form hands back for the fields it shows: every input is trimmed, a
+// textarea (startup command, notes) returns its line breaks as LF.
+function editorShaped(view, changes = {}) {
+  const { invalid: _invalid, ...fields } = view;
+  const out = {};
+  for (const [key, value] of Object.entries({ ...fields, ...changes })) {
+    if (typeof value !== 'string') out[key] = value;
+    else if (key === 'startupCommand' || key === 'notes') out[key] = value.replace(/\r\n?/gu, '\n');
+    else out[key] = value.trim();
+  }
+  return out;
+}
+
+function refusedWithReason(f, id, payload, field, label) {
+  const raw = fs.readFileSync(f.file);
+  assert.throws(() => f.store.save(payload), (error) => error.field === field && /too long/iu.test(error.message), label + ': refused with the field reason');
+  assert.deepEqual(fs.readFileSync(f.file), raw, label + ': a refused save writes nothing');
+  assert.ok(f.store.listAll().find((p) => p.id === id).invalid, label + ': still invalid');
+}
+
+test('an editor-shaped save (trimmed inputs, LF textareas) over an invalid row never stores the cut text of a CRLF startup command', (t) => {
+  const tail = '; rm -rf /';
+  const lines = 'echo one\r\n'.repeat(100);
+  const command = `${lines}echo ${'a'.repeat(2048 - lines.length - 5 - tail.length)}${tail}tmp/build-cache-keepme`;
+  assert.equal(command.length, 2070);
+  const f = fixture(t, [{ ...RICH, id: 'crlf-command', username: 'CORP\\jd', startupCommand: command }]);
+  const view = f.store.listAll().find((p) => p.id === 'crlf-command');
+  assert.equal(view.startupCommand.length, 2048);
+  assert.ok(view.startupCommand.endsWith(tail), 'the cut copy ends in a different command');
+  const sent = editorShaped(view, { username: 'jd@corp' });
+  assert.notEqual(sent.startupCommand, view.startupCommand, 'the editor changes the cut copy before sending it');
+  refusedWithReason(f, 'crlf-command', sent, 'startupCommand', 'CRLF startup command');
+});
+
+test('an editor-shaped save over an invalid row never stores the cut text of CRLF notes', (t) => {
+  const notes = 'note line\r\n'.repeat(400);
+  assert.equal(notes.length, 4400);
+  const f = fixture(t, [{ ...RICH, id: 'crlf-notes', username: 'CORP\\jd', notes }]);
+  const view = f.store.listAll().find((p) => p.id === 'crlf-notes');
+  const sent = editorShaped(view, { username: 'jd@corp' });
+  assert.notEqual(sent.notes, view.notes, 'the editor changes the cut copy before sending it');
+  refusedWithReason(f, 'crlf-notes', sent, 'notes', 'CRLF notes');
+});
+
+test('an editor-shaped save over an invalid row never stores the trimmed cut of a long text field', (t) => {
+  // Cut point right after a space: the window shows the cut with its trailing space, the editor trims it.
+  const spaced = (length, prefix) => `${prefix}${'k'.repeat(length - prefix.length - 2)} x`;
+  const rows = {
+    identityFile: spaced(4097, '/home/ops/.ssh/'),
+    knownHostsFile: spaced(4097, '/home/ops/.ssh/'),
+    sftpRoot: `/${'d'.repeat(4094)} x`,
+    proxyJump: `${'a'.repeat(511)} b`,
+    terminalFontFamily: `${'F'.repeat(239)} x`,
+    name: `Name ${'N'.repeat(114)} tail`
+  };
+  for (const [field, value] of Object.entries(rows)) {
+    const f = fixture(t, [{ ...RICH, id: `spaced-${field}`, username: 'CORP\\jd', [field]: value }]);
+    const view = f.store.listAll().find((p) => p.id === `spaced-${field}`);
+    assert.equal(view[field].length, VALIDATION_MAX[field], `${field}: the window shows the cut at the maximum`);
+    assert.ok(view[field].endsWith(' '), `${field}: the cut ends in a space`);
+    const sent = editorShaped(view, { username: 'jd@corp' });
+    assert.notEqual(sent[field], view[field], `${field}: the editor trims the cut copy before sending it`);
+    refusedWithReason(f, `spaced-${field}`, sent, field, field);
+  }
+});
+
+test('a text field the editor changed is saved as sent over an invalid row', (t) => {
+  const f = fixture(t, [{ ...RICH, id: 'edited-command', username: 'CORP\\jd', startupCommand: `echo ${'a'.repeat(2100)}` }]);
+  const view = f.store.listAll().find((p) => p.id === 'edited-command');
+  const saved = f.store.save(editorShaped(view, { username: 'jd@corp', startupCommand: 'echo short' }));
+  assert.equal(saved.startupCommand, 'echo short');
+  assert.equal(f.storedRows().find((r) => r.id === 'edited-command').username, 'jd@corp');
+});
+
+test('Duplicate on a row invalid only for an oversized value refuses and never stores the cut copy as a new row', (t) => {
+  const command = `echo ${'a'.repeat(2060)}`;
+  const f = fixture(t, [{ ...RICH, id: 'long-command', username: 'jd', startupCommand: command }]);
+  const raw = fs.readFileSync(f.file);
+  const view = f.store.listAll().find((p) => p.id === 'long-command');
+  assert.ok(view.invalid && view.startupCommand.length === 2048, 'the window shows the command cut');
+  // What the renderer's duplicateProfile sends: the view without id, credentialId and updatedAt.
+  const { id: _id, credentialId: _credentialId, updatedAt: _updatedAt, ...copy } = view;
+  assert.throws(() => f.store.save({ ...copy, name: 'Copy', favorite: false }), /Startup command is too long/u);
+  assert.deepEqual(fs.readFileSync(f.file), raw, 'nothing was written');
+});
+
+test('values at or under the validation maximum reach the editor view unchanged', (t) => {
+  const row = { ...RICH, id: 'at-limit', username: 'CORP\\jd', name: 'n'.repeat(120), rdpDomain: 'D'.repeat(128), proxyJump: 'p'.repeat(512), notes: 'x'.repeat(4096) };
+  const f = fixture(t, [row]);
+  const view = f.store.listAll().find((p) => p.id === 'at-limit');
+  assert.equal(view.invalid.field, 'username');
+  for (const field of ['name', 'rdpDomain', 'proxyJump', 'notes']) assert.equal(view[field], row[field], field);
+});
+
+test('a save that leaves out the fields the editor hides keeps their stored values, valid and invalid rows alike', (t) => {
+  const valid = { ...RICH, id: 'valid-rich', username: 'jd' };
+  const f = fixture(t, [RICH, valid]);
+  const hidden = ['baudRate', 'device', 'rdpDomain', 'rdpWidth', 'rdpHeight', 'rdpAudio', 'ftpsMode'];
+  for (const id of ['legacy-rich', 'valid-rich']) {
+    const saved = f.store.save({ id, name: 'Edited', protocol: 'ssh', host: 'rich.example', username: 'jd@corp' });
+    assert.equal(saved.name, 'Edited');
+    const row = f.storedRows().find((r) => r.id === id);
+    for (const key of hidden) assert.deepEqual(row[key], saved[key], `${id} ${key} in the returned profile`);
+    for (const key of ['baudRate', 'rdpDomain', 'rdpWidth', 'rdpHeight', 'rdpAudio', 'notes', 'startupCommand', 'tags', 'createdAt']) {
+      assert.deepEqual(row[key], RICH[key], `${id} ${key} kept`);
+    }
+  }
 });
 
 test('saving an id-only payload over an invalid row still starts from the full stored row', (t) => {

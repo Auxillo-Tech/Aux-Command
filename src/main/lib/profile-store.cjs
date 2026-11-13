@@ -125,8 +125,9 @@ class ProfileStore {
   }
 
   save(input) {
-    // `invalid` only ever comes from the window's copy of a stored profile.
-    const { invalid: _marker, ...source } = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    // `invalid` only ever comes from the window's copy of a stored profile; the
+    // editor's own payload never carries it, so nothing below may depend on it.
+    const { invalid: marker, ...source } = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
     if (source.id === 'local-shell' && source.protocol && source.protocol !== 'local') {
       throw new Error('The default local shell must remain a local profile');
     }
@@ -142,8 +143,18 @@ class ProfileStore {
       const row = this.#rows({ ...data, profiles: [stored] })[0];
       existing = { id: stored.id };
       base = row.invalid ? withAliasGroups(stored, data) : row;
+      // The window shows a stored invalid row with long values cut to the
+      // validation limits, and the editor sends back what it shows, with or
+      // without the `invalid` marker. Over any stored invalid row, a field that
+      // still holds exactly the cut text keeps its stored value, so a cut never
+      // replaces a stored value unasked and validation refuses it with the
+      // real reason.
+      if (row.invalid) keepUncut(source, base);
     }
-    const normalized = normalizeProfile({ ...base, ...source, updatedAt: new Date().toISOString() }, existing?.id || source.id);
+    // A marked copy that matches no stored row (Duplicate on an invalid row) is a new row built from the
+    // cut display copy: it keeps the marker, so validation refuses it with the row's own reason.
+    const marked = !existing && marker !== undefined ? { invalid: marker } : {};
+    const normalized = normalizeProfile({ ...base, ...source, ...marked, updatedAt: new Date().toISOString() }, existing?.id || source.id);
     this.store.update((data) => {
       const index = data.profiles.findIndex((profile) => profile?.id === normalized.id);
       if (index >= 0) data.profiles[index] = normalized;
@@ -166,7 +177,7 @@ class ProfileStore {
       const existing = currentProfiles.get(id);
       if (!existing) throw new Error('A selected connection no longer exists');
       // An invalid stored profile stops the whole change with its own reason;
-      // nothing is written.
+      // nothing is written (normalizeProfile refuses the `invalid` marker).
       return normalizeProfile({ ...existing, ...patch, updatedAt: new Date().toISOString() }, id);
     });
     const byId = new Map(updates.map(p => [p.id, p]));
@@ -314,8 +325,47 @@ const BOOLEAN_FIELDS = [
   'inheritTerminalDefaults', 'terminalCursorBlink'
 ];
 const BOOLEAN_DEFAULTS = { useSshConfig: true, terminalCursorBlink: true };
-// Only the name is cut: it is the list text, and one over 120 characters is invalid anyway.
-const LIST_NAME_LIMIT = 500;
+// The longest value normalizeProfile accepts for each text field (validation.cjs),
+// and for the two lists. The view of an invalid row is cut to these, so a
+// hand-edited profiles.json cannot send an oversized value to the window. A value
+// that was cut is still the stored row's own text up to that length; the stored
+// row itself is never changed by reading it. The id is not cut: it is the key the
+// window uses to edit or delete the row, so it must match the stored row exactly.
+const STRING_LIMITS = {
+  name: 120, protocol: 16, group: 80, host: 255, username: 128, identityFile: 4096, knownHostsFile: 4096,
+  sshAlias: 255, transferMode: 16, credentialId: 128, credentialKind: 16, tabColor: 32, startupCommand: 2048,
+  proxyJump: 512, sftpRoot: 4096, ftpsMode: 16, device: 4096, rdpDomain: 128, terminalTheme: 32,
+  terminalFontFamily: 240, terminalCursorStyle: 32, notes: 4096, createdAt: 64, updatedAt: 64
+};
+const LIST_LIMITS = { tags: { items: 24, length: 48 }, sshAliases: { items: 128, length: 255 } };
+
+function capped(value, limit = 512) {
+  return value.length <= limit ? value : value.trim().slice(0, limit);
+}
+
+function cappedList(value, { items, length }) {
+  return Array.isArray(value) ? value.filter((entry) => typeof entry === 'string').slice(0, items).map((entry) => capped(entry, length)) : [];
+}
+
+// A text field as the editor hands it back: line ends as LF (a textarea does this),
+// then trimmed (every input does this).
+function editorText(value) {
+  return value.replace(/\r\n?/gu, '\n').trim();
+}
+
+function keepUncut(source, stored) {
+  for (const field of STRING_FIELDS) {
+    const value = stored[field];
+    if (typeof value === 'string' && value.length > (STRING_LIMITS[field] ?? 512) && typeof source[field] === 'string'
+      && editorText(source[field]) === editorText(capped(value, STRING_LIMITS[field]))) delete source[field];
+  }
+  for (const [field, limits] of Object.entries(LIST_LIMITS)) {
+    const value = stored[field];
+    if (!Array.isArray(value) || !Array.isArray(source[field])) continue;
+    const cut = cappedList(value, limits);
+    if (JSON.stringify(cut) !== JSON.stringify(value) && JSON.stringify(source[field]) === JSON.stringify(cut)) delete source[field];
+  }
+}
 
 function withAliasGroups(own, data) {
   return { ...own, sshAliases: [...(Array.isArray(own.sshAliases) ? own.sshAliases : []), ...(data?.sshAliasGroups?.[own.id] || [])] };
@@ -327,16 +377,16 @@ function withAliasGroups(own, data) {
 function invalidView(row, error, data) {
   const source = row && typeof row === 'object' && !Array.isArray(row) ? withAliasGroups(row, data) : {};
   const view = { id: typeof source.id === 'string' ? source.id : '' };
-  for (const field of STRING_FIELDS) if (typeof source[field] === 'string') view[field] = source[field];
+  for (const field of STRING_FIELDS) if (field !== 'id' && typeof source[field] === 'string') view[field] = capped(source[field], STRING_LIMITS[field]);
   for (const field of NUMBER_FIELDS) if (Number.isFinite(source[field])) view[field] = source[field];
   // A flag the row never had reads as normalizeProfile would read it.
   for (const field of BOOLEAN_FIELDS) view[field] = typeof source[field] === 'boolean' ? source[field] : BOOLEAN_DEFAULTS[field] ?? false;
-  view.name = (view.name || view.host || view.id || '').slice(0, LIST_NAME_LIMIT);
+  view.name = capped(view.name || view.host || view.id || '', STRING_LIMITS.name);
   view.protocol ||= 'ssh';
   view.group = view.group || 'Connections';
   if (!(Number.isInteger(source.port) && source.port >= 1 && source.port <= 65535)) delete view.port;
-  view.tags = Array.isArray(source.tags) ? source.tags.filter((tag) => typeof tag === 'string') : [];
-  view.sshAliases = Array.isArray(source.sshAliases) ? source.sshAliases.filter((alias) => typeof alias === 'string') : [];
+  view.tags = cappedList(source.tags, LIST_LIMITS.tags);
+  view.sshAliases = cappedList(source.sshAliases, LIST_LIMITS.sshAliases);
   view.invalid = { field: typeof error?.field === 'string' ? error.field : '', message: String(error?.message || 'invalid entry') };
   return view;
 }

@@ -516,6 +516,13 @@
     window.setTimeout(() => item.remove(), kind === 'error' ? 6500 : 3200);
   }
 
+  // Removes an error toast that is showing, by its title.
+  function dismissToast(title) {
+    for (const item of elements.toastRegion.querySelectorAll('.toast')) {
+      if (item.dataset.toastTitle === title) item.remove();
+    }
+  }
+
   // Why a stored connection cannot be used, in the user's language: the
   // message names the field and says what to change.
   function invalidProfileText(profile) {
@@ -1510,6 +1517,7 @@
           className: `profile-item${profile.id === state.selectedProfileId ? ' selected' : ''}${profile.invalid ? ' invalid' : ''}`,
           attrs: { role: 'listitem' }
         }, [connectButton, editButton]);
+        item.dataset.profileId = profile.id;
         applyTabColor(item, profile);
         item.addEventListener('contextmenu', (event) => {
           event.preventDefault();
@@ -3745,6 +3753,13 @@
       terminalScrollback: 20_000,
       ...defaults
     };
+    // Where focus goes back to when the editor closes: the control that opened
+    // it, or, when that is gone (the actions menu closes before the editor opens,
+    // and a save redraws the list), the profile's own actions button.
+    const opener = document.activeElement !== document.body ? document.activeElement : null;
+    // The "Fix this connection first" alert from Enter on an invalid row would
+    // otherwise stay over the editor's Save and Cancel buttons until it expires.
+    dismissToast(uiText('Fix this connection first'));
     const hasCredential = profile.credentialId ? await api.vault.has(profile.credentialId).catch(() => false) : false;
     const protocol = selectInput('protocol', [
       ['ssh', 'SSH'], ['mosh', uiText('Mosh')], ['ftp', 'FTP'], ['ftps', 'FTPS'], ['rdp', 'RDP'], ['vnc', 'VNC'], ['telnet', uiText('Telnet')], ['serial', uiText('Serial')], ['local', uiText('Local shell')]
@@ -3893,15 +3908,31 @@
     protocol.addEventListener('change', updateConditionalFields);
     updateConditionalFields();
 
+    // An invalid stored row reaches this editor as a display copy: long values are
+    // cut at the validation maximum. Whatever the form does to a value on its way
+    // back (trim, line endings), a control the user did not touch must not send it,
+    // or the cut copy replaces the stored value. So for an invalid row the text
+    // controls remember what they were filled with, and Save leaves out every one
+    // that still holds it, whatever the browser made of the stored text (an input
+    // drops line breaks, a textarea turns CRLF into LF). A field the view had no
+    // value for (a default was filled in) is not remembered and keeps being sent.
+    const filledIn = new Map();
+    if (existing?.invalid) {
+      for (const control of form.querySelectorAll('textarea, input:not([type]), input[type=text]')) {
+        if (control.name && typeof existing[control.name] === 'string' && existing[control.name] !== '') filledIn.set(control, control.value);
+      }
+    }
+
     let controller;
+    let savedId = '';
     const saveProfile = async () => {
       if (!form.reportValidity()) return false;
       const values = new FormData(form);
       const selectedProtocol = existing?.id === 'local-shell' ? 'local' : values.get('protocol');
-      // The marker on a stored profile that failed validation is not saved back.
-      const { invalid: _invalid, ...existingFields } = existing || {};
+      // Only what the form holds is sent. The store starts from the full stored
+      // row, so every field the form has no control for keeps its stored value;
+      // the window's copy of an invalid row is a display copy and never saved.
       const next = {
-        ...existingFields,
         id: existing?.id,
         name: String(values.get('name') || '').trim(),
         protocol: selectedProtocol,
@@ -3939,11 +3970,30 @@
         terminalCursorBlink: values.has('terminalCursorBlink'),
         terminalScrollback: Number(values.get('terminalScrollback') || 20000)
       };
+      // A field the selected protocol does not show is disabled, so FormData
+      // leaves it out and the line above would hold a default. Leave it out of
+      // the save instead: the store keeps the stored value (a new profile gets
+      // the normal default). RDP always uses an account password. The one field
+      // a stored row is invalid on still takes the default, so it can be saved.
+      const previousCredentialKind = existing?.credentialKind || (existing?.identityFile ? 'passphrase' : 'password');
+      const invalidField = existing?.invalid?.field || '';
+      for (const control of form.querySelectorAll('[data-when][hidden] [name]')) {
+        const field = control.name;
+        if (!Object.hasOwn(next, field) || field === 'protocol' || field === invalidField) continue;
+        if (field === 'credentialKind') {
+          if (selectedProtocol !== 'rdp' && existing) next.credentialKind = previousCredentialKind;
+          continue;
+        }
+        delete next[field];
+      }
+
+      // Left out because the user did not change it: the store keeps the stored
+      // value, and validation refuses it with the field's own reason if it is invalid.
+      for (const [control, shown] of filledIn) if (control.value === shown) delete next[control.name];
 
       const previousCredentialId = existing?.credentialId || '';
       const clearSecret = values.has('clearSecret');
       const secretValue = String(values.get('secret') || '');
-      const previousCredentialKind = existing?.credentialKind || (existing?.identityFile ? 'passphrase' : 'password');
       if (previousCredentialId && previousCredentialKind !== next.credentialKind && !secretValue && !clearSecret) {
         secret.setCustomValidity(uiText('Changing the credential type requires entering a replacement credential or removing the stored one.'));
         secret.reportValidity();
@@ -3985,6 +4035,7 @@
       await api.sftp.disconnect(saved.id, saved.protocol).catch(() => {});
       updateProfiles(await api.profiles.list());
       state.selectedProfileId = saved.id;
+      savedId = saved.id;
       renderProfiles();
       toast(existing ? uiText('Connection updated') : uiText('Connection created'), saved.name, 'success');
       return true;
@@ -4014,6 +4065,16 @@
         : form,
       className: 'wide',
       actions
+    });
+    controller.onClose(() => {
+      // Runs as the editor closes, after a save has redrawn the list. Anything
+      // that already took focus keeps it.
+      const holder = document.activeElement;
+      if (holder && holder !== document.body && holder !== document.documentElement) return;
+      if (opener?.isConnected && opener.getClientRects().length) { opener.focus(); return; }
+      const id = savedId || existing?.id || '';
+      const row = id ? [...elements.profileList.querySelectorAll('.profile-item')].find((item) => item.dataset.profileId === id) : null;
+      row?.querySelector('.profile-edit')?.focus();
     });
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
