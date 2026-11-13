@@ -17,6 +17,21 @@ const SNAPSHOT_COMMAND = [
   "echo '===NETWORK==='; (ss -tulnp 2>/dev/null || netstat -tulnp 2>/dev/null) | head -30"
 ].join('; ');
 
+const WHITESPACE = /\s/u;
+
+// Drops the blank lines before the first text line and all whitespace at the
+// end, keeping the leading spaces of the first text line. The same result as
+// replace(/^\s*\n|\s+$/gu, ''), which is quadratic on a long run of
+// whitespace in remote output.
+function trimBlankEdges(text) {
+  let firstText = 0;
+  while (firstText < text.length && WHITESPACE.test(text[firstText])) firstText += 1;
+  const start = text.lastIndexOf('\n', firstText - 1) + 1;
+  let end = text.length;
+  while (end > start && WHITESPACE.test(text[end - 1])) end -= 1;
+  return text.slice(start, end);
+}
+
 class LiveMonitorService {
   constructor(options = {}) {
     this.sshExecutable = options.sshExecutable || findExecutable(['ssh']) || 'ssh';
@@ -172,9 +187,9 @@ class LiveMonitorService {
       }
     }
     // Only blank lines are trimmed; leading spaces align columns (free -h, ps).
-    for (const key of Object.keys(sections)) sections[key] = sections[key].replace(/^\s*\n|\s+$/gu, '');
+    for (const key of Object.keys(sections)) sections[key] = trimBlankEdges(sections[key]);
     return sections;
   }
 }
 
-module.exports = { LiveMonitorService, SNAPSHOT_COMMAND };
+module.exports = { LiveMonitorService, SNAPSHOT_COMMAND, trimBlankEdges };

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { normalizeProfile } = require('./validation.cjs');
+const { globMatch } = require('./openssh-known-hosts.cjs');
 
 function stripInlineComment(line) {
   let quote = '';
@@ -53,12 +54,8 @@ function resolveIncludePattern(pattern, baseDir) {
     if (!hasGlob) {
       return fs.statSync(candidate).isFile() ? [candidate] : [];
     }
-    const matcher = new RegExp(`^${base
-      .replace(/[.+^${}()|[\]\\]/gu, '\\$&')
-      .replace(/\*/gu, '.*')
-      .replace(/\?/gu, '.')}$`, 'u');
     return fs.readdirSync(directory)
-      .filter((name) => matcher.test(name))
+      .filter((name) => globMatch(base, name, { ignoreCase: false }))
       .sort()
       .map((name) => path.join(directory, name))
       .filter((file) => {

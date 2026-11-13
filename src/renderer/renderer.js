@@ -1269,7 +1269,7 @@
       label: uiText('Group name'),
       placeholder: uiText('Production')
     });
-    const trimmed = String(name || '').trim().replace(/\s*\/\s*/g,' / ').slice(0, 60);
+    const trimmed = String(name || '').trim().split('/').map((part) => part.trim()).join(' / ').slice(0, 60);
     if (!trimmed) return;
     if (knownGroupNames().some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
       toast(uiText('Group already exists'), trimmed, 'error');
@@ -1287,7 +1287,7 @@
       label: uiText('Group name'),
       value: groupName
     });
-    const trimmed = String(name || '').trim().replace(/\s*\/\s*/g,' / ').slice(0, 60);
+    const trimmed = String(name || '').trim().split('/').map((part) => part.trim()).join(' / ').slice(0, 60);
     if (!trimmed || trimmed === groupName) return;
     const members = state.profiles.filter((profile) => (profile.group || 'Connections') === groupName || profile.group?.startsWith(groupName + ' / '));
     await api.profiles.moveGroup(groupName,trimmed);

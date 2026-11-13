@@ -16,9 +16,67 @@ function hostToken(host, port) {
   return Number(port) === 22 ? host : `[${host}]:${port}`;
 }
 
-function globMatch(pattern, value) {
-  const regex = new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/gu, '\\$&').replace(/\*/gu, '.*').replace(/\?/gu, '.')}$`, 'iu');
-  return regex.test(value);
+// One pattern character against one value character, the way the anchored
+// regular expression the old matcher built compared them: exact for a
+// case-sensitive match and Unicode simple case folding (the iu flag) otherwise.
+// One tiny regex per distinct pattern character is compiled and kept; nothing
+// is compiled from the whole pattern.
+const literalCache = new Map();
+function sameChar(patternChar, valueChar, ignoreCase) {
+  if (patternChar === valueChar) return true;
+  if (!ignoreCase) return false;
+  let regex = literalCache.get(patternChar);
+  if (!regex) {
+    regex = new RegExp(`^${patternChar.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'iu');
+    if (literalCache.size >= 4096) literalCache.clear();
+    literalCache.set(patternChar, regex);
+  }
+  return regex.test(valueChar);
+}
+
+// What '.' matched in the old regex: any code point except a line terminator.
+function isAnyChar(char) {
+  return char !== '\n' && char !== '\r' && char !== '\u2028' && char !== '\u2029';
+}
+
+// Glob match with '*' (any run) and '?' (one character), anchored at both
+// ends. Iterative two-pointer matching: no regular expression is built from the
+// pattern, so a pattern with many stars cannot backtrack (the old '*' to '.*'
+// regex took 15 s for '*a*a*a*a*b' against 200 characters). The work is bounded
+// by pattern length times value length and never exponential.
+function globMatch(pattern, value, { ignoreCase = true } = {}) {
+  const p = Array.from(String(pattern));
+  const v = Array.from(String(value));
+  let pi = 0;
+  let vi = 0;
+  let starPi = -1;
+  let starVi = 0;
+  while (vi < v.length) {
+    if (pi < p.length && p[pi] === '*') {
+      starPi = pi;
+      starVi = vi;
+      pi += 1;
+      continue;
+    }
+    if (pi < p.length) {
+      const single = p[pi] === '?' ? isAnyChar(v[vi]) : sameChar(p[pi], v[vi], ignoreCase);
+      if (single) {
+        pi += 1;
+        vi += 1;
+        continue;
+      }
+    }
+    if (starPi >= 0 && isAnyChar(v[starVi])) {
+      // The star absorbs one more character and the rest is tried again.
+      starVi += 1;
+      pi = starPi + 1;
+      vi = starVi;
+      continue;
+    }
+    return false;
+  }
+  while (pi < p.length && p[pi] === '*') pi += 1;
+  return pi === p.length;
 }
 
 function hostsFieldMatches(field, token) {
@@ -131,4 +189,4 @@ function preferredHostKeyAlgorithms(host, port, files) {
   return [...new Set([...DEFAULT_HOST_KEY_ORDER.filter((name) => preferred.includes(name)), ...DEFAULT_HOST_KEY_ORDER])];
 }
 
-module.exports = { checkOpenSshKnownHosts, defaultKnownHostsFiles, hostToken, hostsFieldMatches, knownHostKeyTypes, preferredHostKeyAlgorithms };
+module.exports = { checkOpenSshKnownHosts, defaultKnownHostsFiles, globMatch, hostToken, hostsFieldMatches, knownHostKeyTypes, preferredHostKeyAlgorithms };
