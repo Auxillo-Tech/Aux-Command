@@ -67,7 +67,7 @@ With the desktop tools above and Python `websocket-client` installed, run:
 bash scripts/test-installers.sh /path/to/candidate-packages
 ```
 
-The UI runner starts a disposable Electron profile and uses fixture file dialogs. It checks the actual SSH and JSON import buttons, repeat imports, workspace backup/restore and undo, keyboard focus, a doubled display scale, desktop smoke, and twenty session/reload cycles. It prints an evidence directory with logs and screenshots. Installer checks require Docker and pull Debian 12, Ubuntu 24.04 and Fedora 44 images; only the candidate package directory is mounted read-only, and test containers are removed after use.
+The UI runner starts a disposable Electron profile and uses fixture file dialogs. It checks the actual SSH and JSON import buttons, repeat imports, workspace backup/restore and undo, keyboard focus, a doubled display scale, desktop smoke, and twenty session/reload cycles. It prints an evidence directory with logs and screenshots. Installer checks require Docker and pull Debian 12, Ubuntu 24.04 and Fedora 44 images; only the candidate package directory is mounted read-only, and test containers are removed after use. Installer test containers are limited to 3 GB of memory and 2 CPUs (`AUX_TEST_MEMORY`, `AUX_TEST_CPUS`), and the FreeRDP 3 container to 6 GB and 2 CPUs (`AUX_RDP_MEMORY`, `AUX_RDP_CPUS`).
 
 The Linux build and release workflows run these checks automatically. Public tag builds must have the configured signing secret; manual unsigned engineering artifacts remain permitted without publication.
 

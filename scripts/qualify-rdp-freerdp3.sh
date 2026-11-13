@@ -9,7 +9,7 @@ IMAGE="${AUX_RDP_IMAGE:-ubuntu:24.04}"
 NODE_VERSION="${AUX_BUILD_NODE_VERSION:-22.23.4}"
 command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
 [ -d "$ROOT/node_modules" ] || { echo "run npm ci first" >&2; exit 1; }
-docker run --rm -e NODE_VERSION="$NODE_VERSION" -v "$ROOT:/src:ro" "$IMAGE" bash -euo pipefail -c '
+docker run --rm --memory "${AUX_RDP_MEMORY:-6g}" --memory-swap "${AUX_RDP_MEMORY:-6g}" --cpus "${AUX_RDP_CPUS:-2}" --pids-limit 2048 -e NODE_VERSION="$NODE_VERSION" -v "$ROOT:/src:ro" "$IMAGE" bash -euo pipefail -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null
   apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils python3 xvfb xauth x11vnc x11-utils procps openssl freerdp3-x11 freerdp3-shadow-x11 >/dev/null

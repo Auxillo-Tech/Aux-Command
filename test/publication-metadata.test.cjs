@@ -176,3 +176,48 @@ test('publish step: a lookup error is never treated as no release', () => {
   assert.equal(calls(result, 'edit').length, 0);
   assert.equal(result.state, 'published');
 });
+
+// The steps of the linux-x64 job as plain text blocks keyed by step name.
+const releaseSteps = () => {
+  const workflow = read('.github/workflows/release.yml');
+  const job = workflow.slice(workflow.indexOf('\n  linux-x64:'));
+  assert.ok(job.length > 20, 'the linux-x64 job exists');
+  const steps = new Map();
+  for (const block of job.split(/\n(?=      - (?:name|uses):)/u).slice(1)) {
+    const name = block.match(/^      - name: (.+)$/mu)?.[1];
+    if (name) steps.set(name, block);
+  }
+  return steps;
+};
+const stepField = (block, field, indent = 8) => block.match(new RegExp(`^ {${indent}}${field}: (.+)$`, 'mu'))?.[1];
+
+test('release workflow: a manual dry run uploads the artifact set and a failed upload fails it', () => {
+  const step = releaseSteps().get('Upload workflow artifacts');
+  assert.ok(step, 'the upload step exists');
+  assert.equal(stepField(step, 'if'), "github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'");
+  assert.equal(stepField(step, 'continue-on-error'), "${{ github.ref_type == 'tag' }}");
+  assert.equal(stepField(step, 'if-no-files-found', 10), 'error');
+  assert.equal(stepField(step, 'retention-days', 10), '5');
+  assert.equal(stepField(step, 'name', 10), 'aux-command-linux-x64-${{ github.ref_name }}');
+  for (const file of ['dist/*.asc', 'dist/SHA256SUMS', 'dist/release-manifest.json', 'dist/latest*.yml']) {
+    assert.ok(step.includes(file), `the artifact set includes ${file}`);
+  }
+});
+
+test('release workflow: publishing stays tag-only and the signing key is always removed', () => {
+  const steps = releaseSteps();
+  const publish = steps.get('Publish authenticated GitHub Release');
+  assert.ok(publish, 'the publish step exists');
+  assert.equal(stepField(publish, 'if'), "github.ref_type == 'tag'");
+  assert.doesNotMatch(publish, /workflow_dispatch/u);
+  const remove = steps.get('Remove release signing key');
+  assert.ok(remove, 'the signing key removal step exists');
+  assert.equal(stepField(remove, 'if'), 'always()');
+  // Only the upload step may name workflow_dispatch among the final steps.
+  const names = [...steps.keys()];
+  for (const name of names.slice(names.indexOf('Publish authenticated GitHub Release'))) {
+    assert.doesNotMatch(steps.get(name), /workflow_dispatch/u, name);
+  }
+  const workflow = read('.github/workflows/release.yml');
+  assert.match(workflow, /^permissions:\n  contents: write\n  id-token: write\n  attestations: write\n/mu);
+});

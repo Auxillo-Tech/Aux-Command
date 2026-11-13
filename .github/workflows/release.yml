@@ -265,9 +265,12 @@ jobs:
             dist/SHA256SUMS
             dist/*.asc
 
+      # A manual run from a branch is a dry run: it must leave the whole file
+      # set downloadable, and a failed upload must fail it. On a tag the
+      # publish step reads dist/ directly, so the upload stays non-blocking.
       - name: Upload workflow artifacts
-        if: github.ref_type == 'tag'
-        continue-on-error: true
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        continue-on-error: ${{ github.ref_type == 'tag' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aux-command-linux-x64-${{ github.ref_name }}
