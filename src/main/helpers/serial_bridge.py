@@ -208,8 +208,11 @@ def main(argv: list[str] | None = None) -> int:
                                 if exc.errno in (errno.EIO, errno.EBADF):
                                     return 0
                                 raise
-                            if data:
-                                write_all(sys.stdout.fileno(), data)
+                            if not data:
+                                # EOF: the adapter end is gone (unplugged or closed). Exit so the
+                                # app reports the ended session instead of spinning on a dead fd.
+                                return 0
+                            write_all(sys.stdout.fileno(), data)
                     elif key.data == 'stdin':
                         try:
                             data = os.read(stdin_fd, MAX_IO_CHUNK)
