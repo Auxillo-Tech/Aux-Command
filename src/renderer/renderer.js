@@ -773,11 +773,22 @@
         elements.appShell.inert = false;
         elements.appShell.removeAttribute('aria-hidden');
       }
+      // The opener gets focus back from a deferred task, which a busy renderer
+      // can run late. Whatever took focus in the meantime (a rename field, a
+      // menu, the terminal) keeps it: restore only while focus is unclaimed.
+      let focusClaimed = false;
+      const noteFocusClaimed = () => { focusClaimed = true; };
+      if (previousFocus?.isConnected && typeof previousFocus.focus === 'function') {
+        document.addEventListener('focusin', noteFocusClaimed, true);
+        window.setTimeout(() => {
+          document.removeEventListener('focusin', noteFocusClaimed, true);
+          const holder = document.activeElement;
+          const unclaimed = !holder || holder === document.body || holder === document.documentElement;
+          if (!focusClaimed && unclaimed && previousFocus.isConnected) previousFocus.focus();
+        }, 0);
+      }
       for (const listener of closeListeners) listener();
       closeListeners.clear();
-      if (previousFocus?.isConnected && typeof previousFocus.focus === 'function') {
-        window.setTimeout(() => previousFocus.focus(), 0);
-      }
     };
     const onClose = (listener) => {
       if (typeof listener !== 'function') return () => {};

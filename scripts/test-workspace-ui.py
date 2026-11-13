@@ -61,7 +61,8 @@ try:
  # Tab context menu is accessible from the keyboard and names survive shell title updates.
  c.eval('document.querySelector(".session-tab.active .tab-select").focus()');key('F10','F10',8)
  wait('!!document.querySelector(".context-menu")');click('.context-menu-item')
- wait('!!document.querySelector(".tab-rename-input")');c.eval('(()=>{const i=document.querySelector(".tab-rename-input");i.value="Operations shell";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));})()')
+ # Wait for the rename field and fill it in one evaluate: a second round trip leaves a window in which the field can be gone.
+ c.eval('''(async()=>{for(let n=0;n<150;n++){const i=document.querySelector(".tab-rename-input");if(i){i.value="Operations shell";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));return true;}await new Promise(r=>setTimeout(r,100));}throw Error("tab rename field did not open");})()''',timeout=30)
  wait('document.querySelector(".session-tab.active .tab-title").textContent==="Operations shell"')
  c.eval('auxCommand.terminal.write(document.querySelector(".session-tab.active").dataset.sessionId,'+json.dumps("printf 'WORKSPACE_SEARCH_MARKER\\n'\r")+')')
  time.sleep(.3);click('#terminal-search-toggle');fill('.terminal-search-panel input','WORKSPACE_SEARCH_MARKER')
