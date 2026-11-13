@@ -35,8 +35,11 @@ def click(selector,text=None):
  call('Input.dispatchMouseEvent',{'type':'mouseReleased','button':'left','clickCount':1,**pos})
 def title(text):wait('[...document.querySelectorAll(".modal h2")].some(e=>e.textContent==='+json.dumps(text)+')')
 wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
-time.sleep(1)
-evaluate('document.querySelector("#tour-skip")?.click()')
+import importlib.util
+from pathlib import Path
+_spec=importlib.util.spec_from_file_location('smoke',Path(__file__).with_name('e2e-cdp-smoke.py'))
+_smoke=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_smoke)
+evaluate(_smoke.DISMISS_TOUR_JS)
 for _ in range(2):
  click('#import-ssh-button');title('SSH import complete')
  assert '1 SSH host entries found' in evaluate('document.querySelector(".modal").textContent')

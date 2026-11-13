@@ -16,9 +16,9 @@ def key(key,code,modifiers=0):
  for kind in ['keyDown','keyUp']:c.call('Input.dispatchKeyEvent',dict(type=kind,key=key,code=code,modifiers=modifiers))
 try:
  wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
- click('#tour-skip')
+ c.dismiss_tour()
  c.eval("(async()=>{await auxCommand.app.saveOnboardingSettings({tourCompleted:true});await auxCommand.app.saveUiSettings({sidebarHidden:false,sidebarWidth:280});})()")
- c.call('Page.reload');wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.call('Emulation.setDeviceMetricsOverride',{'width':1480,'height':920,'deviceScaleFactor':1,'mobile':False})
  time.sleep(.4)
  # Real mouse drag, followed by keyboard adjustment and backend persistence.
@@ -32,9 +32,9 @@ try:
  wait('(async()=>(await auxCommand.app.getState()).settings.ui.sidebarWidth===340)()')
  click('#collapse-sidebar');wait("document.querySelector('#app-shell').classList.contains('sidebar-hidden')")
  click('#sidebar-toggle');wait("!document.querySelector('#app-shell').classList.contains('sidebar-hidden')")
- c.call('Page.reload');wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  assert c.eval("document.querySelector('#sidebar-resizer').getAttribute('aria-valuenow')")=='340'
- click('#local-button');click('#local-button');wait('document.querySelectorAll(".terminal-view").length>=2')
+ for n in (1,2):click('#local-button');wait('document.querySelectorAll(".terminal-view").length>='+str(n))
  if not c.eval("document.querySelector('#terminal-stack').classList.contains('layout-grid')"):click('#layout-toggle')
  wait("document.querySelector('#terminal-stack').classList.contains('layout-grid')")
  c.eval("document.querySelector('.terminal-view').style.width='450px'")

@@ -10,9 +10,9 @@ def wait(expr):
   time.sleep(.1)
  raise AssertionError(expr)
 try:
- wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.eval('document.querySelector("#tour-skip").click()')
+ wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.dismiss_tour()
  c.eval("(async()=>{for(let i=0;i<600;i++)await auxCommand.profiles.save({id:'scale-'+i,name:'Scale target '+String(i).padStart(4,'0'),protocol:'local',group:'Scale / Saved',tags:['benchmark']});})()",timeout=120)
- start=time.monotonic();c.call('Page.reload');time.sleep(.3);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ start=time.monotonic();c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  loaded=time.monotonic()-start;rows=c.eval('document.querySelectorAll(".profile-item").length');assert rows<=201
  timings=[]
  for term in ['scale target 0599','benchmark','scale target 0499','unmatched']:

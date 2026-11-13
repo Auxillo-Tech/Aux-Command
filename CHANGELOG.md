@@ -102,6 +102,7 @@
 - SSH, Mosh and jump-host user names in the Windows `DOMAIN\user` form are refused. Write them as `user@domain`.
 - The ARM64 packages are a preview: built and tested on GitHub's ARM64 runners, not yet on physical ARM64 hardware.
 - RDP sign-in is verified against Windows 11 Pro with FreeRDP 3 and against network level authentication test servers with FreeRDP 2 and 3. Embedded (in-tab) RDP against a real Windows machine, Windows Server and domain accounts are not yet tested.
+- The terminal area is not yet readable by screen readers. This is planned for 0.5.1.
 
 ## 0.4.0 - 2026-08-20
 

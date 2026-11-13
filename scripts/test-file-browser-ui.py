@@ -9,7 +9,8 @@ def wait(expr):
  for _ in range(100):
   if c.eval(expr):return
   time.sleep(.1)
- raise AssertionError(expr)
+ state=c.eval('JSON.stringify({status:[...document.querySelectorAll(".dual-file-status")].map(e=>e.textContent),paths:[...document.querySelectorAll("input[name=localPath]")].map(e=>e.value),toasts:[...document.querySelectorAll(".toast")].map(e=>e.textContent)})')
+ raise AssertionError(expr+' page state: '+str(state))
 def click(selector):
  c.eval('document.querySelector(%s).click()'%json.dumps(selector))
 def fill(selector,value,event='input'):
@@ -20,8 +21,8 @@ with tempfile.TemporaryDirectory(prefix='aux-file-ui-') as directory:
  try:
   port=json.loads(server.stdout.readline())['port']
   c.eval('''(async()=>{await auxCommand.vault.set('ui-ftp-secret','test-only-password',false);await auxCommand.profiles.save({id:'ui-ftp',name:'UI FTP fixture',protocol:'ftp',host:'127.0.0.1',port:%d,username:'fixture',credentialId:'ui-ftp-secret'});})()'''%port)
-  c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
-  click('#tour-skip');click('#profiles-all')
+  c.reload();wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
+  c.dismiss_tour();click('#profiles-all')
   click('[aria-label^="Connect to UI FTP fixture"]');wait('!!document.querySelector(".modal-footer .primary")');click('.modal-footer .primary')
   wait('document.querySelectorAll(".file-row").length===4')
   names=lambda:c.eval('[...document.querySelectorAll(".file-row strong")].map(e=>e.textContent)')

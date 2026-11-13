@@ -11,6 +11,7 @@ const WebSocket = require('ws');
 const { VncBridgeService } = require('../src/main/services/vnc-bridge.cjs');
 const { RdpEmbedService } = require('../src/main/services/rdp-embed.cjs');
 const { KnownHostService } = require('../src/main/services/known-host-service.cjs');
+const { startShadowServer } = require('./start-shadow-server.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // FreeRDP 3 packages name the test server freerdp-shadow-cli3.
 const shadowServer = require('../src/main/lib/executable-finder.cjs').findExecutable(['freerdp-shadow-cli', 'freerdp-shadow-cli3']) || 'freerdp-shadow-cli';
@@ -19,8 +20,7 @@ async function main() {
   process.env.XDG_CONFIG_HOME = directory;
   const listener = net.createServer(); await new Promise((resolve) => listener.listen(0, '127.0.0.1', resolve));
   const port = listener.address().port; await new Promise((resolve) => listener.close(resolve));
-  const shadow = spawn(shadowServer, [`/port:${port}`, '/bind-address:127.0.0.1', '-auth', '/sec:tls']);
-  let shadowLog = ''; for (const pipe of [shadow.stdout, shadow.stderr]) pipe.on('data', (chunk) => { shadowLog = (shadowLog + chunk).slice(-8000); });
+  const shadow = await startShadowServer(shadowServer, [`/port:${port}`, '/bind-address:127.0.0.1', '-auth', '/sec:tls'], port);
   const bridge = new VncBridgeService();
   const prompts = [];
   let answer = { accept: true, remember: true };
@@ -28,11 +28,10 @@ async function main() {
   const service = new RdpEmbedService({ vncBridge: bridge, knownHostService, vaultService: { has: () => true, get: async () => 'test-only-password' } });
   let ws;
   try {
-    await delay(1500);
-    assert.equal(shadow.exitCode, null, shadowLog);
+    assert.equal(shadow.exitCode, null, shadow.log);
     const session = await service.start({ id: 'fixture', name: 'Fixture RDP', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test', rdpWidth: 1280, rdpHeight: 720, rdpAudio: true });
     await delay(2000);
-    assert.equal(service.list().length, 1, `RDP client exited: ${shadowLog}`);
+    assert.equal(service.list().length, 1, `RDP client exited: ${shadow.log}`);
     const desktop = service.list()[0];
     // The display needs the session cookie: other local users are refused.
     const xauthority = service.sessions.get(session.id).xauthority;

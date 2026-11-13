@@ -22,8 +22,8 @@ try:
   try:
    with socket.create_connection(('127.0.0.1',port),timeout=.2):break
   except OSError:time.sleep(.1)
- wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.eval('document.querySelector("#tour-skip").click()')
- c.eval('auxCommand.profiles.save('+json.dumps(dict(id='desktop-control-fixture',name='Desktop controls fixture',protocol='vnc',host='127.0.0.1',port=port))+')');c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.dismiss_tour()
+ c.eval('auxCommand.profiles.save('+json.dumps(dict(id='desktop-control-fixture',name='Desktop controls fixture',protocol='vnc',host='127.0.0.1',port=port))+')');c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.eval('document.querySelector("[aria-label^=\\"Connect to Desktop controls fixture\\"]").click()');wait('!!document.querySelector("iframe")')
  # The viewer is served from its own aux-vnc:// origin, so it runs as a
  # separate out-of-process frame target rather than a child of the page.

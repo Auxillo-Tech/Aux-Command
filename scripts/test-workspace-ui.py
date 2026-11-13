@@ -10,6 +10,13 @@ def wait(expr):
   if c.eval(expr):return
   time.sleep(.1)
  raise AssertionError(expr)
+def click_modal(s):
+ # A closing modal returns focus to its opener from a timer, which can run after
+ # the next step has already moved focus (or started a rename). Wait for the
+ # backdrop to go and for that timer to have fired before going on.
+ before=c.eval('document.querySelectorAll(".modal-backdrop").length')
+ click(s)
+ wait('(async()=>{await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));return document.querySelectorAll(".modal-backdrop").length<'+str(before)+'})()')
 def click(selector):
  pos=c.eval('''(()=>{const e=document.querySelector(%s);if(!e)throw Error('Missing control');e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()'''%json.dumps(selector))
  c.call('Input.dispatchMouseEvent',dict(type='mousePressed',button='left',clickCount=1,**pos))
@@ -20,10 +27,10 @@ def fill(selector,value):
  c.eval('''(()=>{const e=document.querySelector(%s);e.value=%s;e.dispatchEvent(new Event('input',{bubbles:true}));})()'''%(json.dumps(selector),json.dumps(value)))
 try:
  wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
- time.sleep(1);c.eval('document.querySelector("#tour-skip").click()')
- c.eval('''(async()=>{for(const e of document.querySelectorAll('.session-tab')) await auxCommand.terminal.close(e.dataset.sessionId);await auxCommand.app.saveSessions([]);await auxCommand.app.saveUiSettings({density:'comfortable',sidebarHidden:false});})()''')
+ c.dismiss_tour()
+ c.clear_sessions("await auxCommand.app.saveUiSettings({density:'comfortable',sidebarHidden:false});")
  c.eval('''(async()=>{await auxCommand.profiles.save({id:'ui-prod',name:'Production database',host:'db.example.invalid',username:'operator',protocol:'ssh',favorite:true});await auxCommand.profiles.save({id:'ui-stage',name:'Staging web',host:'web.example.invalid',protocol:'ssh'});})()''')
- c.call('Page.reload');time.sleep(.5)
+ c.reload();
  wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
  click('#profiles-favorites');assert c.eval('document.querySelectorAll(".profile-item").length')==1
  fill('#profile-search','operator database');assert c.eval('document.querySelectorAll(".profile-item").length')==1
@@ -57,7 +64,7 @@ try:
  click('#palette-button');wait('!!document.querySelector(".palette-shell input")')
  fill('.palette-shell input','switch to:');assert c.eval('document.querySelectorAll(".palette-row").length')==2
  fill('.palette-shell input','monitor live');assert 'Live server monitor' in c.eval('document.querySelector(".palette-list").textContent')
- click('.modal-close')
+ click_modal('.modal-close')
  # Tab context menu is accessible from the keyboard and names survive shell title updates.
  c.eval('document.querySelector(".session-tab.active .tab-select").focus()');key('F10','F10',8)
  wait('!!document.querySelector(".context-menu")');click('.context-menu-item')
@@ -69,7 +76,7 @@ try:
  wait('document.querySelector(".terminal-search-status").textContent==="Match found"')
  fill('.terminal-search-panel input','ABSENT_MARKER_91fe');assert c.eval('document.querySelector(".terminal-search-status").textContent')=='No matches'
  click('.terminal-search-panel button:nth-child(4)')
- click('#broadcast-toggle');wait('!!document.querySelector(".modal-footer .danger-confirm")');click('.modal-footer .danger-confirm')
+ click('#broadcast-toggle');wait('!!document.querySelector(".modal-footer .danger-confirm")');click_modal('.modal-footer .danger-confirm')
  wait('document.querySelector("#broadcast-toggle").getAttribute("aria-pressed")==="true"')
  c.eval('auxCommand.terminal.write(document.querySelector(".session-tab.active").dataset.sessionId,"exit\\r")')
  wait('document.querySelector(".session-tab.active").classList.contains("closed")')
@@ -78,20 +85,20 @@ try:
  assert c.eval('document.querySelector("#reconnect-session-button").disabled') is False
  click('#preferences-button');wait('!!document.querySelector("select[name=density]")')
  c.eval('document.querySelector("select[name=density]").value="compact"')
- click('input[name=sidebarHidden]');click('.modal-footer .primary');wait('document.querySelector("#app-shell").dataset.density==="compact"')
+ click('input[name=sidebarHidden]');click_modal('.modal-footer .primary');wait('document.querySelector("#app-shell").dataset.density==="compact"')
  wait('document.querySelector("#app-shell").classList.contains("sidebar-hidden")')
  assert c.eval('(async()=>(await auxCommand.app.getState()).settings.ui.sidebarHidden)()') is True
  key('E','KeyE',10);wait('document.activeElement.id==="profile-search"')
  assert not c.eval('document.querySelector("#app-shell").classList.contains("sidebar-hidden")')
  # Save visible, comfortable workspace for layout verification.
- click('#preferences-button');c.eval('document.querySelector("select[name=density]").value="comfortable"');click('.modal-footer .primary')
+ click('#preferences-button');c.eval('document.querySelector("select[name=density]").value="comfortable"');click_modal('.modal-footer .primary')
  wait('document.querySelector("#app-shell").dataset.density==="comfortable"')
  for width,height in [(1600,1000),(1280,800),(900,650),(700,600)]:
   c.call('Emulation.setDeviceMetricsOverride',{'width':width,'height':height,'deviceScaleFactor':1,'mobile':False});time.sleep(.3)
   assert c.eval('document.documentElement.scrollWidth<=innerWidth'),f'page overflow at {width}'
   assert c.eval('document.querySelector("#quick-button").getBoundingClientRect().right<=innerWidth'),f'connect offscreen at {width}'
   click('#preferences-button');assert c.eval('document.querySelector(".modal").getBoundingClientRect().right<=innerWidth')
-  click('.modal-close')
+  click_modal('.modal-close')
   if width==1280:
    c.eval('document.querySelector("#profiles-all").click()')
    m.SCREENSHOT_PATH=os.environ.get('AUX_WORKSPACE_SCREENSHOT','/tmp/aux-workspace-after.png');m.capture_screenshot(c)
@@ -99,7 +106,7 @@ try:
  # A connection's tab colour marks its list entry and its tabs; unknown colours are dropped.
  saved=c.eval('''(async()=>{const p=(await auxCommand.profiles.list()).find(x=>x.id==="ui-stage");const a=await auxCommand.profiles.save({...p,tabColor:"red"});const b=await auxCommand.profiles.save({...p,id:"ui-bad",name:"Bad colour",tabColor:"url(javascript:x)"});await auxCommand.profiles.delete("ui-bad");return [a.tabColor,b.tabColor];})()''')
  assert saved==['red',''],saved
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell").getAttribute("aria-busy")==="false"')
  c.eval('document.querySelector("#profiles-all").click()')
  wait('!!document.querySelector(".profile-item[data-tab-color=red]")')
  assert 'Staging web' in c.eval('document.querySelector(".profile-item[data-tab-color=red]").textContent')

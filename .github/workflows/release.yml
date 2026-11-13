@@ -339,6 +339,13 @@ jobs:
           done
           [ "${#assets[@]}" -gt 0 ] || { echo "No release assets were produced" >&2; exit 1; }
           gh release upload "$tag" "${assets[@]}" --clobber
+          # Publish only what the signed manifest lists. Read back what the draft
+          # now holds and compare it with release-manifest.json and SHA256SUMS:
+          # a missing, extra (for example left by an earlier run), truncated or
+          # swapped file fails here, and the draft stays unpublished.
+          draft_assets="${RUNNER_TEMP}/draft-release.json"
+          gh release view "$tag" --json tagName,isDraft,assets > "$draft_assets"
+          node scripts/verify-draft-release.cjs --dist dist --tag "$tag" --draft-json "$draft_assets" --require-signed
           gh release edit "$tag" --draft=false --latest
 
       - name: Remove release signing key

@@ -15,9 +15,9 @@ def button(text):c.eval('([...document.querySelectorAll(".modal-backdrop:last-ch
 def key(k,code,mods=0):
  for kind in ['keyDown','keyUp']:c.call('Input.dispatchKeyEvent',dict(type=kind,key=k,code=code,modifiers=mods))
 try:
- wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');click('#tour-skip')
- c.eval('(async()=>{for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);await auxCommand.app.saveSessions([]);})()');c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
- click('#local-button');click('#local-button');wait('document.querySelectorAll(".session-tab").length===2');time.sleep(.5)
+ wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.dismiss_tour()
+ c.clear_sessions();c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ for n in (1,2):click('#local-button');wait('document.querySelectorAll(".session-tab").length==='+str(n));time.sleep(.5)
  ids=c.eval('[...document.querySelectorAll(".session-tab")].map(e=>e.dataset.sessionId)')
  c.eval('(()=>{const s=document.querySelector("#pane-flow");s.value="rows";s.dispatchEvent(new Event("change"));})()')
  wait('(async()=>(await auxCommand.app.getState()).settings.workspace.paneFlow==="rows")()')
@@ -32,7 +32,13 @@ try:
  assert c.eval('[...document.querySelectorAll(".multi-run-output")].every(e=>e.textContent.includes("TASK_OK_quoted value"))')
  # Nonzero exits and cancellation must be distinct outcomes.
  c.eval('document.querySelector("textarea[name=taskCommand]").value="exit 7"');button('Review and run');wait('document.querySelectorAll(".modal").length===2');button('Run on selected sessions');wait('[...document.querySelectorAll(".multi-run-block > span")].filter(e=>e.textContent==="Failed · exit 7").length===2')
- c.eval('document.querySelector("textarea[name=taskCommand]").value="sleep 30"');button('Review and run');wait('document.querySelectorAll(".modal").length===2');button('Run on selected sessions');wait('!([...document.querySelectorAll(".modal button")].find(b=>b.textContent==="Cancel run")).disabled');button('Cancel run');wait('[...document.querySelectorAll(".multi-run-block > span")].every(e=>e.textContent.includes("interrupt requested"))');button('Close');time.sleep(.7)
+ # Cancel only once the command is running, and make the last command an exec
+ # of sleep: dash does not exit when a child dies of SIGINT, so a Ctrl+C that
+ # lands while an earlier child is still running is swallowed and the sleep
+ # then starts anyway. With exec the shell is the sleep, and a Ctrl+C before
+ # the exec kills the shell itself.
+ hold='until [ "$(cut -d" " -f5 /proc/$$/stat)" = "$(cut -d" " -f8 /proc/$$/stat)" ]; do sleep .05; done; printf "SLEEP_%s\\n" STARTED; exec sleep 30'
+ c.eval('document.querySelector("textarea[name=taskCommand]").value='+json.dumps(hold));button('Review and run');wait('document.querySelectorAll(".modal").length===2');button('Run on selected sessions');wait('[...document.querySelectorAll(".multi-run-output")].length===2&&[...document.querySelectorAll(".multi-run-output")].every(e=>e.textContent.includes("SLEEP_STARTED"))');wait('!([...document.querySelectorAll(".modal button")].find(b=>b.textContent==="Cancel run")).disabled');button('Cancel run');wait('[...document.querySelectorAll(".multi-run-block > span")].every(e=>e.textContent.includes("interrupt requested"))');button('Close');time.sleep(.7)
  active=c.eval('document.querySelector(".session-tab.active").dataset.sessionId')
  # The separate window opens in the workspace language (German here), then the workspace returns to English.
  def language(code):
@@ -50,8 +56,9 @@ try:
   assert d.eval('document.querySelector("#attach").textContent===AuxDialogMessages["Return to workspace"].de && document.querySelector("#fullscreen").textContent===AuxDialogMessages["Full screen (F11)"].de')
   assert d.eval('document.querySelector("#attach").textContent')!='Return to workspace'
   language('en')
-  d.call('Emulation.setDeviceMetricsOverride',dict(width=400,height=300,deviceScaleFactor=1,mobile=False));time.sleep(.2)
-  assert d.eval('document.documentElement.scrollWidth<=innerWidth')
+  d.call('Emulation.setDeviceMetricsOverride',dict(width=400,height=300,deviceScaleFactor=1,mobile=False));
+  # The terminal refits after a debounce, so wait for the narrow layout to settle.
+  wait('document.documentElement.scrollWidth<=innerWidth',d)
   snapshot=d.eval('detachedTerminal.init("cannot-select-other-session")');assert snapshot['id']==active
   d.eval('detachedTerminal.write('+json.dumps('shutdown --help\r')+')');wait('!!document.querySelector(".danger-confirm")');button('Cancel');wait('!document.querySelector(".modal")')
   assert d.eval('detachedTerminal.write('+json.dumps("printf 'DETACHED_OUTPUT_17\\n'\r")+')') is True
@@ -63,7 +70,7 @@ try:
  wait('!document.querySelector(".session-tab.active").classList.contains("detached")')
  trace=c.eval('auxCommand.terminal.timeline('+json.dumps(active)+')');assert any(e['stage']=='output' for e in trace)
  c.eval("(async()=>{for(const id of ['bulk-one','bulk-two'])await auxCommand.profiles.save({id,name:id,protocol:'ssh',host:'127.0.0.1',port:22345,group:'Lab',credentialId:'keep-secret-reference'});})()")
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');click('#manage-connections')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');click('#manage-connections')
  c.eval('(()=>{const f=document.querySelector("input[name=connectionFilter]");f.value="bulk-";f.dispatchEvent(new Event("input"));})()');button('Select matching connections')
  c.eval('document.querySelector("input[name=bulkGroup]").value="Production / Europe / DB"');c.eval('document.querySelector("input[name=bulkTags]").value="database, production"');button('Review changes');wait('document.querySelectorAll(".modal").length===2');button('Apply changes');wait('!document.querySelector(".modal")')
  profiles=c.eval('(async()=>(await auxCommand.profiles.list()).filter(p=>p.id.startsWith("bulk-")))()');assert len(profiles)==2
@@ -71,7 +78,7 @@ try:
  assert c.eval('[...document.querySelectorAll(".group-name")].some(e=>e.textContent==="Production / Europe")')
  # RDP settings are saved through the actual profile form.
  c.eval("auxCommand.profiles.save({id:'rdp-options',name:'RDP options fixture',protocol:'rdp',host:'127.0.0.1'})")
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.eval("document.querySelector('[aria-label=\"Actions for RDP options fixture\"]').click()")
  c.eval("[...document.querySelectorAll('.context-menu-item')].find(b=>b.textContent.includes('Edit')).click()")
  wait('!!document.querySelector("input[name=rdpWidth]")')
@@ -109,7 +116,7 @@ try:
  assert ssh['credentialId'] and c.eval('auxCommand.vault.has('+json.dumps(ssh['credentialId'])+')') is True
  # The FTPS mode select is offered only for FTPS profiles, and its value is saved through the form.
  c.eval("auxCommand.profiles.save({id:'ftps-mode',name:'FTPS mode fixture',protocol:'ftps',host:'127.0.0.1',port:2121})")
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  mode='.modal select[name=ftpsMode]'
  def choose_protocol(value):c.eval('(()=>{const s=document.querySelector(".modal select[name=protocol]");s.value='+json.dumps(value)+';s.dispatchEvent(new Event("change",{bubbles:true}));})()')
  def mode_shown():return c.eval('(()=>{const s=document.querySelector('+json.dumps(mode)+'),f=s.closest(".field");return !f.hidden&&!s.disabled&&f.getClientRects().length>0;})()')

@@ -39,6 +39,44 @@ def get_ws_url() -> str:
     raise RuntimeError(f'Aux Command page not found: {pages!r}')
 
 
+# The first-run tour opens on a timer after the settings load, so a click on
+# #tour-skip made before it opens does nothing and the tour then opens over the
+# test, swallows its keystrokes and comes back after a reload. Wait for the tour
+# (or for the saved completion flag) and leave only when it is closed and saved.
+DISMISS_TOUR_JS = """
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const deadline = Date.now() + 30000;
+  const root = document.getElementById('tour-root');
+  const saved = async () => Boolean((await window.auxCommand.app.getState()).settings?.onboarding?.tourCompleted);
+  while (Date.now() < deadline) {
+    if (!root.hidden) { document.getElementById('tour-skip').click(); break; }
+    if (await saved()) break;
+    await sleep(50);
+  }
+  while (Date.now() < deadline) {
+    if (root.hidden && await saved()) return true;
+    await sleep(50);
+  }
+  throw new Error('first-run tour was not dismissed');
+})()
+"""
+
+RELOADED_JS = (
+    "!window.__auxPreReload && document.readyState === 'complete' && Boolean(window.auxCommand)"
+    " && document.querySelector('#app-shell')?.getAttribute('aria-busy') === 'false'"
+)
+
+
+CLEAR_SESSIONS_JS = """(async()=>{
+  for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);
+  for(let i=0;i<300&&document.querySelectorAll('.session-tab:not(.closed)').length;i++)await new Promise(r=>setTimeout(r,100));
+  if(document.querySelectorAll('.session-tab:not(.closed)').length)throw new Error('terminal tabs were still live after close');
+  await auxCommand.app.saveSessions([]);
+  %s
+})()"""
+
+
 class CDP:
     def __init__(self, url: str):
         self.ws = websocket.create_connection(url, timeout=30)
@@ -70,6 +108,40 @@ class CDP:
         if result.get('exceptionDetails'):
             raise RuntimeError(f'Eval exception: {result["exceptionDetails"]}')
         return result.get('result', {}).get('value')
+
+    def dismiss_tour(self) -> None:
+        self.eval(DISMISS_TOUR_JS, timeout=40)
+
+    def clear_sessions(self, then_js: str = '') -> None:
+        """Close every terminal and leave no saved session behind.
+
+        The renderer marks a tab closed when the backend exit event arrives
+        and persists the open tabs on a 500 ms debounce.  Saving an empty list
+        straight after the close calls can be overwritten by a persist that
+        still saw a live tab, and the next reload then restores it.  Wait
+        until no tab is live in the page, then save the empty list.
+        """
+        self.eval(CLEAR_SESSIONS_JS % then_js, timeout=40)
+
+    def reload(self, ignore_cache: bool = False, timeout: float = 40.0) -> None:
+        """Reload and wait until the NEW document has initialised the app.
+
+        A fixed sleep after Page.reload can end while the old document is still
+        answering, so a later wait is satisfied by the page being replaced and
+        the next click is lost with it.  Mark the old document and wait for a
+        document without the mark.
+        """
+        self.eval('window.__auxPreReload=true')
+        self.call('Page.reload', {'ignoreCache': ignore_cache}, timeout=20)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if self.eval(RELOADED_JS, timeout=5):
+                    return
+            except Exception:  # the execution context is gone while navigating
+                pass
+            time.sleep(0.1)
+        raise AssertionError('page did not finish reloading within %ss' % timeout)
 
     def close(self) -> None:
         self.ws.close()

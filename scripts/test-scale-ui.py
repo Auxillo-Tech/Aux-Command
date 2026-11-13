@@ -13,9 +13,9 @@ def wait(expr,seconds=30):
  raise AssertionError(expr)
 try:
  wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
- c.eval("document.querySelector('#tour-skip').click()")
+ c.dismiss_tour()
  c.eval("(async()=>{for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);await auxCommand.app.saveSessions([]);})()")
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  c.call('Performance.enable')
  results=[]
  for count in [20,50]:

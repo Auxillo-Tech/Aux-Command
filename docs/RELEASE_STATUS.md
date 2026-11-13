@@ -48,6 +48,10 @@ The source CI workflows now run protocol, import/recovery UI, keyboard/high-DPI 
 - Real GNOME keyring upgrade from the published 0.4.0 app preserves encrypted credentials, profile settings and remembered SSH host keys.
 - Packaged AppImage desktop smoke covers renderer startup, local terminals, layout, command palette, reconnect, snippets, diagnostics and updates UI.
 
+## Known limitations
+
+The terminal area is not yet readable by screen readers. This is planned for 0.5.1.
+
 ## Remaining field qualification
 
 Controlled fixtures do not establish universal interoperability. Still needed: Windows RDP/domain environments, representative NAT/jump-host networks, physical serial unplug/reconnect, real screen-reader use, and broader Wayland, high-DPI and multi-monitor environments. This is not a claim of production 1.0 certification.

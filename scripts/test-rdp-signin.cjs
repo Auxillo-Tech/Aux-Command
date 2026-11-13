@@ -13,6 +13,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { VncBridgeService } = require('../src/main/services/vnc-bridge.cjs');
 const { RdpEmbedService } = require('../src/main/services/rdp-embed.cjs');
 const { KnownHostService } = require('../src/main/services/known-host-service.cjs');
+const { startShadowServer } = require('./start-shadow-server.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // FreeRDP 3 packages name the test server freerdp-shadow-cli3.
 const shadowServer = require('../src/main/lib/executable-finder.cjs').findExecutable(['freerdp-shadow-cli', 'freerdp-shadow-cli3']) || 'freerdp-shadow-cli';
@@ -37,8 +38,7 @@ async function main() {
   fs.writeFileSync(sam, `fixture:::${ntHash(PASSWORD)}:::\n`, { mode: 0o600 });
   const listener = net.createServer(); await new Promise((resolve) => listener.listen(0, '127.0.0.1', resolve));
   const port = listener.address().port; await new Promise((resolve) => listener.close(resolve));
-  const shadow = spawn(shadowServer, [`/port:${port}`, '/bind-address:127.0.0.1', '/sec:nla', `/sam-file:${sam}`]);
-  let shadowLog = ''; for (const pipe of [shadow.stdout, shadow.stderr]) pipe.on('data', (chunk) => { shadowLog = (shadowLog + chunk).slice(-8000); });
+  const shadow = await startShadowServer(shadowServer, [`/port:${port}`, '/bind-address:127.0.0.1', '/sec:nla', `/sam-file:${sam}`], port);
   const bridge = new VncBridgeService();
   const knownHostService = new KnownHostService(directory, { request: async () => ({ accept: true, remember: true }) });
   const prompts = [];
@@ -50,7 +50,7 @@ async function main() {
   const profile = (extra = {}) => ({ id: 'fixture', name: 'Fixture RDP', protocol: 'rdp', host: '127.0.0.1', port, username: 'fixture', credentialId: 'test', ...extra });
   const connected = async (session) => {
     await delay(2500);
-    assert.equal(service.list().length, 1, `RDP client exited: ${shadowLog}`);
+    assert.equal(service.list().length, 1, `RDP client exited: ${shadow.log}`);
     const record = service.sessions.get(session.id);
     const windows = spawnSync('xwininfo', ['-display', `:${record.display}`, '-root', '-tree'], { encoding: 'utf8', env: { ...process.env, XAUTHORITY: record.xauthority } });
     assert.match(windows.stdout, /FreeRDP/u, 'RDP must have a rendered client window');
@@ -58,8 +58,7 @@ async function main() {
     await delay(500);
   };
   try {
-    await delay(1500);
-    assert.equal(shadow.exitCode, null, shadowLog);
+    assert.equal(shadow.exitCode, null, shadow.log);
     // FreeRDP 2 and 3 ask for sign-in details differently; say which one ran.
     const { findExecutable } = require('../src/main/lib/executable-finder.cjs');
     const { freerdpMajor } = require('../src/main/lib/rdp-certificate.cjs');

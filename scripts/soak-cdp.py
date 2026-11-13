@@ -40,6 +40,12 @@ def get_ws_url() -> str:
     raise RuntimeError(f'Aux Command page not found: {last!r}')
 
 
+RELOADED_JS = (
+    "!window.__auxPreReload && document.readyState === 'complete' && Boolean(window.auxCommand)"
+    " && document.querySelector('#app-shell')?.getAttribute('aria-busy') === 'false'"
+)
+
+
 class CDP:
     def __init__(self, url: str):
         self.ws = websocket.create_connection(url, timeout=30)
@@ -71,6 +77,26 @@ class CDP:
         if result.get('exceptionDetails'):
             raise RuntimeError(f'Eval exception: {result["exceptionDetails"]}')
         return result.get('result', {}).get('value')
+
+    def reload(self, ignore_cache: bool = False, timeout: float = 40.0) -> None:
+        """Reload and wait until the NEW document has initialised the app.
+
+        A fixed sleep after Page.reload can end while the old document is still
+        answering, so a later wait is satisfied by the page being replaced and
+        the next click is lost with it.  Mark the old document and wait for a
+        document without the mark.
+        """
+        self.eval('window.__auxPreReload=true')
+        self.call('Page.reload', {'ignoreCache': ignore_cache}, timeout=20)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if self.eval(RELOADED_JS, timeout=5):
+                    return
+            except Exception:  # the execution context is gone while navigating
+                pass
+            time.sleep(0.1)
+        raise AssertionError('page did not finish reloading within %ss' % timeout)
 
     def close(self) -> None:
         self.ws.close()
@@ -134,8 +160,7 @@ def main() -> int:
             require(result.get('ok'), f'soak cycle {index} failed', result)
             results.append(result)
             if index and index % 3 == 0:
-                cdp.call('Page.reload', {'ignoreCache': True}, timeout=10)
-                time.sleep(1.0)
+                cdp.reload(ignore_cache=True)
                 post_reload = cdp.eval("""
                   (async () => ({ title: document.title, api: Boolean(window.auxCommand), state: await window.auxCommand.app.getState() }))()
                 """, timeout=20)

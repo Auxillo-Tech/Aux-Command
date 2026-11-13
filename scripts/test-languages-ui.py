@@ -11,7 +11,7 @@ def wait(expr):
  raise AssertionError(expr)
 try:
  wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
- c.eval('document.querySelector("#tour-skip")?.click()')
+ c.dismiss_tour()
  for lang in ['en','de','es','fr','it','ja','pt','ru','zh']:
   c.eval('(()=>{const s=document.querySelector("#language-select");s.value='+json.dumps(lang)+';s.dispatchEvent(new Event("change",{bubbles:true}));})()')
   wait('document.documentElement.lang==='+json.dumps(lang))

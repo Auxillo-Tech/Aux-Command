@@ -9,20 +9,22 @@ def wait(expr):
  for _ in range(100):
   if c.eval(expr):return
   time.sleep(.1)
- raise AssertionError(expr)
+ state=c.eval('JSON.stringify({tabs:[...document.querySelectorAll(".session-tab")].map(e=>e.textContent.trim()),busy:document.querySelector("#app-shell")?.getAttribute("aria-busy"),toasts:[...document.querySelectorAll(".toast")].map(e=>e.textContent),modals:document.querySelectorAll(".modal").length,preReload:!!window.__auxPreReload})')
+ raise AssertionError(expr+' page state: '+str(state))
 def click(s):c.eval('document.querySelector('+json.dumps(s)+').click()')
 def textbutton(text):c.eval('([...document.querySelectorAll(".modal button")].find(b=>b.textContent==='+json.dumps(text)+')).click()')
 try:
- wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');click('#tour-skip')
- c.eval("(async()=>{for(const s of await auxCommand.terminal.list())await auxCommand.terminal.close(s.id);await auxCommand.app.saveSessions([]);await auxCommand.app.saveWorkspaceSettings({layout:'single'});})()")
- c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
- click('#local-button');click('#local-button');wait('document.querySelectorAll(".session-tab").length===2')
+ wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"');c.dismiss_tour()
+ c.clear_sessions("await auxCommand.app.saveWorkspaceSettings({layout:'single'});")
+ c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ for n in (1,2):click('#local-button');wait('document.querySelectorAll(".session-tab").length==='+str(n))
  c.eval("auxCommand.terminal.write(document.querySelector('.session-tab.active').dataset.sessionId,'cd /tmp\\r')")
  wait("(async()=>(await auxCommand.terminal.list()).some(s=>s.cwd==='/tmp'))()")
  # Rename active tab through its accessible context menu.
  c.eval("document.querySelector('.session-tab.active .tab-select').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true}))")
  c.eval("[...document.querySelectorAll('.context-menu-item')].find(b=>b.textContent.includes('Rename')).click()")
- wait('!!document.querySelector(".tab-rename-input")');c.eval('(()=>{const i=document.querySelector(".tab-rename-input");i.value="Saved operations";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));})()')
+ # Wait for the rename field and fill it in one evaluate: a second round trip leaves a window in which the field can be gone.
+ c.eval('''(async()=>{for(let n=0;n<150;n++){const i=document.querySelector(".tab-rename-input");if(i){i.value="Saved operations";i.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));return true;}await new Promise(r=>setTimeout(r,100));}throw Error("tab rename field did not open");})()''',timeout=30)
  click('#layout-toggle');c.eval("document.querySelector('.terminal-view[data-session-id=\"'+document.querySelector('.session-tab.active').dataset.sessionId+'\"]').style.width='480px'")
  click('#workspaces-button');wait('!!document.querySelector(".modal")');textbutton('Save current workspace')
  wait('document.querySelectorAll(".modal").length===2');c.eval("document.querySelector('.modal-backdrop:last-child input').value='Operations desk'");click('.modal-backdrop:last-child .primary')
@@ -35,7 +37,7 @@ try:
  assert c.eval('document.querySelector(".session-tab.active .tab-title").textContent')=='Saved operations'
  wait('(async()=>(await auxCommand.terminal.list()).filter(s=>s.cwd==="/tmp").length===2)()')
  # Persistence survives renderer restart without duplicating live backend sessions.
- time.sleep(.8);c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ time.sleep(.8);c.reload();wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
  assert c.eval('document.querySelectorAll(".session-tab").length')==4
  assert c.eval('document.querySelector(".session-tab.active .tab-title").textContent')=='Saved operations'
  click('#workspaces-button');wait('!!document.querySelector(".modal")');textbutton('Update')

@@ -85,6 +85,7 @@ state=$(cat "$STATE")
 case "$1 $2" in
   "release view")
     [ "$state" = none ] && { echo "release not found" >&2; exit 1; }
+    case "$*" in *assets*) echo "{}"; exit 0;; esac
     [ "$state" = draft ] && echo true || echo false
     exit 0;;
   "release create") echo draft > "$STATE"; exit 0;;
@@ -102,6 +103,10 @@ const runPublish = (state, env = {}) => {
     fs.mkdirSync(path.join(dir, 'bin'));
     fs.mkdirSync(path.join(dir, 'work/dist'), { recursive: true });
     fs.mkdirSync(path.join(dir, 'tmp'));
+    // The draft-versus-manifest comparison has its own tests (verify-draft-release.test.cjs);
+    // here the verifier only has to be called, so a stub stands in for it.
+    fs.mkdirSync(path.join(dir, 'work/scripts'));
+    fs.writeFileSync(path.join(dir, 'work/scripts/verify-draft-release.cjs'), 'process.exit(0);\n');
     fs.writeFileSync(path.join(dir, 'bin/gh'), FAKE_GH, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'work/dist/SHA256SUMS'), 'x\n');
     fs.writeFileSync(path.join(dir, 'work/dist/release-manifest.json'), '{}\n');
@@ -132,7 +137,8 @@ const calls = (result, verb) => result.log.filter((line) => line.startsWith(`rel
 test('publish step: no release creates a draft, uploads, then publishes', () => {
   const result = runPublish('none');
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(calls(result, 'view').length, 1);
+  // one lookup of the draft state, one read-back of its assets before publishing
+  assert.equal(calls(result, 'view').length, 2);
   assert.equal(calls(result, 'create').length, 1);
   assert.match(calls(result, 'create')[0], /--verify-tag --draft /u);
   assert.equal(calls(result, 'upload').length, 1);
