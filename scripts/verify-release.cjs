@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
+const { packageArch, updaterMetadataName } = require('../src/main/lib/release-arch.cjs');
 const root = path.resolve(__dirname, '..');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
@@ -20,6 +21,7 @@ function parseArgs(argv) {
   const options = {
     dist: path.resolve(__dirname, '..', 'dist'),
     allowUnsigned: false,
+    requireArch: [],
     expectedFingerprint: process.env.AUX_COMMAND_GPG_FINGERPRINT || ''
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -34,8 +36,15 @@ function parseArgs(argv) {
       const value = argv[++index];
       if (!value) throw new Error('--expected-fingerprint requires a full OpenPGP fingerprint');
       options.expectedFingerprint = value;
+    } else if (arg === '--require-arch') {
+      // Every listed architecture must have its AppImage, deb, rpm and
+      // updater metadata, for example --require-arch x64,arm64.
+      options.requireArch = String(argv[++index] || '').split(',').filter(Boolean);
+      if (!options.requireArch.length || options.requireArch.some((arch) => !['x64', 'arm64'].includes(arch))) {
+        throw new Error('--require-arch takes a comma-separated list of x64 and arm64');
+      }
     } else if (arg === '--help') {
-      process.stdout.write('Usage: node scripts/verify-release.cjs [--dist DIR] [--allow-unsigned] [--expected-fingerprint FINGERPRINT]\n');
+      process.stdout.write('Usage: node scripts/verify-release.cjs [--dist DIR] [--allow-unsigned] [--expected-fingerprint FINGERPRINT] [--require-arch x64,arm64]\n');
       process.exit(0);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
@@ -133,6 +142,11 @@ function main() {
     seen.add(name);
     if (!/^[0-9a-f]{64}$/u.test(artifact.sha256 || '')) throw new Error(`Invalid manifest checksum for ${name}`);
     if (!Number.isSafeInteger(artifact.size) || artifact.size < 0) throw new Error(`Invalid manifest size for ${name}`);
+    // Manifests written before packages were built for more than one
+    // architecture have no arch field; when present it must be truthful.
+    if (artifact.arch !== undefined && (!['appimage', 'deb', 'rpm'].includes(artifact.kind) || !artifact.arch || artifact.arch !== packageArch(name))) {
+      throw new Error(`Manifest architecture does not match the file name for ${name}`);
+    }
     if (!sums.has(name)) throw new Error(`Missing checksum entry for ${name}`);
     if (sums.get(name) !== artifact.sha256) throw new Error(`Manifest/SHA256SUMS mismatch for ${name}`);
 
@@ -153,6 +167,17 @@ function main() {
   for (const kind of requiredKinds) {
     if (!manifest.artifacts.some((artifact) => artifact.kind === kind)) {
       throw new Error(`Release manifest is missing required artifact kind: ${kind}`);
+    }
+  }
+
+  for (const arch of options.requireArch) {
+    for (const kind of ['appimage', 'deb', 'rpm']) {
+      const count = manifest.artifacts.filter((artifact) => artifact.kind === kind && artifact.arch === arch).length;
+      if (count !== 1) throw new Error(`Release manifest must contain exactly one ${arch} ${kind} package, found ${count}`);
+    }
+    const metadata = updaterMetadataName(arch);
+    if (!manifest.artifacts.some((artifact) => artifact.kind === 'updater-metadata' && artifact.name === metadata)) {
+      throw new Error(`Release manifest is missing ${metadata} for ${arch}`);
     }
   }
 

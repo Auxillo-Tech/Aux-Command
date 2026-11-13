@@ -90,6 +90,7 @@ class ProfileSync {
       type: this.syncConfig?.type || null,
       lastSyncAt: this.lastSyncAt,
       lastError: this.lastError,
+      skipped: this.lastSkipped || [],
       providerCount: this.syncConfig ? 1 : 0
     };
   }
@@ -106,6 +107,7 @@ class ProfileSync {
     try {
       const remoteProfiles = await this.#fetchRemote();
       if (!remoteProfiles.length) {
+        this.lastSkipped = [];
         this.lastSyncAt = new Date().toISOString();
         this.#persist();
         this.#emitStatus();
@@ -119,8 +121,14 @@ class ProfileSync {
       // Each tuple is saved once, and conflicting normalized updates abort the
       // whole batch. total remains the source row count for API compatibility.
       const staged = new Map();
+      // Every entry that does not validate is collected with its reason, so the
+      // user sees all of them at once; any refusal still aborts before a write.
+      const skipped = [];
       for (const [index, remote] of remoteProfiles.entries()) {
-        if (!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new Error(`Sync profile entry ${index + 1} must be an object`);
+        if (!remote || typeof remote !== 'object' || Array.isArray(remote)) {
+          skipped.push({ index: index + 1, name: '', field: '', reason: 'it must be an object' });
+          continue;
+        }
         const {
           id: _id,
           createdAt: _createdAt,
@@ -160,7 +168,13 @@ class ProfileSync {
             credentialKind: existing?.credentialKind || 'password'
           });
         } catch (error) {
-          throw new Error(`Sync profile entry ${index + 1} is invalid: ${error?.message || error}`);
+          skipped.push({
+            index: index + 1,
+            name: typeof remote.name === 'string' ? remote.name.slice(0, 120) : '',
+            field: error?.field || '',
+            reason: String(error?.message || error)
+          });
+          continue;
         }
         // IDs and timestamps are local persistence metadata, not shared data.
         const { id: _candidateId, createdAt: _candidateCreatedAt, updatedAt: _candidateUpdatedAt, ...shared } = candidate;
@@ -171,6 +185,13 @@ class ProfileSync {
           continue;
         }
         staged.set(key, { candidate, existing, fingerprint });
+      }
+
+      this.lastSkipped = skipped;
+      if (skipped.length) {
+        throw new Error(skipped.map((entry) => entry.index
+          ? `Sync profile entry ${entry.index}${entry.name ? ` (${entry.name})` : ''} is invalid: ${entry.reason}`
+          : entry.reason).join('\n'));
       }
 
       let added = 0;
@@ -203,6 +224,7 @@ class ProfileSync {
     this.syncConfig = null;
     this.lastSyncAt = null;
     this.lastError = null;
+    this.lastSkipped = [];
     this.#persist();
     this.#emitStatus();
     return this.getStatus();

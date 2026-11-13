@@ -2,6 +2,8 @@
 set -euo pipefail
 node scripts/test-mosh-tunnels.cjs
 node scripts/test-sftp-signin.cjs
+node scripts/test-ssh-saved-credentials.cjs
+node scripts/test-sftp-ssh-config.cjs
 xvfb-run -a node scripts/test-rdp-vnc.cjs
 xvfb-run -a node scripts/test-rdp-signin.cjs
 # Electron's TLS library is stricter than Node's; Windows-style certificates must be read inside it.

@@ -26,6 +26,7 @@ function fixture(t) {
   sync.configure({ type: 'file', path: source });
   return {
     store, sync,
+    source,
     rows: (rows) => fs.writeFileSync(source, JSON.stringify(rows)),
     reopen: () => new ProfileStore(dataDir),
     bytes: () => fs.readFileSync(path.join(dataDir, 'profiles.json'))
@@ -82,4 +83,64 @@ test('ProfileSync rejects case-normalized local shells before saving earlier val
   await assert.rejects(f.sync.syncNow(), /local shells are never synchronized/);
   assert.equal(saves.mock.callCount(), 0);
   assert.deepEqual(f.bytes(), before);
+});
+
+test('ProfileSync rejects an ssh profile whose user or host holds shell syntax and saves nothing', async (t) => {
+  const f = fixture(t);
+  const hosts = () => f.reopen().list().map((p) => p.host).sort();
+  const before = hosts();
+  f.rows([
+    { name: 'fine', host: 'fine.example', protocol: 'ssh', username: 'deploy' },
+    { name: 'evil', host: 'evil.example', protocol: 'ssh', username: 'x$IFS-oProxyCommand=touch\\ /tmp/p1f-pwned' }
+  ]);
+  await assert.rejects(f.sync.syncNow(), /Sync profile entry 2 \(evil\) is invalid: Username cannot contain/);
+  assert.deepEqual(hosts(), before, 'no earlier valid row was saved either');
+  f.rows([{ name: 'evil', host: 'a;b', protocol: 'ssh' }]);
+  await assert.rejects(f.sync.syncNow(), /Sync profile entry 1 \(evil\) is invalid: Host cannot contain/);
+});
+
+test('ProfileSync lists every refused remote entry with its reason and saves nothing', async (t) => {
+  const f = fixture(t);
+  f.store.save({ name: 'Existing', host: 'existing.test' });
+  const before = f.bytes();
+  f.rows([
+    { name: 'Good', host: 'good.example', username: 'ops' },
+    { name: 'Corp', host: 'corp.example', username: 'CORP\\jd' },
+    { name: 'Spaced', host: 'space.example', username: 'first last' },
+    { name: 'Glob', host: '{touch,/tmp/f}' },
+    'not an object'
+  ]);
+  await assert.rejects(f.sync.syncNow(), (error) => {
+    const lines = error.message.split('\n');
+    assert.equal(lines.length, 4, error.message);
+    assert.match(lines[0], /^Sync profile entry 2 \(Corp\) is invalid: Username cannot contain a backslash: use user@domain/);
+    assert.match(lines[1], /^Sync profile entry 3 \(Spaced\) is invalid: Username /);
+    assert.match(lines[2], /^Sync profile entry 4 \(Glob\) is invalid: Host /);
+    assert.match(lines[3], /^Sync profile entry 5 is invalid: it must be an object/);
+    return true;
+  });
+  assert.deepEqual(f.bytes(), before);
+  const status = f.sync.getStatus();
+  assert.deepEqual(status.skipped.map((s) => s.name), ['Corp', 'Spaced', 'Glob', '']);
+  assert.deepEqual(status.skipped.map((s) => s.field), ['username', 'username', 'host', '']);
+  assert.ok(status.lastError.includes('Sync profile entry 4'));
+  f.rows([{ name: 'Good', host: 'good.example', username: 'ops' }]);
+  await f.sync.syncNow();
+  assert.deepEqual(f.sync.getStatus().skipped, []);
+});
+
+test('ProfileSync keeps legacy-invalid stored rows byte for byte', async (t) => {
+  const f = fixture(t);
+  f.store.save({ name: 'Existing', host: 'existing.test' });
+  const raw = JSON.parse(f.bytes().toString());
+  raw.profiles.push({ id: 'legacy-corp', name: 'Corp box', protocol: 'ssh', host: 'corp.example', username: 'CORP\\jd', extra: [1, { a: 2 }] });
+  fs.writeFileSync(path.join(path.dirname(f.reopen().store.filename), 'profiles.json'), JSON.stringify(raw));
+  const store = f.reopen();
+  const sync = new ProfileSync(store, () => null);
+  sync.configure({ type: 'file', path: f.source });
+  fs.writeFileSync(f.source, JSON.stringify([{ name: 'Good', host: 'good.example', username: 'ops' }]));
+  await sync.syncNow();
+  const after = JSON.parse(fs.readFileSync(store.store.filename, 'utf8')).profiles.find((p) => p.id === 'legacy-corp');
+  assert.deepEqual(after, raw.profiles.find((p) => p.id === 'legacy-corp'));
+  sync.stop();
 });

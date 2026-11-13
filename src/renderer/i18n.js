@@ -2,8 +2,9 @@
 
 // UI chrome localization. Catalogs cover the persistent workspace surfaces
 // (top bar, rail, sidebar, toolbar, welcome, SFTP panel, status bar, tour);
-// deep modal prose keeps its English source text until translated. Every
-// language must define exactly the English key set — enforced by tests.
+// dialogs, notifications and prompts use the message catalog in
+// dialog-i18n.js, keyed by their English source text. Every language must
+// define exactly the English key set — enforced by tests.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.AuxI18n = factory();

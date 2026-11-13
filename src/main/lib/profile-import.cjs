@@ -18,10 +18,22 @@ function planProfileImport(payload, current, mode = 'merge') {
   if (payload.profiles.length > 5000) throw new Error('An import may contain at most 5000 profiles');
   if (payload.snippets !== undefined && !Array.isArray(payload.snippets)) throw new Error('The export snippets must be a list');
   if ((payload.snippets || []).length > 1000) throw new Error('An import may contain at most 1000 snippets');
-  const parse = (items, normalize, kind) => items.map((item, index) => {
-    try { return normalize({ ...item, credentialId: '' }); }
-    catch (error) { throw new Error(`${kind} ${index + 1}: ${error.message}`); }
-  });
+  // An entry that does not validate is left out and reported with its reason;
+  // the others are still imported. Every refused entry is listed, not the first.
+  const rejected = [];
+  const parse = (items, normalize, kind) => {
+    const rows = [];
+    items.forEach((item, index) => {
+      try {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${kind.toLowerCase()} must be an object`);
+        rows.push(normalize({ ...item, credentialId: '' }));
+      } catch (error) {
+        const name = item && typeof item === 'object' && typeof item.name === 'string' ? item.name.slice(0, 120) : '';
+        rejected.push({ kind: kind.toLowerCase(), index: index + 1, name, field: error?.field || '', reason: String(error?.message || 'invalid entry') });
+      }
+    });
+    return rows;
+  };
   const imported = parse(payload.profiles, normalizeProfile, 'Profile');
   for (const profile of imported) {
     if (profile.id === 'local-shell' && profile.protocol !== 'local') throw new Error('The local-shell ID is reserved for a local terminal');
@@ -37,7 +49,8 @@ function planProfileImport(payload, current, mode = 'merge') {
       }
     }
   }
-  const summary = { added: 0, updated: 0, skipped: 0, conflicts: 0, snippetsAdded: 0, snippetsUpdated: 0, snippetsSkipped: 0, startupCommands: imported.filter(p => p.startupCommand).length };
+  const reserved = new Set(current.reservedIds || []);
+  const summary = { added: 0, updated: 0, skipped: 0, rejected: rejected.length, rejectedEntries: rejected, conflicts: 0, snippetsAdded: 0, snippetsUpdated: 0, snippetsSkipped: 0, startupCommands: imported.filter(p => p.startupCommand).length };
   function merge(rows, incoming, kind) {
     const result = structuredClone(rows);
     for (const record of incoming) {
@@ -56,7 +69,7 @@ function planProfileImport(payload, current, mode = 'merge') {
         summary[counter('updated')]++;
       } else {
         // Explicit copies always get new IDs; repeated identical imports do not.
-        if (mode === 'copy' || result.some(p => p.id === record.id)) record.id = randomUUID();
+        if (mode === 'copy' || reserved.has(record.id) || result.some(p => p.id === record.id)) record.id = randomUUID();
         result.push(record); summary[counter('added')]++;
       }
     }

@@ -41,7 +41,7 @@ test('serial profiles require a device', () => {
 
 test('rejects unsupported protocols and invalid ports', () => {
   assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'smtp', host: 'mail' }), /unsupported protocol/u);
-  assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'ssh', host: 'host', port: 70000 }), /between 1 and 65535/u);
+  assert.throws(() => normalizeProfile({ name: 'Bad', protocol: 'ssh', host: 'host', port: 70000 }), /Port must be a number from 1 to 65535/u);
 });
 
 test('normalizes FTP and FTPS file-transfer profiles', () => {
@@ -51,6 +51,25 @@ test('normalizes FTP and FTPS file-transfer profiles', () => {
   assert.equal(ftps.port, 990);
   assert.equal(ftp.sftpRoot, '/');
   assert.equal(ftps.sftpRoot, '/');
+});
+
+test('FTPS mode defaults to automatic, keeps a valid choice and ignores unknown values', () => {
+  const base = { name: 'FTPS', protocol: 'ftps', host: 'secure.example' };
+  assert.equal(normalizeProfile(base).ftpsMode, 'auto');
+  assert.equal(normalizeProfile({ ...base, ftpsMode: 'explicit' }).ftpsMode, 'explicit');
+  assert.equal(normalizeProfile({ ...base, ftpsMode: ' Implicit ' }).ftpsMode, 'implicit');
+  assert.equal(normalizeProfile({ ...base, ftpsMode: 'auto' }).ftpsMode, 'auto');
+  // An unknown value (for example from a newer version's export) must not
+  // reject the profile or pick a form the user did not choose.
+  for (const unknown of ['starttls', 'none', '', null, 7, {}, ['explicit', 'implicit']]) {
+    assert.equal(normalizeProfile({ ...base, ftpsMode: unknown }).ftpsMode, 'auto');
+  }
+  // The setting only exists for FTPS; other protocols never carry a forced form.
+  assert.equal(normalizeProfile({ name: 'FTP', protocol: 'ftp', host: 'ftp.example', ftpsMode: 'implicit' }).ftpsMode, 'auto');
+  assert.equal(normalizeProfile({ name: 'SSH', protocol: 'ssh', host: 'ssh.example', ftpsMode: 'explicit' }).ftpsMode, 'auto');
+  // Normalising twice gives the same answer, as save-then-load does.
+  const once = normalizeProfile({ ...base, ftpsMode: 'explicit' });
+  assert.equal(normalizeProfile(once).ftpsMode, 'explicit');
 });
 
 test('preserves supplied timestamps while stores can explicitly update them', () => {
@@ -76,15 +95,15 @@ test('normalizes dynamic and local tunnels', () => {
 test('rejects option-like connection targets and relative serial devices', () => {
   assert.throws(
     () => normalizeProfile({ name: 'Bad host', protocol: 'ssh', host: '-oProxyCommand=bad' }),
-    /host cannot start with a hyphen/u
+    /Host cannot start with a hyphen/u
   );
   assert.throws(
     () => normalizeProfile({ name: 'Bad alias', protocol: 'ssh', host: 'server', sshAlias: '-bad' }),
-    /sshAlias cannot start with a hyphen/u
+    /SSH alias cannot start with a hyphen/u
   );
   assert.throws(
     () => normalizeProfile({ name: 'Bad jump', protocol: 'ssh', host: 'server', proxyJump: 'jump host' }),
-    /proxyJump cannot contain whitespace/u
+    /ProxyJump cannot contain/u
   );
   assert.throws(
     () => normalizeProfile({ name: 'Serial', protocol: 'serial', device: 'ttyUSB0' }),
@@ -147,7 +166,7 @@ test('preserves optional OpenSSH known-hosts file overrides', () => {
   assert.equal(profile.knownHostsFile, '/tmp/aux-command-known-hosts');
   assert.throws(
     () => normalizeProfile({ name: 'Bad known hosts', protocol: 'ssh', host: '127.0.0.1', knownHostsFile: '-oProxyCommand=bad' }),
-    /knownHostsFile cannot start with a hyphen/u
+    /Known-hosts file cannot start with a hyphen/u
   );
 });
 
@@ -175,4 +194,40 @@ test('accepts every terminal theme offered by the profile editor', () => {
     () => normalizeProfile({ name: 'Bad theme', protocol: 'ssh', host: 'host', terminalTheme: 'hotdog-stand' }),
     /unsupported terminal theme/u
   );
+});
+
+// OpenSSH before 9.6 puts user and host names into `sh -c` strings without
+// checking them: `x$IFS-oProxyCommand=touch\ /tmp/f` ran a command on Debian
+// 12's OpenSSH 9.2 through a ProxyCommand using %r. Names are refused whole.
+const HOSTILE_NAMES = [
+  'x$IFS-oProxyCommand=touch\\ /tmp/p1f-pwned', 'bob;id', 'bob&id', 'bob|id', 'bob`id`', 'bob$(id)', 'bob${IFS}id',
+  "bob'id", 'bob"id', 'bob\\id', 'bob<id', 'bob>id', '*', 'bo?b', 'bob smith', 'bob\tid', 'bob(id)'
+];
+
+test('ssh and mosh profiles refuse shell syntax in the user, host and alias, and name the field', () => {
+  for (const protocol of ['ssh', 'mosh']) {
+    for (const bad of HOSTILE_NAMES) {
+      for (const field of ['username', 'host', 'sshAlias']) {
+        const input = { name: 'x', protocol, host: 'server.example', username: 'deploy', sshAlias: 'alias', [field]: bad };
+        assert.throws(() => normalizeProfile(input, 'x'), (error) => error instanceof Error, `${protocol} ${field} ${JSON.stringify(bad)}`);
+      }
+    }
+  }
+  assert.throws(() => normalizeProfile({ name: 'x', protocol: 'ssh', host: 'server.example', username: 'x$IFS-oProxyCommand=touch\\ /tmp/f' }, 'x'), /Username cannot contain quotes/u);
+  assert.throws(() => normalizeProfile({ name: 'x', protocol: 'ssh', host: 'a*b' }, 'x'), /Host cannot contain/u);
+  assert.throws(() => normalizeProfile({ name: 'x', protocol: 'ssh', host: 'h', sshAlias: 'a;b' }, 'x'), /SSH alias cannot contain/u);
+  assert.throws(() => normalizeProfile({ name: 'x', protocol: 'ssh', host: 'h', proxyJump: 'ok@bastion,evil$IFS' }, 'x'), /ProxyJump cannot contain/u);
+  assert.equal(normalizeProfile({ name: 'x', protocol: 'ssh', host: 'h', proxyJump: 'ops@[2001:db8::1]:2201,inner' }, 'x').proxyJump, 'ops@[2001:db8::1]:2201,inner');
+});
+
+test('ordinary names still pass: dots, hyphens, underscores, @ + : and IPv6', () => {
+  for (const [username, host] of [['deploy', 'server.example.com'], ['first.last', 'host-1_a'], ['svc+ops@corp.example', '192.0.2.10'], ['jane', '2001:db8::1'], ['dom\\user'.replace('\\', '.'), 'xn--bcher-kva.example']]) {
+    const profile = normalizeProfile({ name: 'ok', protocol: 'ssh', host, username }, 'ok');
+    assert.equal(profile.username, username);
+    assert.equal(profile.host, host);
+  }
+});
+
+test('protocols that never reach a shell keep their wider names', () => {
+  assert.equal(normalizeProfile({ name: 'win', protocol: 'rdp', host: 'rdp.example', username: 'DOMAIN\\user' }, 'win').username, 'DOMAIN\\user');
 });

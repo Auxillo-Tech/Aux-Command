@@ -11,6 +11,8 @@ const { randomUUID } = require('node:crypto');
 const { PythonPty } = require('../lib/python-pty.cjs');
 const { buildTerminalCommand } = require('../lib/command-builder.cjs');
 const { normalizeTerminalRequest } = require('../lib/validation.cjs');
+const { createAskpassSession, hasStoredCredential, supportsSavedCredentialAnswers } = require('../lib/ssh-askpass.cjs');
+const { findExecutable } = require('../lib/executable-finder.cjs');
 
 const MAX_TRANSCRIPT_BYTES = 1_048_576;
 const TRANSCRIPT_TRIM_SLACK = 262_144;
@@ -77,10 +79,13 @@ function safeLogPath(filePath) {
 }
 
 const MAX_RETAINED_TRANSCRIPTS = 20;
+// Mosh signs in through an ordinary ssh process before it switches to UDP.
+const ASKPASS_PROTOCOLS = new Set(['ssh', 'mosh']);
 
 class TerminalService {
-  constructor(getWindow) {
+  constructor(getWindow, options = {}) {
     this.getWindow = getWindow;
+    this.vaultService = options.vaultService || null;
     this.sessions = new Map();
     this.closedTranscripts = new Map();
   }
@@ -100,15 +105,31 @@ class TerminalService {
     const request = normalizeTerminalRequest(input);
     const spec = buildTerminalCommand(request.profile, { remoteCwd: request.remoteCwd });
     const id = randomUUID();
-    const terminal = new PythonPty({
-      command: spec.command,
-      args: spec.args,
-      cols: request.cols,
-      rows: request.rows,
-      cwd: request.cwd || os.homedir(),
-      env: spec.env
-    });
+    // Only a profile with a saved credential gets the askpass variables: its
+    // password or passphrase prompt is then answered from the vault, and
+    // every other prompt is handed back to this terminal. Without a saved
+    // credential, or with an OpenSSH too old for the saved credential to be
+    // released safely, the session starts exactly as it always has.
+    const askpass = ASKPASS_PROTOCOLS.has(request.profile.protocol) && hasStoredCredential(request.profile, this.vaultService)
+      && supportsSavedCredentialAnswers(findExecutable(['ssh'], spec.env.PATH || ''))
+      ? createAskpassSession({ profile: request.profile, vaultService: this.vaultService, mode: 'terminal' })
+      : null;
+    let terminal;
+    try {
+      terminal = new PythonPty({
+        command: spec.command,
+        args: spec.args,
+        cols: request.cols,
+        rows: request.rows,
+        cwd: request.cwd || os.homedir(),
+        env: askpass ? { ...spec.env, ...askpass.env } : spec.env
+      });
+    } catch (error) {
+      askpass?.close();
+      throw error;
+    }
 
+    askpass?.trackProcess(terminal.child?.pid);
     const session = {
       id,
       profileId: request.profile.id,
@@ -116,6 +137,7 @@ class TerminalService {
       protocol: request.profile.protocol,
       cwd: request.profile.protocol === 'local' ? request.cwd : request.remoteCwd,
       terminal,
+      askpass,
       startedAt: new Date().toISOString(),
       cwdTracker: new TerminalDirectoryTracker(),
       outputSequence: 0,
@@ -137,6 +159,7 @@ class TerminalService {
       this.#send('terminal:data', { id, data, sequence: ++session.outputSequence });
     });
     terminal.onExit(({ exitCode, signal }) => {
+      askpass?.close();
       session.timeline.exit(exitCode);
       // A user-initiated close already discarded this session; re-adding the
       // transcript here would leak it until app quit.
@@ -255,6 +278,7 @@ class TerminalService {
     this.sessions.delete(id);
     this.closedTranscripts.delete(id);
     this.#closeLogStream(session);
+    session.askpass?.close();
     try { session.terminal.kill(); } catch { /* process already exited */ }
     return true;
   }
@@ -264,7 +288,7 @@ class TerminalService {
   }
 
   list() {
-    return [...this.sessions.values()].map(({ terminal, transcript, logging, recording, cwdTracker, timeline, ...metadata }) => ({
+    return [...this.sessions.values()].map(({ terminal, askpass, transcript, logging, recording, cwdTracker, timeline, ...metadata }) => ({
       ...metadata,
       cwd: metadata.protocol === 'local' ? (terminal.currentDirectory?.() || metadata.cwd) : metadata.cwd,
       logging: logging ? { filePath: logging.filePath, active: Boolean(logging.stream && !logging.stream.destroyed) } : null

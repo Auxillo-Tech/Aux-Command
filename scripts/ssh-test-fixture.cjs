@@ -79,6 +79,7 @@ async function createSshdFixture() {
   let last = null;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     last = spawnSync('ssh', [
+      '-F', 'none',
       '-i', clientKey,
       '-p', String(port),
       '-o', 'BatchMode=yes',

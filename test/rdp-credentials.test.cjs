@@ -79,3 +79,27 @@ test('FreeRDP failures are reported in plain words', () => {
   assert.match(describeRdpFailure('nla_client_setup_identity: ERRCONNECT_CONNECT_CANCELLED'), /RDP sign-in failed: the server requires a user name and password/u);
   assert.equal(describeRdpFailure('something unrelated'), '');
 });
+
+test('the sign-in prompt also carries its source text and values for translation', async () => {
+  const { english, message } = require('../src/main/lib/prompt-message.cjs');
+  assert.deepEqual(message('Password for {p0}', { p0: 'ops' }), { text: 'Password for {p0}', params: { p0: 'ops' } });
+  assert.equal(english(message('Password for {p0}', { p0: 'ops' })), 'Password for ops');
+  assert.equal(english(message('Password')), 'Password');
+  // A value is inserted once; it is never read again as a placeholder.
+  assert.equal(english(message('{p0} and {p1}', { p0: '{p1}', p1: 'x' })), '{p1} and x');
+  assert.equal(english(message('Password for {p0}')), 'Password for {p0}');
+
+  const withUser = broker({ answers: ['typed'] });
+  await resolveRdpCredentials({ name: 'Desk', host: 'desk.example', username: 'ops' }, { promptBroker: withUser });
+  const payload = withUser.requests[0].payload;
+  assert.deepEqual(payload.messages.name, { text: 'RDP sign-in', params: {} });
+  assert.deepEqual(payload.messages.prompts, [{ text: 'Password for {p0}', params: { p0: 'ops' } }]);
+  // The English wording is exactly the source with its values filled in.
+  assert.equal(payload.name, english(payload.messages.name));
+  assert.equal(payload.instructions, english(payload.messages.instructions));
+  assert.deepEqual(payload.prompts.map((prompt) => prompt.prompt), payload.messages.prompts.map(english));
+
+  const withoutUser = broker({ answers: ['ops', 'typed'] });
+  await resolveRdpCredentials({ name: 'Desk', host: 'desk.example' }, { promptBroker: withoutUser });
+  assert.deepEqual(withoutUser.requests[0].payload.messages.prompts, [{ text: 'User name', params: {} }, { text: 'Password', params: {} }]);
+});

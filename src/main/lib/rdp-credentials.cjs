@@ -7,6 +7,8 @@
 // hands it to FreeRDP on standard input so it never appears in the process
 // list.
 
+const { english, message } = require('./prompt-message.cjs');
+
 const SIGN_IN_CANCELLED = 'RDP sign-in was cancelled';
 
 function cleanLine(value, max) {
@@ -36,16 +38,22 @@ async function resolveRdpCredentials(profile, { vaultService = null, promptBroke
   }
   if (!promptBroker) return { username, password: '', stored: false };
 
-  const prompts = [];
-  if (!username) prompts.push({ prompt: 'User name', echo: true });
-  prompts.push({ prompt: username ? `Password for ${username}` : 'Password', echo: false });
+  // Each text is sent in English and also as a source message, so the
+  // window can show it in the user's language.
+  const asked = [];
+  if (!username) asked.push({ message: message('User name'), echo: true });
+  asked.push({ message: username ? message('Password for {p0}', { p0: username }) : message('Password'), echo: false });
+  const prompts = asked.map((entry) => ({ prompt: english(entry.message), echo: entry.echo }));
+  const title = message('RDP sign-in');
+  const instructions = message('Leave the password empty if this server shows its own sign-in screen. To skip this prompt, save a password in the connection profile.');
   const response = await promptBroker.request('keyboard-interactive', {
     profileName: profile.name || '',
     host: profile.host || '',
-    name: 'RDP sign-in',
-    instructions: 'Leave the password empty if this server shows its own sign-in screen. To skip this prompt, save a password in the connection profile.',
+    name: english(title),
+    instructions: english(instructions),
     language: '',
-    prompts
+    prompts,
+    messages: { name: title, instructions, prompts: asked.map((entry) => entry.message) }
   }, 300_000);
   const answers = Array.isArray(response?.answers) ? response.answers : [];
   if (answers.length < prompts.length) throw new Error(SIGN_IN_CANCELLED);

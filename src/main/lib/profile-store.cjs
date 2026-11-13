@@ -8,7 +8,7 @@ const { planProfileImport } = require('./profile-import.cjs');
 const { JsonStore } = require('./json-store.cjs');
 const { defaultLocalProfile, defaultInfraProfiles, defaultInfraSnippets } = require('./command-builder.cjs');
 const { normalizeProfile, normalizeSnippet, expandHome } = require('./validation.cjs');
-const { readDefaultSshConfig } = require('./ssh-config-parser.cjs');
+const { readDefaultSshConfigDetailed } = require('./ssh-config-parser.cjs');
 
 const PROFILE_STORE_VERSION = 2;
 const MANAGED_CONNECTIVITY_FIELDS = Object.freeze([
@@ -52,20 +52,32 @@ class ProfileStore {
     });
   }
 
-  list() {
-    // One hand-edited or legacy-invalid entry must not take every profile
-    // (and app startup) down with it; invalid entries are skipped with a
-    // warning and stay untouched in profiles.json for manual repair.
-    const data = this.store.get();
-    const profiles = [];
-    for (const profile of data.profiles) {
+  // Every stored row, each either normalised or, when it no longer passes
+  // validation, a display copy marked `invalid` with the reason. The raw row is
+  // never changed by reading it.
+  #rows(data) {
+    return data.profiles.map((profile) => {
       try {
-        profiles.push(normalizeProfile({ ...profile, sshAliases: [...(profile.sshAliases || []), ...(data.sshAliasGroups?.[profile.id] || [])] }, profile.id));
+        const own = profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : null;
+        if (!own) throw new Error('profile must be an object');
+        return normalizeProfile(withAliasGroups(own, data), own.id);
       } catch (error) {
-        process.stderr.write(`Aux Command skipped invalid profile ${profile?.id || '(no id)'} in profiles.json: ${error?.message || error}\n`);
+        return invalidView(profile, error, data);
       }
-    }
-    return profiles;
+    });
+  }
+
+  // The profiles that can be used to connect. A stored one that fails
+  // validation (a legacy user name, a hand edit) is left out here but stays
+  // untouched in profiles.json; listAll() shows it so it can be fixed.
+  list() {
+    return this.#rows(this.store.get()).filter((profile) => !profile.invalid);
+  }
+
+  // The same list including the invalid entries, for the profile list in the
+  // window. Nothing but display code may connect with an entry that has `invalid`.
+  listAll() {
+    return this.#rows(this.store.get());
   }
 
   snippets() {
@@ -107,15 +119,33 @@ class ProfileStore {
     return this.list().find((profile) => profile.id === id) || null;
   }
 
+  // The stored row as it is on disk, for deleting its saved credential.
+  raw(id) {
+    return this.store.get().profiles.find((profile) => profile?.id === id) || null;
+  }
+
   save(input) {
-    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    // `invalid` only ever comes from the window's copy of a stored profile.
+    const { invalid: _marker, ...source } = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
     if (source.id === 'local-shell' && source.protocol && source.protocol !== 'local') {
       throw new Error('The default local shell must remain a local profile');
     }
-    const existing = source.id ? this.get(source.id) : null;
-    const normalized = normalizeProfile({ ...existing, ...source, updatedAt: new Date().toISOString() }, existing?.id || source.id);
+    // An invalid stored profile can be saved over once the edit makes it valid.
+    // The base is the full stored row, never the window's display copy, so a
+    // field the edit does not touch stays exactly as it was stored. It still
+    // goes through normalizeProfile below, which drops unknown fields.
+    const data = this.store.get();
+    const stored = source.id ? data.profiles.find((profile) => profile?.id === source.id) : null;
+    let existing = null;
+    let base = {};
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+      const row = this.#rows({ ...data, profiles: [stored] })[0];
+      existing = { id: stored.id };
+      base = row.invalid ? withAliasGroups(stored, data) : row;
+    }
+    const normalized = normalizeProfile({ ...base, ...source, updatedAt: new Date().toISOString() }, existing?.id || source.id);
     this.store.update((data) => {
-      const index = data.profiles.findIndex((profile) => profile.id === normalized.id);
+      const index = data.profiles.findIndex((profile) => profile?.id === normalized.id);
       if (index >= 0) data.profiles[index] = normalized;
       else data.profiles.push(normalized);
       return data;
@@ -126,29 +156,33 @@ class ProfileStore {
   moveGroup(from, to) {
     if(typeof from!=='string'||!from||from==='Local'||typeof to!=='string'||!to.trim())throw new Error('Invalid folder move');
     const updates=new Map(this.list().filter(p=>p.group===from||p.group.startsWith(from+' / ')).map(p=>[p.id,normalizeProfile({...p,group:to+p.group.slice(from.length)},p.id)]));
-    this.store.update(data=>({...data,profiles:data.profiles.map(p=>updates.get(p.id)||p)}));return updates.size;
+    this.store.update(data=>({...data,profiles:data.profiles.map(p=>updates.get(p?.id)||p)}));return updates.size;
   }
   bulkUpdate(ids, patch) {
     if (!Array.isArray(ids) || !ids.length || ids.length > 2000 || new Set(ids).size !== ids.length) throw new Error('Select 1–2,000 distinct connections');
     if (!patch || Object.keys(patch).some(key => !['group', 'tags', 'favorite', 'username', 'port', 'keepAliveSeconds'].includes(key))) throw new Error('Unsupported bulk field');
-    const currentProfiles = new Map(this.list().map(profile => [profile.id, profile]));
+    const currentProfiles = new Map(this.listAll().map(profile => [profile.id, profile]));
     const updates = ids.map(id => {
       const existing = currentProfiles.get(id);
       if (!existing) throw new Error('A selected connection no longer exists');
+      // An invalid stored profile stops the whole change with its own reason;
+      // nothing is written.
       return normalizeProfile({ ...existing, ...patch, updatedAt: new Date().toISOString() }, id);
     });
     const byId = new Map(updates.map(p => [p.id, p]));
-    this.store.update(data => ({ ...data, profiles: data.profiles.map(p => byId.get(p.id) || p) }));
+    this.store.update(data => ({ ...data, profiles: data.profiles.map(p => byId.get(p?.id) || p) }));
     return updates;
   }
   delete(id) {
     if (id === 'local-shell') throw new Error('The default local shell profile cannot be deleted');
-    const before = this.list().length;
+    let removed = false;
     this.store.update((data) => {
-      data.profiles = data.profiles.filter((profile) => profile.id !== id);
+      const kept = data.profiles.filter((profile) => profile?.id !== id);
+      removed = kept.length < data.profiles.length;
+      data.profiles = kept;
       return data;
     });
-    return this.list().length < before;
+    return removed;
   }
 
   // Hosts are read from $HOME/.ssh/config, so OpenSSH must resolve them from
@@ -159,10 +193,11 @@ class ProfileStore {
   }
 
   async importSshConfig() {
-    const imported = readDefaultSshConfig();
+    const { profiles: parsed, skipped } = readDefaultSshConfigDetailed();
+    const imported = [];
     // Resolve all entries before writing: a bad config must not partially
     // replace working saved connections. Ignore copied fields when resolving.
-    for (const profile of imported) {
+    for (const profile of parsed) {
       const config = await this.resolveSsh({ name: profile.name, protocol: 'ssh', host: profile.sshAlias, sshAlias: profile.sshAlias, useSshConfig: true }, { configFile: this.sshConfigFile || this.#defaultSshConfigFile() });
       profile.host = config.hostname[0];
       profile.port = Number(config.port[0]);
@@ -171,6 +206,16 @@ class ProfileStore {
       profile.proxyJump = config.proxyjump?.[0] === 'none' ? '' : config.proxyjump?.[0] || '';
       profile.compression = config.compression?.[0] === 'yes';
       profile.agentForwarding = config.forwardagent?.[0] === 'yes';
+      // The user name and host OpenSSH resolved (Match blocks, wildcards,
+      // Include files) can hold shell syntax even when the alias did not, and
+      // the resolved values are what reaches a shell. Check the finished
+      // profile the way saving does; one that fails is reported, never
+      // altered, and never written (list() would otherwise hide it).
+      try { normalizeProfile(profile, profile.id); } catch (error) {
+        skipped.push({ alias: profile.sshAlias, field: error?.field || '', reason: error?.message || 'invalid entry' });
+        continue;
+      }
+      imported.push(profile);
     }
     let added = 0;
     let updated = 0;
@@ -180,10 +225,10 @@ class ProfileStore {
       const identity = (profile) => profile.protocol === 'ssh' && profile.useSshConfig && profile.sshAlias
         ? JSON.stringify(['ssh-alias', profile.sshAlias])
         : JSON.stringify([profile.protocol, profile.name, profile.host]);
-      const aliases = new Map(data.profiles.map((profile) => [identity(profile), profile]));
+      const aliases = new Map(data.profiles.filter((profile) => profile && typeof profile === 'object').map((profile) => [identity(profile), profile]));
       for (const existing of data.profiles) {
-        if (existing.protocol !== 'ssh' || !existing.useSshConfig) continue;
-        for (const alias of [...(existing.sshAliases || []), ...(data.sshAliasGroups?.[existing.id] || [])]) aliases.set(JSON.stringify(['ssh-alias', alias]), existing);
+        if (existing?.protocol !== 'ssh' || !existing.useSshConfig) continue;
+        for (const alias of [...(Array.isArray(existing.sshAliases) ? existing.sshAliases : []), ...(data.sshAliasGroups?.[existing.id] || [])]) aliases.set(JSON.stringify(['ssh-alias', alias]), existing);
       }
       for (const profile of imported) {
         const key = identity(profile);
@@ -203,7 +248,7 @@ class ProfileStore {
       }
       return data;
     });
-    return { found: imported.length, added, updated, profiles: this.list() };
+    return { found: imported.length, added, updated, skipped, profiles: this.listAll() };
   }
 
   exportSafe() {
@@ -222,16 +267,78 @@ class ProfileStore {
     };
   }
 
+  // The rows import and merge work against: the ones that validate, plus the
+  // ids of those that do not (a new profile must not reuse such an id).
+  #importBase() {
+    const data = this.store.get();
+    const rows = this.#rows(data);
+    return {
+      profiles: rows.filter((row) => !row.invalid),
+      snippets: this.snippets(),
+      reservedIds: rows.filter((row) => row.invalid).map((row) => row.id)
+    };
+  }
+
   previewImport(payload, mode = 'merge') {
-    return planProfileImport(payload, { profiles: this.list(), snippets: this.snippets() }, mode).summary;
+    return planProfileImport(payload, this.#importBase(), mode).summary;
   }
 
   importSafe(payload, mode = 'merge') {
-    const plan = planProfileImport(payload, { profiles: this.list(), snippets: this.snippets() }, mode);
-    this.store.update(data => ({ ...data, profiles: plan.profiles, snippets: plan.snippets }));
-    return { ...plan.summary, profiles: this.list(), snippets: this.snippets() };
+    const plan = planProfileImport(payload, this.#importBase(), mode);
+    this.store.update((data) => {
+      // Rows that fail validation are kept exactly as stored: the plan only
+      // knows the valid ones, in their stored order, followed by new ones.
+      const valid = new Set(this.#rows(data).map((row, index) => (row.invalid ? -1 : index)).filter((index) => index >= 0));
+      let next = 0;
+      const merged = data.profiles.map((row, index) => (valid.has(index) ? plan.profiles[next++] : row));
+      return { ...data, profiles: [...merged, ...plan.profiles.slice(next)], snippets: plan.snippets };
+    });
+    return { ...plan.summary, profiles: this.listAll(), snippets: this.snippets() };
   }
 
+}
+
+// Every field of a stored profile, by the kind of value it holds. A stored row
+// that fails validation is shown with these fields at full length, so the
+// editor is filled with what is really stored and saving it changes only what
+// the user changed. Anything else in the row (unknown or injected keys, values
+// of the wrong kind) is not carried.
+const STRING_FIELDS = [
+  'name', 'protocol', 'group', 'host', 'username', 'identityFile', 'knownHostsFile', 'sshAlias', 'transferMode',
+  'credentialId', 'credentialKind', 'tabColor', 'startupCommand', 'proxyJump', 'sftpRoot', 'ftpsMode', 'device',
+  'rdpDomain', 'terminalTheme', 'terminalFontFamily', 'terminalCursorStyle', 'notes', 'createdAt', 'updatedAt'
+];
+const NUMBER_FIELDS = ['port', 'keepAliveSeconds', 'baudRate', 'rdpWidth', 'rdpHeight', 'terminalFontSize', 'terminalScrollback'];
+const BOOLEAN_FIELDS = [
+  'favorite', 'useSshConfig', 'trackRemoteCwd', 'compression', 'agentForwarding', 'x11Forwarding', 'rdpAudio',
+  'inheritTerminalDefaults', 'terminalCursorBlink'
+];
+const BOOLEAN_DEFAULTS = { useSshConfig: true, terminalCursorBlink: true };
+// Only the name is cut: it is the list text, and one over 120 characters is invalid anyway.
+const LIST_NAME_LIMIT = 500;
+
+function withAliasGroups(own, data) {
+  return { ...own, sshAliases: [...(Array.isArray(own.sshAliases) ? own.sshAliases : []), ...(data?.sshAliasGroups?.[own.id] || [])] };
+}
+
+// What the profile list shows for a stored row that fails validation, and what
+// the editor is filled from: the row's own values (strings, numbers, booleans
+// and lists of strings), the reason, and the field to fix.
+function invalidView(row, error, data) {
+  const source = row && typeof row === 'object' && !Array.isArray(row) ? withAliasGroups(row, data) : {};
+  const view = { id: typeof source.id === 'string' ? source.id : '' };
+  for (const field of STRING_FIELDS) if (typeof source[field] === 'string') view[field] = source[field];
+  for (const field of NUMBER_FIELDS) if (Number.isFinite(source[field])) view[field] = source[field];
+  // A flag the row never had reads as normalizeProfile would read it.
+  for (const field of BOOLEAN_FIELDS) view[field] = typeof source[field] === 'boolean' ? source[field] : BOOLEAN_DEFAULTS[field] ?? false;
+  view.name = (view.name || view.host || view.id || '').slice(0, LIST_NAME_LIMIT);
+  view.protocol ||= 'ssh';
+  view.group = view.group || 'Connections';
+  if (!(Number.isInteger(source.port) && source.port >= 1 && source.port <= 65535)) delete view.port;
+  view.tags = Array.isArray(source.tags) ? source.tags.filter((tag) => typeof tag === 'string') : [];
+  view.sshAliases = Array.isArray(source.sshAliases) ? source.sshAliases.filter((alias) => typeof alias === 'string') : [];
+  view.invalid = { field: typeof error?.field === 'string' ? error.field : '', message: String(error?.message || 'invalid entry') };
+  return view;
 }
 
 module.exports = { ProfileStore };

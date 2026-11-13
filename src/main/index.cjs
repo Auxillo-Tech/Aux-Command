@@ -21,6 +21,8 @@ const { ExternalService } = require('./services/external-service.cjs');
 const { FtpService } = require('./services/ftp-service.cjs');
 const { KnownHostService } = require('./services/known-host-service.cjs');
 const { SftpService } = require('./services/sftp-service.cjs');
+const { resolveSshConfig } = require('./lib/ssh-config-resolver.cjs');
+const { sweepStaleAskpassDirectories } = require('./lib/ssh-askpass.cjs');
 const { SystemService } = require('./services/system-service.cjs');
 const { TerminalService } = require('./services/terminal-service.cjs');
 const { TerminalWindows } = require('./services/terminal-windows.cjs');
@@ -153,10 +155,10 @@ function initializeServices() {
   const promptBroker = new PromptBroker(getWindow);
   const vaultService = new VaultService(dataDir, safeStorage);
   const knownHostService = new KnownHostService(dataDir, promptBroker);
-  const terminalService = new TerminalService(getWindow);
+  const terminalService = new TerminalService(getWindow, { vaultService });
   const terminalWindows = new TerminalWindows({ BrowserWindow, ipcMain, terminalService, getWindow, clipboard, settingsStore, devTools: process.argv.includes('--dev') });
-  const tunnelService = new TunnelService(profileStore, getWindow);
-  const sftpService = new SftpService(vaultService, knownHostService, promptBroker, getWindow);
+  const tunnelService = new TunnelService(profileStore, getWindow, { vaultService, promptBroker });
+  const sftpService = new SftpService(vaultService, knownHostService, promptBroker, getWindow, { resolveSshConfig });
   const ftpService = new FtpService(vaultService, getWindow);
   const externalService = new ExternalService({ knownHostService, vaultService, promptBroker });
   const systemService = new SystemService();
@@ -168,8 +170,8 @@ function initializeServices() {
   const reachabilityService = new ReachabilityService();
   const sshKeyService = new SshKeyService();
   const profileSync = new ProfileSync(profileStore, getWindow, { dataDir, sftpService });
-  const liveMonitor = new LiveMonitorService();
-  const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow, knownHostService, promptBroker });
+  const liveMonitor = new LiveMonitorService({ vaultService, promptBroker });
+  const remoteDesktopGateway = new RemoteDesktopGateway({ getWindow, knownHostService, promptBroker, vaultService });
   const aiAssist = new AiAssistService(settingsStore, vaultService);
 
   // Route managed transfers through the correct protocol service with full profile data.
@@ -234,6 +236,8 @@ if (!singleInstance) {
     Menu.setApplicationMenu(null);
     handleAppProtocols(protocol, app.getAppPath());
     initializeServices();
+    // Leftovers of an earlier crash; never blocks start-up.
+    sweepStaleAskpassDirectories().catch(() => {});
     createWindow();
   });
 }

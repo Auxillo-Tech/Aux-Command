@@ -37,6 +37,7 @@ const pythonFiles = [
   path.join(root, 'src/main/helpers/process_guard.py'),
   path.join(root, 'src/main/helpers/pty_bridge.py'),
   path.join(root, 'src/main/helpers/serial_bridge.py'),
+  path.join(root, 'src/main/helpers/ssh_askpass.py'),
   path.join(root, 'src/main/helpers/telnet_bridge.py')
 ];
 for (const filename of fs.readdirSync(path.join(root, 'scripts'))) {

@@ -3,6 +3,7 @@
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { vncViewerUrl } = require('./lib/app-protocol.cjs');
+const { dialogTitle } = require('./lib/dialog-title.cjs');
 const { plainTerminalText } = require('./lib/terminal-text.cjs');
 const { FileBrowserService } = require('./services/file-browser-service.cjs');
 
@@ -38,6 +39,8 @@ function registerIpc({
   aiAssist,
   getWindow
 }) {
+  // Native file-chooser titles follow the language chosen in the window.
+  const chooserTitle = (source) => dialogTitle(source, settingsStore?.get?.()?.ui?.language);
   const fileBrowser = new FileBrowserService((profile) => fileTransferServiceFor(profile, sftpService, ftpService), transferQueue);
   const handle = (channel, handler) => {
     ipcMain.handle(channel, async (event, ...args) => {
@@ -55,7 +58,7 @@ function registerIpc({
     fullscreen: Boolean(getWindow().isFullScreen?.()),
     version: app.getVersion(),
     name: app.getName(),
-    profiles: profileStore.list(),
+    profiles: profileStore.listAll(),
     settings: settingsStore.get(),
     snippets: profileStore.snippets(),
     sessions: terminalService.list(),
@@ -74,16 +77,25 @@ function registerIpc({
 
   handle('profiles:move-group', (from,to) => {recoveryService.snapshot('Before folder move');return profileStore.moveGroup(from,to);});
   handle('profiles:bulk-update', (ids, patch) => { recoveryService.snapshot('Before bulk connection edit'); return profileStore.bulkUpdate(ids, patch); });
-  handle('profiles:list', () => profileStore.list());
+  handle('profiles:list', () => profileStore.listAll());
   handle('profiles:save', (profile) => profileStore.save(profile));
-  handle('profiles:delete', (id) => profileStore.delete(id));
+  handle('profiles:delete', (id) => {
+    // A stored profile that fails validation can be deleted too, and its saved
+    // credential goes with it (the credential id is read from the stored row).
+    const credentialId = profileStore.raw(id)?.credentialId;
+    const removed = profileStore.delete(id);
+    if (removed && typeof credentialId === 'string' && credentialId) {
+      try { vaultService.delete(credentialId); } catch { /* the window retries and reports it */ }
+    }
+    return removed;
+  });
   handle('profiles:import-ssh-config', async () => {
     recoveryService.snapshot('Before SSH config import');
     return profileStore.importSshConfig();
   });
   handle('profiles:export', async () => {
     const result = await dialog.showSaveDialog(getWindow(), {
-      title: 'Export Aux Command profiles',
+      title: chooserTitle('Export Aux Command profiles'),
       defaultPath: path.join(app.getPath('documents'), 'aux-command-profiles.json'),
       filters: [{ name: 'JSON', extensions: ['json'] }]
     });
@@ -93,7 +105,7 @@ function registerIpc({
   });
   handle('profiles:import', async () => {
     const result = await dialog.showOpenDialog(getWindow(), {
-      title: 'Import Aux Command profiles',
+      title: chooserTitle('Import Aux Command profiles'),
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }]
     });
@@ -125,13 +137,13 @@ function registerIpc({
   handle('recovery:list', () => recoveryService.list());
   handle('recovery:restore-local', (id) => recoveryService.restoreLocal(id));
   handle('recovery:export', async () => {
-    const result = await dialog.showSaveDialog(getWindow(), { title: 'Back up workspace', defaultPath: path.join(app.getPath('documents'), 'aux-command-workspace.json'), filters: [{ name: 'JSON', extensions: ['json'] }] });
+    const result = await dialog.showSaveDialog(getWindow(), { title: chooserTitle('Back up workspace'), defaultPath: path.join(app.getPath('documents'), 'aux-command-workspace.json'), filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return { canceled: true };
     systemService.writeTextFile(result.filePath, JSON.stringify(recoveryService.exportWorkspace(), null, 2) + '\n');
     return { canceled: false, filePath: result.filePath };
   });
   handle('recovery:preview', async () => {
-    const result = await dialog.showOpenDialog(getWindow(), { title: 'Restore workspace backup', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+    const result = await dialog.showOpenDialog(getWindow(), { title: chooserTitle('Restore workspace backup'), properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
     const payload = readImport(result.filePaths[0]);
     const validated = recoveryService.validateWorkspace(payload);
@@ -175,7 +187,7 @@ function registerIpc({
     const transcript = terminalService.exportTranscript(id);
     const safeTitle = String(transcript.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
     const result = await dialog.showSaveDialog(getWindow(), {
-      title: 'Save terminal transcript',
+      title: chooserTitle('Save terminal transcript'),
       defaultPath: path.join(app.getPath('documents'), `${safeTitle}-transcript.txt`),
       filters: [{ name: 'Text files', extensions: ['txt', 'log'] }]
     });
@@ -211,7 +223,7 @@ function registerIpc({
     const session = terminalService.exportTranscript(id);
     const safeTitle = String(session.title || 'terminal').replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'terminal';
     const result = await dialog.showSaveDialog(getWindow(), {
-      title: 'Start terminal log',
+      title: chooserTitle('Start terminal log'),
       defaultPath: path.join(app.getPath('documents'), `${safeTitle}.log`),
       filters: [{ name: 'Terminal logs', extensions: ['log', 'txt'] }]
     });
@@ -257,18 +269,18 @@ function registerIpc({
   handle('sftp:plan-batch', (request) => fileBrowser.plan(request));
   handle('sftp:apply-batch', (token, policy) => fileBrowser.apply(token, policy));
   handle('sftp:choose-directory', async () => {
-    const result = await dialog.showOpenDialog(getWindow(), { title: 'Choose download directory', properties: ['openDirectory'] });
+    const result = await dialog.showOpenDialog(getWindow(), { title: chooserTitle('Choose download directory'), properties: ['openDirectory'] });
     return result.canceled ? null : result.filePaths[0];
   });
   handle('sftp:upload', async (profile, remoteDirectory) => {
-    const result = await dialog.showOpenDialog(getWindow(), { title: 'Select files to upload', properties: ['openFile', 'multiSelections'] });
+    const result = await dialog.showOpenDialog(getWindow(), { title: chooserTitle('Select files to upload'), properties: ['openFile', 'multiSelections'] });
     if (result.canceled || !result.filePaths.length) return { canceled: true };
     return fileBrowser.plan({ profile, direction: 'upload', paths: result.filePaths, directory: remoteDirectory });
   });
   handle('sftp:upload-paths', (profile, remoteDirectory, localPaths) => fileBrowser.plan({ profile, direction: 'upload', paths: localPaths, directory: remoteDirectory }));
   handle('sftp:download', async (profile, remotePath) => {
     const result = await dialog.showSaveDialog(getWindow(), {
-      title: 'Save remote file',
+      title: chooserTitle('Save remote file'),
       defaultPath: path.join(app.getPath('downloads'), path.posix.basename(remotePath))
     });
     if (result.canceled || !result.filePath) return { canceled: true };

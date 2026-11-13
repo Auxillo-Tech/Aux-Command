@@ -6,6 +6,8 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
+const { packageArch } = require('../src/main/lib/release-arch.cjs');
+
 const root = path.resolve(__dirname, '..');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
@@ -55,7 +57,7 @@ function collectArtifacts(distDir, version) {
   // Package names, legacy source archives, shipped source archives and SBOMs.
   // Anchor the whole grammar so stable versions cannot also select prereleases.
   const versionedArtifact = new RegExp(`^(?:${[
-    `Aux-Command-${escapedVersion}-(?:x64|x86_64|amd64)\\.(?:AppImage|deb|rpm)`,
+    `Aux-Command-${escapedVersion}-(?:x64|x86_64|amd64|arm64|aarch64)\\.(?:AppImage|deb|rpm)`,
     `Aux-Command-${escapedVersion}\\.(?:tar\\.gz|zip)`,
     `aux-command-${escapedVersion}-source\\.(?:tar\\.gz|zip)`,
     `aux-command-${escapedVersion}-sbom\\.cdx\\.json`
@@ -67,9 +69,12 @@ function collectArtifacts(distDir, version) {
       const filename = path.join(distDir, name);
       const stat = fs.statSync(filename);
       if (!stat.isFile()) return null;
+      const kind = artifactKind(name);
       return {
         name,
-        kind: artifactKind(name),
+        kind,
+        // Packages exist once per architecture; installed copies pick theirs.
+        ...(['appimage', 'deb', 'rpm'].includes(kind) ? { arch: packageArch(name) } : {}),
         size: stat.size,
         sha256: sha256File(filename)
       };

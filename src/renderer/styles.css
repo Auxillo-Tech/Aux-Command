@@ -745,6 +745,7 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .previous-fingerprint { display: grid; gap: 5px; color: var(--faint); font-size: 10.5px; }
 .previous-fingerprint code { padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: #070d16; color: var(--muted); font-family: var(--mono); font-size: 10px; word-break: break-all; }
 .prompt-stack { display: grid; gap: 12px; }
+.prompt-received { margin: 0; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: #070d16; color: var(--text); font-family: var(--mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; user-select: text; }
 .menu-stack { display: grid; gap: 9px; }
 .menu-action { width: 100%; display: grid; gap: 4px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 10px; background: rgba(12, 19, 32, .72); color: var(--text); text-align: left; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
 .menu-action:hover { border-color: rgba(124, 92, 255, .32); background: rgba(124, 92, 255, .1); }
@@ -1078,3 +1079,9 @@ kbd { margin-right: 2px; padding: 2px 6px; border: 1px solid var(--line-strong);
 .profile-item[data-tab-color] { box-shadow: inset 3px 0 0 var(--tab-color); }
 .session-tab.drop-before.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
 .session-tab.drop-after.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+
+.profile-item.invalid { border-color: rgba(255, 113, 133, .3); }
+.profile-item.invalid .profile-copy small,
+.profile-item.invalid .profile-connect-label { color: #ffb1bd; white-space: normal; }
+.refused-list { margin: 6px 0 0; padding-left: 18px; max-height: 12em; overflow: auto; overflow-wrap: anywhere; }
+.sync-skipped:empty { display: none; }

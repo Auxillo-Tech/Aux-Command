@@ -73,7 +73,8 @@ test('UpdateService checks electron-updater only after authenticating the publis
       : new Response('missing', { status: 404 });
   };
   const app = { isPackaged: true, getVersion: () => '1.0.0', getAppPath: () => path.join(__dirname, '..') };
-  const service = new UpdateService(app, () => null, { updater, fetch, publicKeyPath });
+  // The architecture is given, so the test reads the same file on any machine.
+  const service = new UpdateService(app, () => null, { updater, fetch, publicKeyPath, arch: 'x64' });
   const status = await service.check();
   assert.equal(status.authenticated, true);
   assert.equal(status.updateAvailable, true);
@@ -141,4 +142,90 @@ test('updater prevents overlapping checks and downloads and recovers from interr
   f.updater.downloadUpdate = async () => [f.filename];
   await f.service.download();
   assert.equal(f.service.getStatus().downloaded, true);
+});
+
+const { packageArch, updaterMetadataName } = require('../src/main/lib/release-arch.cjs');
+
+test('each architecture reads its own updater metadata and package names', () => {
+  // electron-updater's own rule: no suffix on x64, the architecture elsewhere.
+  assert.equal(updaterMetadataName('x64'), 'latest-linux.yml');
+  assert.equal(updaterMetadataName('arm64'), 'latest-linux-arm64.yml');
+  for (const [name, arch] of [
+    ['Aux-Command-0.5.0-x86_64.AppImage', 'x64'], ['Aux-Command-0.5.0-amd64.deb', 'x64'], ['Aux-Command-0.5.0-x86_64.rpm', 'x64'], ['Aux-Command-0.5.0-x64.AppImage', 'x64'],
+    ['Aux-Command-0.5.0-arm64.AppImage', 'arm64'], ['Aux-Command-0.5.0-arm64.deb', 'arm64'], ['Aux-Command-0.5.0-aarch64.rpm', 'arm64'],
+    ['Aux-Command-0.5.0.rpm', ''], ['candidate.AppImage', ''], ['Aux-Command-0.5.0-riscv64.deb', ''], ['Aux-Command-0.5.0-arm64.AppImage.zip', ''], ['Aux-Command-0.5.0-constructor.deb', ''], [undefined, '']
+  ]) assert.equal(packageArch(name), arch, String(name));
+});
+
+test('the updater metadata authenticated is the file for the running architecture', async () => {
+  const armBytes = Buffer.from('version: 9.9.9\npath: Aux-Command-9.9.9-arm64.AppImage\n');
+  const metadata = releaseMetadata();
+  metadata.assets.push({ name: 'latest-linux-arm64.yml', browser_download_url: 'https://fixture/latest-arm64' });
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const withArm = { ...manifest, artifacts: [...manifest.artifacts, { name: 'latest-linux-arm64.yml', kind: 'updater-metadata', size: armBytes.length, sha256: sha256(armBytes) }] };
+  assert.equal(validateReleaseMetadata(metadata, withArm, updaterMetadataName('arm64'), armBytes).updaterName, 'latest-linux-arm64.yml');
+  // The x64 file's bytes do not pass as the arm64 file, nor the reverse.
+  assert.throws(() => validateReleaseMetadata(metadata, withArm, 'latest-linux-arm64.yml', updaterBytes), /does not match/u);
+  assert.throws(() => validateReleaseMetadata(metadata, withArm, 'latest-linux.yml', armBytes), /does not match/u);
+  assert.throws(() => validateReleaseMetadata(releaseMetadata(), withArm, 'latest-linux-arm64.yml', armBytes), /missing required authenticated asset: latest-linux-arm64\.yml/u);
+
+  // Through the service: which file is fetched depends only on the architecture.
+  const check = async (arch, assets) => {
+    const fetched = [];
+    const responses = new Map([
+      ['https://api.github.com/repos/Auxillo-Tech/Aux-Command/releases/latest', Buffer.from(JSON.stringify({ ...releaseMetadata(), assets }))],
+      ['https://fixture/manifest', fs.readFileSync(manifestPath)],
+      ['https://fixture/signature', fs.readFileSync(signaturePath)],
+      ['https://fixture/latest', updaterBytes],
+      ['https://fixture/latest-arm64', armBytes]
+    ]);
+    const fetch = async (url) => {
+      fetched.push(String(url));
+      const data = responses.get(String(url));
+      return data ? new Response(data, { status: 200 }) : new Response('missing', { status: 404 });
+    };
+    const updater = Object.assign(new EventEmitter(), {
+      checkForUpdates: async () => { updater.emit('update-available', { version: '9.9.9' }); return { updateInfo: { version: '9.9.9' } }; }
+    });
+    const app = { isPackaged: true, getVersion: () => '1.0.0', getAppPath: () => path.join(__dirname, '..') };
+    const service = new UpdateService(app, () => null, { updater, fetch, publicKeyPath, arch });
+    const outcome = await service.check().then((status) => status, (error) => error);
+    return { fetched, outcome, status: service.getStatus() };
+  };
+  const onIntel = await check('x64', metadata.assets);
+  assert.equal(onIntel.status.authenticated, true);
+  assert.equal(onIntel.fetched.includes('https://fixture/latest'), true);
+  assert.equal(onIntel.fetched.includes('https://fixture/latest-arm64'), false);
+  // The signed fixture manifest lists only latest-linux.yml, so on arm64 the
+  // arm64 file is fetched and then refused: it is not covered by the signature.
+  const onArm = await check('arm64', metadata.assets);
+  assert.equal(onArm.fetched.includes('https://fixture/latest-arm64'), true);
+  assert.equal(onArm.fetched.includes('https://fixture/latest'), false);
+  assert.match(onArm.outcome.message, /Signed manifest does not include latest-linux-arm64\.yml/u);
+  assert.equal(onArm.status.authenticated, false);
+  assert.equal(onArm.status.updateAvailable, false);
+  // A release without the arm64 file offers nothing on arm64.
+  const armWithoutFile = await check('arm64', releaseMetadata().assets);
+  assert.match(armWithoutFile.outcome.message, /GitHub release is missing latest-linux-arm64\.yml/u);
+  assert.equal(armWithoutFile.status.updateAvailable, false);
+});
+
+test('a downloaded AppImage built for another architecture is refused', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-updater-arch-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const intel = path.join(directory, 'intel.AppImage');
+  const arm = path.join(directory, 'arm.AppImage');
+  fs.writeFileSync(intel, 'installer for x64...');
+  fs.writeFileSync(arm, 'installer for arm64.');
+  const entry = (file, name, extra) => ({ name, kind: 'appimage', size: fs.statSync(file).size, sha256: sha256(fs.readFileSync(file)), ...extra });
+  for (const manifest of [
+    { artifacts: [entry(intel, 'Aux-Command-9.9.9-x86_64.AppImage', { arch: 'x64' }), entry(arm, 'Aux-Command-9.9.9-arm64.AppImage', { arch: 'arm64' })] },
+    // Without the arch field the file name decides.
+    { artifacts: [entry(intel, 'Aux-Command-9.9.9-x86_64.AppImage'), entry(arm, 'Aux-Command-9.9.9-arm64.AppImage')] }
+  ]) {
+    assert.equal(await verifyDownloadedArtifact(intel, manifest, 'x64'), intel);
+    assert.equal(await verifyDownloadedArtifact(arm, manifest, 'arm64'), arm);
+    await assert.rejects(() => verifyDownloadedArtifact(arm, manifest, 'x64'), /does not match/u);
+    await assert.rejects(() => verifyDownloadedArtifact(intel, manifest, 'arm64'), /does not match/u);
+  }
 });

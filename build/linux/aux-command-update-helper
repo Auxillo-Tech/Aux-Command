@@ -1,0 +1,524 @@
+#!/usr/bin/python3 -I
+"""Aux Command update helper: installs one signed deb or rpm package as root.
+
+Installed by the package itself as /usr/lib/aux-command/update-helper, owned
+by root, and started by the application through pkexec. Its polkit action
+(tech.auxillo.command.install-update) is bound to that exact path, so the
+administrator prompt names Aux Command and not a shell.
+
+    update-helper KIND                 (deb or rpm; everything else on stdin)
+
+Standard input carries one frame, in this order:
+
+    AUX-UPDATE-1 <manifest bytes> <signature bytes> LF
+    the release-manifest.json bytes
+    the release-manifest.json.asc bytes (a detached OpenPGP signature)
+    the package bytes
+
+This program does not trust its caller for anything but the bytes. It is the
+privileged side and decides everything again, on its own:
+
+  * The manifest must carry a valid signature of the release signing key that
+    the package installs next to this file (root-owned, checked here with
+    gpgv). The caller cannot choose the key, the size, the hash, the version,
+    the file name or the architecture: all of those are read from the signed
+    manifest, and the architecture is this machine's.
+  * The package arrives on standard input, so root never opens a path chosen
+    by the user's session: no symlink, FIFO, device or slow mount to follow.
+    Exactly the signed size is accepted into a private root-only directory; one
+    more byte, a short stream or a stalled writer is a refusal.
+  * The SHA-256 is compared for equality, over the bytes as received and again
+    over the file the package manager will read.
+  * The package must be named aux-command, declare the signed version, be built
+    for this machine and be strictly newer than the installed aux-command.
+    Nothing is ever downgraded or reinstalled.
+
+What a signature cannot give is freshness: an older signed manifest that is
+still newer than the installed version could be replayed, and then installs
+the genuine, signed package that release shipped.
+
+Exit status: 0 installed; 64 bad arguments or frame; 65 the bytes do not match
+or are not signed; 66 the package is not an acceptable update; 70 the system
+could not do it (no space, tool or key missing); 74 the package manager failed;
+77 not running as root. pkexec itself uses 126 and 127.
+"""
+import hashlib
+import json
+import os
+import re
+import select
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+PACKAGE_NAME = 'aux-command'
+FILE_PREFIX = 'Aux-Command'
+MAX_PACKAGE_BYTES = 1_000_000_000
+MAX_MANIFEST_BYTES = 2_000_000
+MAX_SIGNATURE_BYTES = 65_536
+MAX_KEYRING_BYTES = 100_000
+WORK_PARENT = '/var/tmp'
+KEYRING_PATH = '/usr/lib/aux-command/release-signing-key.gpg'
+TRUSTED_UID = 0           # the owner the key file and its folder must have
+TOOL_DIRS = ('/usr/sbin', '/usr/bin', '/sbin', '/bin')
+IDLE_TIMEOUT = 120.0      # seconds without a byte from the application
+TOTAL_TIMEOUT = 1500.0    # whole transfer
+EOF_TIMEOUT = 10.0        # the writer must close the stream right after the package
+CHUNK = 1 << 20
+FRAME_MAGIC = 'AUX-UPDATE-1'
+
+EXIT_USAGE, EXIT_DATA, EXIT_REFUSED, EXIT_SYSTEM, EXIT_INSTALL, EXIT_NOT_ROOT = 64, 65, 66, 70, 74, 77
+
+SHA256_RE = re.compile(r'[0-9a-f]{64}')
+LENGTH_RE = re.compile(r'[1-9][0-9]{0,9}')
+VERSION_RE = re.compile(r'(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})')
+DEB_VERSION_RE = re.compile(r'[0-9][0-9A-Za-z.+~:-]*')
+FINGERPRINT_RE = re.compile(r'[0-9A-F]{40}')
+# How each package format spells the machines Aux Command is built for.
+MACHINES = {
+    'deb': {'amd64': 'x64', 'arm64': 'arm64'},
+    'rpm': {'x86_64': 'x64', 'aarch64': 'arm64'},
+}
+# What the installed package is in dpkg's eyes, other than fully installed.
+DEB_REPAIR = 'sudo apt-get install -f'
+
+
+class Stop(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def say(message):
+    sys.stderr.write(f'aux-command-update: {message}\n')
+    sys.stderr.flush()
+
+
+def tool(name):
+    for directory in TOOL_DIRS:
+        candidate = os.path.join(directory, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def clean_env():
+    return {'PATH': ':'.join(TOOL_DIRS), 'LC_ALL': 'C', 'LANG': 'C', 'DEBIAN_FRONTEND': 'noninteractive'}
+
+
+def query(argv):
+    """stdout of a read-only query, or None when it failed."""
+    result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            env=clean_env(), timeout=60, check=False)
+    return result.stdout.decode('utf-8', 'replace') if result.returncode == 0 else None
+
+
+def parse_arguments(argv):
+    if len(argv) != 1:
+        raise Stop(EXIT_USAGE, 'usage: update-helper deb|rpm < frame')
+    if argv[0] not in ('deb', 'rpm'):
+        raise Stop(EXIT_USAGE, 'unsupported package kind')
+    return argv[0]
+
+
+def require_root():
+    if os.geteuid() != 0:
+        raise Stop(EXIT_NOT_ROOT, 'this helper installs system packages and must run as root (through pkexec)')
+
+
+def wait_readable(fd, started, idle):
+    remaining = TOTAL_TIMEOUT - (time.monotonic() - started)
+    if remaining <= 0:
+        raise Stop(EXIT_DATA, 'the update took too long to arrive')
+    ready, _, _ = select.select([fd], [], [], min(idle, remaining))
+    if not ready:
+        raise Stop(EXIT_DATA, 'the update stopped arriving')
+
+
+def read_header(fd, started):
+    """(manifest length, signature length) from the first line of the frame."""
+    line = b''
+    while not line.endswith(b'\n'):
+        if len(line) > 64:
+            raise Stop(EXIT_USAGE, 'the update frame header is too long')
+        wait_readable(fd, started, IDLE_TIMEOUT)
+        byte = os.read(fd, 1)
+        if not byte:
+            raise Stop(EXIT_USAGE, 'the update frame is missing its header')
+        line += byte
+    try:
+        fields = line[:-1].decode('ascii').split(' ')
+    except UnicodeDecodeError:
+        raise Stop(EXIT_USAGE, 'the update frame header is not valid') from None
+    if len(fields) != 3 or fields[0] != FRAME_MAGIC or not all(LENGTH_RE.fullmatch(f) for f in fields[1:]):
+        raise Stop(EXIT_USAGE, 'the update frame header is not valid')
+    manifest, signature = int(fields[1]), int(fields[2])
+    if manifest > MAX_MANIFEST_BYTES or signature > MAX_SIGNATURE_BYTES:
+        raise Stop(EXIT_USAGE, 'the release manifest or its signature is too large')
+    return manifest, signature
+
+
+def read_exact(fd, size, started):
+    """Exactly `size` bytes from `fd`, in memory."""
+    chunks = []
+    count = 0
+    while count < size:
+        wait_readable(fd, started, IDLE_TIMEOUT)
+        chunk = os.read(fd, min(CHUNK, size - count))
+        if not chunk:
+            raise Stop(EXIT_DATA, 'the update ended before its expected size')
+        chunks.append(chunk)
+        count += len(chunk)
+    return b''.join(chunks)
+
+
+def trusted_keyring_bytes():
+    """The release signing key the package installed, if root owns it alone."""
+    try:
+        directory = os.lstat(os.path.dirname(KEYRING_PATH))
+        fd = os.open(KEYRING_PATH, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        raise Stop(EXIT_SYSTEM, 'the Aux Command release signing key is missing') from None
+    try:
+        info = os.fstat(fd)
+        trusted = (stat.S_ISREG(info.st_mode) and info.st_uid == TRUSTED_UID and info.st_mode & 0o022 == 0
+                   and stat.S_ISDIR(directory.st_mode) and directory.st_uid == TRUSTED_UID and directory.st_mode & 0o022 == 0)
+        if not trusted or not 0 < info.st_size <= MAX_KEYRING_BYTES:
+            raise Stop(EXIT_SYSTEM, 'the Aux Command release signing key is not a root-owned file')
+        with os.fdopen(os.dup(fd), 'rb') as handle:
+            return handle.read(MAX_KEYRING_BYTES + 1)
+    finally:
+        os.close(fd)
+
+
+def write_private(path, data):
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'wb') as handle:
+        handle.write(data)
+
+
+def verify_signature(work, manifest, signature):
+    """The upper-case fingerprint of the key that signed `manifest`, or a refusal."""
+    gpgv = tool('gpgv') or tool('gpgv2')
+    if not gpgv:
+        raise Stop(EXIT_SYSTEM, 'gpgv is not available')
+    keyring = trusted_keyring_bytes()
+    home = os.path.join(work, 'gnupg')
+    os.mkdir(home, 0o700)
+    write_private(os.path.join(work, 'release-signing-key.gpg'), keyring)
+    write_private(os.path.join(work, 'release-manifest.json'), manifest)
+    write_private(os.path.join(work, 'release-manifest.json.asc'), signature)
+    result = subprocess.run(
+        [gpgv, '--homedir', home, '--keyring', os.path.join(work, 'release-signing-key.gpg'), '--status-fd', '1',
+         os.path.join(work, 'release-manifest.json.asc'), os.path.join(work, 'release-manifest.json')],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=clean_env(), timeout=60, check=False)
+    good, valid = [], []
+    for line in result.stdout.decode('utf-8', 'replace').split('\n'):
+        fields = line.split(' ')
+        if len(fields) < 2 or fields[0] != '[GNUPG:]':
+            continue
+        if fields[1] in ('BADSIG', 'ERRSIG', 'EXPSIG', 'EXPKEYSIG', 'REVKEYSIG', 'NO_PUBKEY', 'NODATA'):
+            raise Stop(EXIT_DATA, 'the release manifest is not signed by the Aux Command release key')
+        if fields[1] == 'GOODSIG':
+            good.append(fields)
+        elif fields[1] == 'VALIDSIG' and len(fields) >= 12:
+            valid.append(fields[11].upper())
+    if result.returncode != 0 or len(good) != 1 or len(valid) != 1 or not FINGERPRINT_RE.fullmatch(valid[0]):
+        raise Stop(EXIT_DATA, 'the release manifest is not signed by the Aux Command release key')
+    return valid[0]
+
+
+def reject_duplicate_keys(pairs):
+    keys = [key for key, _ in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError('duplicate key')
+    return dict(pairs)
+
+
+def machine_rpm_arch():
+    return os.uname().machine
+
+
+def machine_arch(kind):
+    """(spelling the package uses, Node's name) for this machine, or a refusal."""
+    if kind == 'deb':
+        dpkg = tool('dpkg')
+        out = query([dpkg, '--print-architecture']) if dpkg else None
+        spelling = out.strip() if out else None
+    else:
+        spelling = machine_rpm_arch()
+    node = MACHINES[kind].get(spelling or '')
+    if not node:
+        raise Stop(EXIT_REFUSED, 'this machine has no Aux Command package')
+    return spelling, node
+
+
+def signed_release(kind, manifest, fingerprint):
+    """(version, size, sha256) of this machine's package, from the signed manifest only."""
+    try:
+        data = json.loads(manifest.decode('utf-8'), object_pairs_hook=reject_duplicate_keys)
+    except (UnicodeDecodeError, ValueError):
+        raise Stop(EXIT_DATA, 'the signed release manifest is not valid') from None
+    if not isinstance(data, dict) or not isinstance(data.get('artifacts'), list):
+        raise Stop(EXIT_DATA, 'the signed release manifest is not valid')
+    version = data.get('version')
+    if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
+        raise Stop(EXIT_DATA, 'the signed release manifest has no usable version')
+    signing = data.get('signing')
+    key = signing.get('key') if isinstance(signing, dict) else None
+    if (data.get('packageName') != PACKAGE_NAME or not isinstance(signing, dict) or signing.get('status') != 'signed-detached-gpg'
+            or not isinstance(key, str) or key.upper() != fingerprint):
+        raise Stop(EXIT_DATA, 'the signed release manifest is not for Aux Command or names another signing key')
+    spelling, node = machine_arch(kind)
+    name = f'{FILE_PREFIX}-{version}-{spelling}.{kind}'
+    found = [item for item in data['artifacts'] if isinstance(item, dict) and item.get('name') == name]
+    if len(found) != 1:
+        raise Stop(EXIT_REFUSED, 'the signed release has no single package for this machine')
+    item = found[0]
+    size, digest = item.get('size'), item.get('sha256')
+    if (item.get('kind') != kind or ('arch' in item and item['arch'] != node)
+            or type(size) is not int or not 1 <= size <= MAX_PACKAGE_BYTES
+            or not isinstance(digest, str) or not SHA256_RE.fullmatch(digest)):
+        raise Stop(EXIT_REFUSED, 'the signed release lists the package for this machine in an unusable way')
+    return version, size, digest
+
+
+def receive(fd, size, destination, digest, started):
+    """Copies exactly `size` bytes of `fd` into a new file; checks the hash."""
+    mode = os.fstat(fd).st_mode
+    if stat.S_ISDIR(mode):
+        raise Stop(EXIT_DATA, 'the package must be sent on standard input')
+    received = hashlib.sha256()
+    count = 0
+    out = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(out, 'wb') as handle:
+        while count < size:
+            wait_readable(fd, started, IDLE_TIMEOUT)
+            chunk = os.read(fd, min(CHUNK, size - count))
+            if not chunk:
+                raise Stop(EXIT_DATA, 'the package ended before its signed size')
+            received.update(chunk)
+            handle.write(chunk)
+            count += len(chunk)
+        handle.flush()
+        os.fsync(handle.fileno())
+    # The stream must end here: more data than signed is a refusal, and so
+    # is a writer that keeps the stream open.
+    wait_readable(fd, started, EOF_TIMEOUT)
+    if os.read(fd, 1):
+        raise Stop(EXIT_DATA, 'the package is longer than its signed size')
+    if received.hexdigest() != digest:
+        raise Stop(EXIT_DATA, 'the package does not match the signed SHA-256')
+    # What the package manager will read is checked again, from disk.
+    again = hashlib.sha256()
+    flags = os.O_RDONLY | os.O_NOFOLLOW
+    saved = os.open(destination, flags)
+    try:
+        info = os.fstat(saved)
+        if not stat.S_ISREG(info.st_mode) or info.st_size != size:
+            raise Stop(EXIT_DATA, 'the stored package is not what was received')
+        while True:
+            block = os.read(saved, CHUNK)
+            if not block:
+                break
+            again.update(block)
+    finally:
+        os.close(saved)
+    if again.hexdigest() != digest:
+        raise Stop(EXIT_DATA, 'the stored package does not match the signed SHA-256')
+
+
+def free_bytes(directory):
+    info = os.statvfs(directory)
+    return info.f_bavail * info.f_frsize
+
+
+def inspect_package(kind, path):
+    """(name, version, architecture) the package declares. A package with an
+    epoch is refused: versions are compared here without one."""
+    if kind == 'deb':
+        dpkg_deb = tool('dpkg-deb')
+        if not dpkg_deb:
+            raise Stop(EXIT_SYSTEM, 'dpkg-deb is not available')
+        fields = []
+        for field in ('Package', 'Version', 'Architecture'):
+            out = query([dpkg_deb, '-f', path, field])
+            if out is None or not out.strip() or '\n' in out.strip():
+                raise Stop(EXIT_REFUSED, 'the file is not a readable deb package')
+            fields.append(out.strip())
+        return tuple(fields)
+    rpm = tool('rpm')
+    if not rpm:
+        raise Stop(EXIT_SYSTEM, 'rpm is not available')
+    out = query([rpm, '-qp', '--nosignature', '--nodigest', '--qf', '%{NAME}\\n%{VERSION}\\n%{ARCH}\\n%{EPOCH}\\n', path])
+    lines = out.split('\n') if out else []
+    if len(lines) != 5 or lines[4] != '' or not all(lines[:4]):
+        raise Stop(EXIT_REFUSED, 'the file is not a readable rpm package')
+    if lines[3] != '(none)':
+        raise Stop(EXIT_REFUSED, 'the package has an epoch; updates of this kind are not installed automatically')
+    return tuple(lines[:3])
+
+
+def installed_state(kind):
+    """('none', None), ('ok', version), ('broken', text) or ('epoch', text) for the installed aux-command."""
+    if kind == 'deb':
+        dpkg_query = tool('dpkg-query')
+        out = query([dpkg_query, '-W', '-f=${Status}\\t${Version}', PACKAGE_NAME]) if dpkg_query else None
+        if not out or '\t' not in out:
+            return 'none', None
+        status, version = (part.strip() for part in out.split('\t', 1))
+        if status == 'install ok installed':
+            return 'ok', version
+        # Unpacked or half-configured after a failed installation script: the
+        # package manager has to be repaired before it can update anything.
+        if status.startswith('install ok ') or status.endswith(' half-installed'):
+            return 'broken', status
+        return 'none', None
+    rpm = tool('rpm')
+    out = query([rpm, '-q', '--qf', '%{VERSION}\\n%{EPOCH}\\n', PACKAGE_NAME]) if rpm else None
+    lines = out.split('\n') if out else []
+    if len(lines) != 3 or lines[2] != '' or not lines[0] or not lines[1]:
+        return 'none', None
+    if lines[1] != '(none)':
+        return 'epoch', lines[1]
+    return 'ok', lines[0]
+
+
+def installed_version(kind):
+    state, value = installed_state(kind)
+    return value if state == 'ok' else None
+
+
+def is_newer(kind, candidate, installed):
+    if kind == 'deb':
+        if not DEB_VERSION_RE.fullmatch(installed):
+            return False
+        dpkg = tool('dpkg')
+        if not dpkg:
+            raise Stop(EXIT_SYSTEM, 'dpkg is not available')
+        return subprocess.run([dpkg, '--compare-versions', candidate, 'gt', installed], stdin=subprocess.DEVNULL,
+                              env=clean_env(), timeout=60, check=False).returncode == 0
+    old = VERSION_RE.fullmatch(installed)
+    new = VERSION_RE.fullmatch(candidate)
+    return bool(old and new and tuple(map(int, new.groups())) > tuple(map(int, old.groups())))
+
+
+def repair_advice(kind):
+    return DEB_REPAIR if kind == 'deb' else 'your package manager'
+
+
+def check_package(kind, path, version, machine):
+    name, declared, arch = inspect_package(kind, path)
+    if name != PACKAGE_NAME:
+        raise Stop(EXIT_REFUSED, f'the package is not {PACKAGE_NAME}')
+    if declared != version:
+        raise Stop(EXIT_REFUSED, 'the package version is not the signed version')
+    if arch != machine:
+        raise Stop(EXIT_REFUSED, 'the package is built for another architecture')
+    state, current = installed_state(kind)
+    if state == 'broken':
+        raise Stop(EXIT_REFUSED, f'{PACKAGE_NAME} is half-configured on this system (dpkg status: {current}); '
+                                 f'repair it with: {repair_advice(kind)}, then update again')
+    if state == 'epoch':
+        raise Stop(EXIT_REFUSED, f'the installed {PACKAGE_NAME} has an epoch ({current}); update it with your package manager')
+    if state == 'none':
+        raise Stop(EXIT_REFUSED, f'{PACKAGE_NAME} is not installed through this package manager; nothing to update')
+    if not is_newer(kind, version, current):
+        raise Stop(EXIT_REFUSED, 'the package is not newer than the installed version; nothing is downgraded or reinstalled')
+
+
+def install_command(kind, path):
+    if kind == 'deb':
+        apt = tool('apt-get')
+        if apt:
+            return [apt, 'install', '-y', '--no-install-recommends', path]
+        dpkg = tool('dpkg')
+        if dpkg:
+            return [dpkg, '-i', path]
+    else:
+        dnf = tool('dnf')
+        if dnf:
+            return [dnf, 'upgrade', '-y', path]
+        zypper = tool('zypper')
+        if zypper:
+            return [zypper, '--non-interactive', 'install', '--allow-unsigned-rpm', path]
+        rpm = tool('rpm')
+        if rpm:
+            return [rpm, '-U', path]
+    raise Stop(EXIT_SYSTEM, 'no package manager was found')
+
+
+def run_install(kind, path):
+    command = install_command(kind, path)
+    result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            env=clean_env(), check=False)
+    if result.returncode != 0:
+        tail = result.stdout.decode('utf-8', 'replace').strip().split('\n')[-6:]
+        for line in tail:
+            say(''.join(ch if ch.isprintable() else '?' for ch in line)[:300])
+        state, status = installed_state(kind)
+        if state == 'broken':
+            raise Stop(EXIT_INSTALL, f'the package manager could not finish the update and left {PACKAGE_NAME} '
+                                     f'half-configured ({status}); repair it with: {repair_advice(kind)}')
+        raise Stop(EXIT_INSTALL, 'the package manager could not install the update')
+
+
+def interrupted(signum, _frame):
+    raise Stop(EXIT_SYSTEM, 'interrupted')
+
+
+def main(argv, stdin_fd=0):
+    work = None
+    try:
+        kind = parse_arguments(argv)
+        require_root()
+        signal.signal(signal.SIGTERM, interrupted)
+        signal.signal(signal.SIGINT, interrupted)
+        signal.signal(signal.SIGHUP, interrupted)
+        os.umask(0o077)
+        if free_bytes(WORK_PARENT) < MAX_MANIFEST_BYTES * 4:
+            raise Stop(EXIT_SYSTEM, f'not enough free space in {WORK_PARENT}')
+        started = time.monotonic()
+        manifest_size, signature_size = read_header(stdin_fd, started)
+        manifest = read_exact(stdin_fd, manifest_size, started)
+        signature = read_exact(stdin_fd, signature_size, started)
+        work = tempfile.mkdtemp(prefix='aux-command-update.', dir=WORK_PARENT)
+        fingerprint = verify_signature(work, manifest, signature)
+        version, size, digest = signed_release(kind, manifest, fingerprint)
+        machine = machine_arch(kind)[0]
+        if free_bytes(WORK_PARENT) < size + 64 * 1024 * 1024:
+            raise Stop(EXIT_SYSTEM, f'not enough free space in {WORK_PARENT}')
+        path = os.path.join(work, f'{PACKAGE_NAME}.{kind}')
+        receive(stdin_fd, size, path, digest, started)
+        # Verified. From here the package manager may be running: a signal
+        # must not cut it off half way, so they wait until it is finished.
+        # A handler, not SIG_IGN: an ignored signal would be inherited by the
+        # package manager, while a handler is reset to the default on exec.
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            signal.signal(signum, lambda *_: None)
+        os.chmod(work, 0o755)      # apt's unprivileged downloader must be able to read it
+        os.chmod(path, 0o644)
+        check_package(kind, path, version, machine)
+        run_install(kind, path)
+        if installed_version(kind) != version:
+            raise Stop(EXIT_INSTALL, 'the installed version is not the signed version after the installation')
+        say(f'installed {PACKAGE_NAME} {version}')
+        return 0
+    except Stop as stop:
+        say(stop.message)
+        return stop.code
+    except OSError as error:
+        say(f'system error: {error.strerror or type(error).__name__}')
+        return EXIT_SYSTEM
+    finally:
+        if work:
+            shutil.rmtree(work, ignore_errors=True)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

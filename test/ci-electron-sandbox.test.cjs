@@ -10,15 +10,30 @@ const script = path.join(root, 'scripts/ci-enable-electron-sandbox.sh');
 const stepName = 'Enable the Electron SUID sandbox helper on the runner';
 const stepCommand = 'bash scripts/ci-enable-electron-sandbox.sh';
 
-function workflowSteps(workflow) {
+// Every job that builds and tests the application, on either architecture.
+const jobs = [
+  ['linux-build.yml', 'test-and-build'], ['linux-build.yml', 'test-and-build-arm64'],
+  ['release.yml', 'linux-x64'], ['release.yml', 'linux-arm64']
+];
+
+// The text of one job: from its key under `jobs:` to the next job.
+function jobSource(workflow, job) {
   const source = fs.readFileSync(path.join(root, '.github/workflows', workflow), 'utf8');
-  return source.split(/(?=^      - )/m).slice(1);
+  const start = source.search(new RegExp(`^  ${job}:$`, 'm'));
+  assert.ok(start >= 0, `${workflow} must have a ${job} job`);
+  const rest = source.slice(start + 1);
+  const next = rest.search(/^  [A-Za-z0-9_-]+:$/m);
+  return next < 0 ? rest : rest.slice(0, next);
 }
 
-function sandboxStep(workflow) {
-  const steps = workflowSteps(workflow);
+function workflowSteps(workflow, job) {
+  return jobSource(workflow, job).split(/(?=^      - )/m).slice(1);
+}
+
+function sandboxStep(workflow, job) {
+  const steps = workflowSteps(workflow, job);
   const matches = steps.filter(step => new RegExp(`^      - name: ${stepName}$`, 'm').test(step));
-  assert.equal(matches.length, 1, `${workflow} must enable the SUID sandbox helper exactly once`);
+  assert.equal(matches.length, 1, `${workflow} ${job} must enable the SUID sandbox helper exactly once`);
   const step = matches[0];
   assert.equal(step.match(/^        run: (.+)$/m)?.[1], stepCommand, 'run the collected script, not inline privileged commands');
   const installIndex = steps.findIndex(s => /^      - name: Install locked Electron runtime$/m.test(s));
@@ -53,11 +68,13 @@ function fixture() {
   return { dir, helper, fake, log, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-for (const workflow of ['linux-build.yml', 'release.yml']) {
-  test(`${workflow} enables the SUID sandbox helper between Electron install and UI qualification`, () => {
-    sandboxStep(workflow);
+for (const [workflow, job] of jobs) {
+  test(`${workflow} ${job} enables the SUID sandbox helper between Electron install and UI qualification`, () => {
+    sandboxStep(workflow, job);
   });
+}
 
+for (const workflow of ['linux-build.yml', 'release.yml']) {
   test(`${workflow} never disables the Electron sandbox instead`, () => {
     const source = fs.readFileSync(path.join(root, '.github/workflows', workflow), 'utf8');
     assert.doesNotMatch(source, /no-sandbox|ELECTRON_DISABLE_SANDBOX|disable-setuid-sandbox/);

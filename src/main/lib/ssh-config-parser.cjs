@@ -97,7 +97,10 @@ function expandIncludes(content, baseDir, visited = new Set(), depth = 0) {
   return output.join('\n');
 }
 
-function parseSshConfig(content) {
+// Returns the profiles and the aliases that could not become one: a name with
+// shell syntax in it (see validation.cjs), an option-like alias, a bad port.
+// Nothing is changed to fit and nothing is dropped without being listed.
+function parseSshConfigDetailed(content) {
   const records = [];
   let currentRecords = [];
 
@@ -137,6 +140,7 @@ function parseSshConfig(content) {
   }
 
   const profiles = [];
+  const skipped = [];
   for (const record of records) {
     try {
       profiles.push(normalizeProfile({
@@ -153,19 +157,28 @@ function parseSshConfig(content) {
         agentForwarding: record.agentForwarding || false,
         useSshConfig: true
       }));
-    } catch {
-      // Skip malformed or option-like aliases without blocking valid imports.
+    } catch (error) {
+      // Valid entries still import; this one is reported to the user.
+      skipped.push({ alias: record.alias, field: error?.field || '', reason: error?.message || 'invalid entry' });
     }
   }
-  return profiles;
+  return { profiles, skipped };
+}
+
+function parseSshConfig(content) {
+  return parseSshConfigDetailed(content).profiles;
+}
+
+function readDefaultSshConfigDetailed() {
+  const sshDir = path.join(os.homedir(), '.ssh');
+  const filename = path.join(sshDir, 'config');
+  if (!fs.existsSync(filename)) return { profiles: [], skipped: [] };
+  const visited = new Set([path.resolve(filename)]);
+  return parseSshConfigDetailed(expandIncludes(fs.readFileSync(filename, 'utf8'), sshDir, visited));
 }
 
 function readDefaultSshConfig() {
-  const sshDir = path.join(os.homedir(), '.ssh');
-  const filename = path.join(sshDir, 'config');
-  if (!fs.existsSync(filename)) return [];
-  const visited = new Set([path.resolve(filename)]);
-  return parseSshConfig(expandIncludes(fs.readFileSync(filename, 'utf8'), sshDir, visited));
+  return readDefaultSshConfigDetailed().profiles;
 }
 
-module.exports = { expandIncludes, parseSshConfig, readDefaultSshConfig, resolveIncludePattern, stripInlineComment, tokenize };
+module.exports = { expandIncludes, parseSshConfig, parseSshConfigDetailed, readDefaultSshConfig, readDefaultSshConfigDetailed, resolveIncludePattern, stripInlineComment, tokenize };

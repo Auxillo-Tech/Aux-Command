@@ -336,3 +336,67 @@ for (const [name, failure, attempts] of [
     service.disconnectAll();
   });
 }
+
+test('a forced FTPS mode selects exactly one form on every port', () => {
+  const { ftpsModes } = require('../src/main/services/ftp-service.cjs');
+  for (const port of [21, 990, 2121]) {
+    assert.deepEqual(ftpsModes({ protocol: 'ftps', port, ftpsMode: 'explicit' }), [true]);
+    assert.deepEqual(ftpsModes({ protocol: 'ftps', port, ftpsMode: 'implicit' }), ['implicit']);
+  }
+  // Automatic and missing values keep the port-based behaviour.
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 990, ftpsMode: 'auto' }), ['implicit']);
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 21, ftpsMode: 'auto' }), [true]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 2121, ftpsMode: 'auto' }), ['implicit', true]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftps', port: 2121 }), ['implicit', true]);
+  assert.deepEqual(ftpsModes({ protocol: 'ftp', port: 21, ftpsMode: 'implicit' }), [false], 'the mode never adds TLS to plain FTP');
+});
+
+for (const [ftpsMode, port, expected] of [
+  ['explicit', 2121, [true]],
+  ['explicit', 990, [true]],
+  ['implicit', 2121, ['implicit']],
+  ['implicit', 21, ['implicit']]
+]) {
+  test(`FTPS forced to ${ftpsMode} on port ${port} connects with only that form`, async (t) => {
+    const seen = [];
+    t.mock.getter(ftp.Client.prototype, 'closed', () => false);
+    t.mock.method(ftp.Client.prototype, 'close', () => {});
+    t.mock.method(ftp.Client.prototype, 'access', async (config) => { seen.push(config.secure); });
+    const service = new FtpService({ has: () => false, get: async () => '' }, () => null);
+    const profile = { id: 'forced', name: 'Forced', protocol: 'ftps', host: '127.0.0.1', port, username: 'tester', ftpsMode };
+    assert.equal((await service.connect(profile)).ready, true);
+    assert.deepEqual(seen, expected);
+    service.disconnectAll();
+  });
+
+  test(`FTPS forced to ${ftpsMode} on port ${port} does not fall back when the server speaks the other form`, async (t) => {
+    const seen = [];
+    t.mock.getter(ftp.Client.prototype, 'closed', () => false);
+    t.mock.method(ftp.Client.prototype, 'close', () => {});
+    t.mock.method(ftp.Client.prototype, 'access', async (config) => {
+      seen.push(config.secure);
+      throw Object.assign(new Error('wrong version number'), { code: 'EPROTO' });
+    });
+    const service = new FtpService({ has: () => false, get: async () => '' }, () => null);
+    const profile = { id: 'forced', name: 'Forced', protocol: 'ftps', host: '127.0.0.1', port, username: 'tester', ftpsMode };
+    await assert.rejects(() => service.connect(profile), /wrong version number/u);
+    assert.deepEqual(seen, expected, 'the other form must not be tried');
+    assert.equal(service.connections.has(profile.id), false);
+    service.disconnectAll();
+  });
+}
+
+test('changing the FTPS mode reconnects instead of reusing the open connection', async (t) => {
+  const seen = [];
+  t.mock.getter(ftp.Client.prototype, 'closed', () => false);
+  t.mock.method(ftp.Client.prototype, 'close', () => {});
+  t.mock.method(ftp.Client.prototype, 'access', async (config) => { seen.push(config.secure); });
+  const service = new FtpService({ has: () => false, get: async () => '' }, () => null);
+  const profile = { id: 'switch', name: 'Switch', protocol: 'ftps', host: '127.0.0.1', port: 2121, username: 'tester', ftpsMode: 'explicit' };
+  const first = await service.connect(profile);
+  assert.equal(await service.connect(profile), first, 'an unchanged profile reuses its connection');
+  const second = await service.connect({ ...profile, ftpsMode: 'implicit' });
+  assert.notEqual(second, first);
+  assert.deepEqual(seen, [true, 'implicit']);
+  service.disconnectAll();
+});

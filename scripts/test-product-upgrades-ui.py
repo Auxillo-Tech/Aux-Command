@@ -34,6 +34,10 @@ try:
  c.eval('document.querySelector("textarea[name=taskCommand]").value="exit 7"');button('Review and run');wait('document.querySelectorAll(".modal").length===2');button('Run on selected sessions');wait('[...document.querySelectorAll(".multi-run-block > span")].filter(e=>e.textContent==="Failed · exit 7").length===2')
  c.eval('document.querySelector("textarea[name=taskCommand]").value="sleep 30"');button('Review and run');wait('document.querySelectorAll(".modal").length===2');button('Run on selected sessions');wait('!([...document.querySelectorAll(".modal button")].find(b=>b.textContent==="Cancel run")).disabled');button('Cancel run');wait('[...document.querySelectorAll(".multi-run-block > span")].every(e=>e.textContent.includes("interrupt requested"))');button('Close');time.sleep(.7)
  active=c.eval('document.querySelector(".session-tab.active").dataset.sessionId')
+ # The separate window opens in the workspace language (German here), then the workspace returns to English.
+ def language(code):
+  c.eval('(()=>{const s=document.querySelector("#language-select");s.value='+json.dumps(code)+';s.dispatchEvent(new Event("change",{bubbles:true}));})()');wait('document.documentElement.lang==='+json.dumps(code))
+ language('de')
  c.eval('auxCommand.terminal.detach('+json.dumps(active)+')');wait('document.querySelector(".session-tab.active").classList.contains("detached")')
  for _ in range(100):
   pages=json.load(urllib.request.urlopen(m.TARGET));windows=[p for p in pages if p.get('url','').endswith('/detached.html')]
@@ -42,7 +46,10 @@ try:
  else:raise AssertionError('Detached window not found')
  d=m.CDP(windows[0]['webSocketDebuggerUrl'])
  try:
-  wait('document.querySelector("#status") && document.querySelector("#status").textContent!=="Opening terminal…"',d)
+  wait('document.documentElement?.lang==="de" && !!document.querySelector("#status") && document.querySelector("#status").textContent!==AuxDialogMessages["Opening terminal…"].de',d)
+  assert d.eval('document.querySelector("#attach").textContent===AuxDialogMessages["Return to workspace"].de && document.querySelector("#fullscreen").textContent===AuxDialogMessages["Full screen (F11)"].de')
+  assert d.eval('document.querySelector("#attach").textContent')!='Return to workspace'
+  language('en')
   d.call('Emulation.setDeviceMetricsOverride',dict(width=400,height=300,deviceScaleFactor=1,mobile=False));time.sleep(.2)
   assert d.eval('document.documentElement.scrollWidth<=innerWidth')
   snapshot=d.eval('detachedTerminal.init("cannot-select-other-session")');assert snapshot['id']==active
@@ -100,5 +107,30 @@ try:
  click('.modal-footer .primary');wait('!document.querySelector(".modal")')
  ssh=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="bulk-one"))()')
  assert ssh['credentialId'] and c.eval('auxCommand.vault.has('+json.dumps(ssh['credentialId'])+')') is True
- print('TASK_RESULTS_CANCEL_DETACHED_REATTACH_DRAG_SPLIT_BULK_NESTED_FOLDERS_RDP_OPTIONS_AND_PASSWORD_PASSED')
+ # The FTPS mode select is offered only for FTPS profiles, and its value is saved through the form.
+ c.eval("auxCommand.profiles.save({id:'ftps-mode',name:'FTPS mode fixture',protocol:'ftps',host:'127.0.0.1',port:2121})")
+ c.call('Page.reload');time.sleep(.5);wait('document.querySelector("#app-shell")?.getAttribute("aria-busy")==="false"')
+ mode='.modal select[name=ftpsMode]'
+ def choose_protocol(value):c.eval('(()=>{const s=document.querySelector(".modal select[name=protocol]");s.value='+json.dumps(value)+';s.dispatchEvent(new Event("change",{bubbles:true}));})()')
+ def mode_shown():return c.eval('(()=>{const s=document.querySelector('+json.dumps(mode)+'),f=s.closest(".field");return !f.hidden&&!s.disabled&&f.getClientRects().length>0;})()')
+ edit('FTPS mode fixture')
+ assert mode_shown() and c.eval('document.querySelector('+json.dumps(mode)+').value')=='auto'
+ assert c.eval('[...document.querySelector('+json.dumps(mode)+').options].map(o=>o.value).join()')=='auto,explicit,implicit'
+ assert c.eval('!!document.querySelector('+json.dumps(mode)+').closest(".field").querySelector("small").textContent.trim()')
+ for other in ['ssh','mosh','ftp','rdp','vnc','telnet','serial','local']:
+  choose_protocol(other);assert not mode_shown(),other
+ choose_protocol('ftps');assert mode_shown()
+ c.eval('document.querySelector(".modal input[name=port]").value="2121";document.querySelector('+json.dumps(mode)+').value="explicit"')
+ click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ ftps=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="ftps-mode"))()');assert ftps['ftpsMode']=='explicit' and ftps['protocol']=='ftps' and ftps['port']==2121,ftps
+ # Reopening shows the saved choice; a profile changed to plain FTP no longer carries a forced mode.
+ edit('FTPS mode fixture')
+ assert c.eval('document.querySelector('+json.dumps(mode)+').value')=='explicit'
+ c.eval('document.querySelector('+json.dumps(mode)+').value="implicit"');click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ assert c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="ftps-mode").ftpsMode)()')=='implicit'
+ edit('FTPS mode fixture');choose_protocol('ftp');click('.modal-footer .primary');wait('!document.querySelector(".modal")')
+ ftp=c.eval('(async()=>(await auxCommand.profiles.list()).find(p=>p.id==="ftps-mode"))()');assert ftp['protocol']=='ftp' and ftp['ftpsMode']=='auto',ftp
+ # Profiles that are not FTPS do not show the select at all.
+ edit('bulk-one');assert not mode_shown();click('.modal-close');wait('!document.querySelector(".modal")')
+ print('TASK_RESULTS_CANCEL_DETACHED_REATTACH_DRAG_SPLIT_BULK_NESTED_FOLDERS_RDP_OPTIONS_PASSWORD_AND_FTPS_MODE_PASSED')
 finally:c.close()

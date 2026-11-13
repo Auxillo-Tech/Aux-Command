@@ -36,7 +36,7 @@ part switchable on its own from the Assist panel.
 |---|---|---|
 | Windows / macOS builds | decision needed | Biggest audience multiplier; needs per-OS PTY bridge work and CI runners for both platforms. |
 | Optional AI command assist | shipped | Ctrl+Shift+A: natural language → command and explain-output, strictly off by default, bring-your-own OpenAI-compatible endpoint (llama.cpp, Ollama, or a key). API key lives encrypted in the vault; replies are inserted, never executed. |
-| UI localization | shipped (chrome) | All 9 README languages selectable from the status bar; the persistent chrome (top bar, rail, sidebar, toolbar, welcome, tour, SFTP panel, status bar) is fully translated with real plural rules. Deep modal/toast prose remains English pending a full catalog pass. |
+| UI localization | shipped | All 9 README languages selectable from the status bar. The persistent chrome (top bar, rail, sidebar, toolbar, welcome, tour, SFTP panel, status bar) is translated with real plural rules, and so are dialogs, notifications, status messages, the command palette, the separate terminal window, the VNC viewer and the sign-in prompts and sign-in errors (RDP, SSH) that Aux Command writes itself. A test fails when new text in those places is not in the catalog. Native file-chooser titles follow the language too. Still English: most other error text from the background process, server and OpenSSH replies, and terminal output. |
 
 ## Shipped foundation (v0.3.0)
 

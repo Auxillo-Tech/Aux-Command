@@ -32,9 +32,10 @@ test('repeated JSON imports are idempotent; explicit updates preserve credential
 test('invalid rows and future export versions cannot partially import',t=>{
  const {profiles}=fixture(t);const before=profiles.store.get();
  assert.throws(()=>profiles.importSafe({format:'aux-command-profiles',version:2,profiles:[]}),/version/);
- assert.throws(()=>profiles.importSafe({format:'aux-command-profiles',profiles:[{name:'Good',host:'good'},{name:'Bad',host:'-option'}]}),/Profile 2/);
+ {const partial=profiles.importSafe({format:'aux-command-profiles',profiles:[{name:'Good',host:'good'},{name:'Bad',host:'-option'}]});assert.equal(partial.added,1);assert.equal(partial.rejected,1);assert.match(partial.rejectedEntries[0].reason,/Host cannot start with a hyphen/);}
+ const before2=profiles.store.get();
  assert.throws(()=>profiles.importSafe({format:'aux-command-profiles',profiles:[{id:'local-shell',protocol:'ssh',name:'Bad',host:'bad.example'}]}),/reserved/);
- assert.deepEqual(profiles.store.get(),before);
+ assert.deepEqual(profiles.store.get(),before2);
 });
 test('workspace backup restores layout and profiles without exporting secrets or reconnecting sessions',t=>{
  const {profiles,settings,recovery}=fixture(t);
@@ -48,6 +49,15 @@ test('workspace backup restores layout and profiles without exporting secrets or
  assert.equal(result.settings.workspace.layout,'grid');assert.equal(result.profiles.find(x=>x.id===p.id).credentialId,'local-secret');
  assert.deepEqual(result.settings.sessions,[]);assert.equal(recovery.list().length,1);
  recovery.restoreLocal(result.recoveryId);assert.equal(settings.get().workspace.layout,'single');
+});
+test('workspace backup and restore keep the FTPS mode',t=>{
+ const {profiles,recovery}=fixture(t);
+ const p=profiles.save({name:'Hosting',protocol:'ftps',host:'ftp.example',port:2121,ftpsMode:'explicit'});
+ const backup=JSON.parse(JSON.stringify(recovery.exportWorkspace()));
+ assert.equal(backup.profiles.profiles.find(x=>x.id===p.id).ftpsMode,'explicit');
+ profiles.save({...p,ftpsMode:'implicit'});
+ const result=recovery.restoreWorkspace(backup);
+ assert.equal(result.profiles.find(x=>x.id===p.id).ftpsMode,'explicit');
 });
 test('failed workspace persistence rolls back profiles and leaves a recovery point',t=>{
  const {profiles,settings,recovery}=fixture(t);const backup=recovery.exportWorkspace();

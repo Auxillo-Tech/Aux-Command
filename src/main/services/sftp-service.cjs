@@ -10,7 +10,9 @@ const { pipeline } = require('node:stream/promises');
 const { Client } = require('ssh2');
 const { resolveHelper } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
-const { createSshAuthHandler, defaultKeyFiles, readKeyFile } = require('../lib/ssh-auth.cjs');
+const { english, message } = require('../lib/prompt-message.cjs');
+const { createSshAuthHandler, defaultKeyFiles, identitiesOnlyAgent, readKeyFile } = require('../lib/ssh-auth.cjs');
+const { SshConfigError, expandProxyCommand, sshConfigSettings } = require('../lib/ssh-config-settings.cjs');
 const { expandHome, normalizeProfile, normalizeRemotePath } = require('../lib/validation.cjs');
 const {
   connectionSignature, formatHostPort, formatProxyJumpHop, isDirectory, modeToString, parseProxyJumpChain, safeTimestampToIso
@@ -183,7 +185,11 @@ function createGuardedHostVerifier(verify, isConnectionDead) {
   };
 }
 
-function createOpenSshProxy(profile) {
+// How long resolved ~/.ssh/config settings are reused: every file operation
+// asks for the connection, and each lookup starts an `ssh -G` process.
+const SSH_CONFIG_REUSE_MS = 5_000;
+
+function createOpenSshProxy(profile, options = {}) {
   // OpenSSH performs the hop-to-hop chaining itself: earlier hops ride the -J
   // option while the final hop carries the -W stream to the destination.
   const hops = parseProxyJumpChain(profile.proxyJump);
@@ -193,18 +199,30 @@ function createOpenSshProxy(profile) {
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=15'
   ];
+  if (options.configFile) args.unshift('-F', options.configFile);
   if (profile.knownHostsFile) args.push('-o', `UserKnownHostsFile=${expandHome(profile.knownHostsFile)}`);
   if (hops.length > 1) args.push('-J', hops.slice(0, -1).map(formatProxyJumpHop).join(','));
   if (finalHop.port !== 22) args.push('-p', String(finalHop.port));
   args.push('-W', formatHostPort(profile.host, profile.port), finalHop.destination);
-  const child = spawnGuarded('ssh', args, ['pipe', 'pipe', 'pipe']);
+  return processSocket(spawnGuarded('ssh', args, ['pipe', 'pipe', 'pipe']), 'OpenSSH ProxyJump');
+}
 
+// ProxyCommand from ~/.ssh/config. OpenSSH runs it through the user's shell
+// with `exec`; so does this, under the process guard so the command and
+// whatever it starts end with the connection.
+function createProxyCommand(command) {
+  const shell = findExecutable([process.env.SHELL || '', '/bin/sh']) || '/bin/sh';
+  return processSocket(spawnGuarded(shell, ['-c', `exec ${command}`], ['pipe', 'pipe', 'pipe']), 'ProxyCommand');
+}
+
+// Presents a child process's stdin/stdout as the stream ssh2 connects over.
+function processSocket(child, label) {
   let stderr = '';
   const socket = new Duplex({
     read() { child.stdout.resume(); },
     write(chunk, encoding, callback) {
       if (!child.stdin.writable) {
-        callback(new Error('OpenSSH ProxyJump stream is not writable'));
+        callback(new Error(`${label} stream is not writable`));
         return;
       }
       if (child.stdin.write(chunk, encoding)) callback();
@@ -224,9 +242,9 @@ function createOpenSshProxy(profile) {
   child.once('error', (error) => socket.destroy(error));
   child.once('exit', (code, signal) => {
     if (code && !socket.destroyed) {
-      socket.destroy(new Error(stderr.trim() || `OpenSSH ProxyJump exited with code ${code}`));
+      socket.destroy(new Error(stderr.trim() || `${label} exited with code ${code}`));
     } else if (signal && !socket.destroyed) {
-      socket.destroy(new Error(`OpenSSH ProxyJump exited with signal ${signal}`));
+      socket.destroy(new Error(`${label} exited with signal ${signal}`));
     } else if (!socket.destroyed) {
       socket.push(null);
     }
@@ -239,7 +257,17 @@ function createOpenSshProxy(profile) {
 }
 
 class SftpService {
-  constructor(vaultService, knownHostService, promptBroker, getWindow) {
+  // options.resolveSshConfig: resolveSshConfig from ssh-config-resolver.cjs.
+  //   With it, a profile that uses ~/.ssh/config connects with the settings
+  //   OpenSSH resolves for it; without it only the profile's fields are used.
+  // options.sshConfigFile: read this file instead of ~/.ssh/config (tests).
+  // options.sshConfigReuseMs: how long a lookup is reused (tests).
+  constructor(vaultService, knownHostService, promptBroker, getWindow, options = {}) {
+    this.resolveSshConfig = options.resolveSshConfig || null;
+    this.sshConfigFile = options.sshConfigFile || '';
+    this.sshConfigReuseMs = options.sshConfigReuseMs ?? SSH_CONFIG_REUSE_MS;
+    this.resolvedSettings = new Map();
+    this.resolving = new Map();
     this.vaultService = vaultService;
     this.knownHostService = knownHostService;
     this.promptBroker = promptBroker;
@@ -252,7 +280,11 @@ class SftpService {
     const profile = normalizeProfile(profileInput, profileInput?.id);
     if (profile.protocol !== 'ssh') throw new Error('SFTP requires an SSH profile');
     if (profile.transferMode === 'scp') throw new Error('SCP transfer mode does not support directory browsing; use upload/download fallback actions only.');
-    const signature = connectionSignature(profile);
+    // Only a lookup that is still running is awaited: the connection below
+    // must otherwise be registered before this call first yields.
+    const lookup = this.#sshConfigSettings(profile);
+    const settings = lookup instanceof Promise ? await lookup : lookup;
+    const signature = connectionSignature(profile, settings);
     const existing = this.connections.get(profile.id);
     if (existing && existing.signature !== signature) this.disconnect(profile.id);
     else if (existing?.ready) return existing;
@@ -263,7 +295,7 @@ class SftpService {
     }
 
     const holder = {
-      ready: false, client: null, sftp: null, proxy: null, profile, signature,
+      ready: false, client: null, sftp: null, proxy: null, profile, settings, signature,
       promise: null, cancelled: false, error: null, cleanupSetup: null
     };
     let resolveConnection, rejectConnection;
@@ -300,8 +332,75 @@ class SftpService {
     return connection;
   }
 
+  // The settings OpenSSH resolves for a profile that uses ~/.ssh/config, or
+  // null: the profile does not use it, or OpenSSH is not installed (then the
+  // connection is made from the profile's own fields: the terminal could not
+  // follow the configuration either). Any other failure of the lookup (it
+  // timed out, exited with an error, or printed too little) rejects with a
+  // SshConfigError: the configuration may require a ProxyCommand, a jump host
+  // or a known-hosts file, and connecting without it would skip them. Neither
+  // a failure nor an earlier answer is reused for that.
+  #sshConfigSettings(profile) {
+    if (!this.resolveSshConfig || !profile.useSshConfig) return null;
+    const key = JSON.stringify([
+      profile.host, profile.sshAlias, profile.port, profile.username, profile.identityFile, profile.knownHostsFile, profile.proxyJump
+    ]);
+    let entry = this.resolvedSettings.get(profile.id);
+    if (entry?.key !== key || (!entry.promise && Date.now() - entry.at >= this.sshConfigReuseMs)) {
+      const next = { key, at: 0, settings: null, promise: null };
+      next.promise = Promise.resolve()
+        .then(() => this.resolveSshConfig(profile, this.sshConfigFile ? { configFile: this.sshConfigFile } : {}))
+        .then((resolved) => sshConfigSettings(profile, resolved))
+        .catch((error) => {
+          if (error?.code === 'ssh-missing') return null;
+          throw error instanceof SshConfigError ? error : new SshConfigError('failed');
+        })
+        .then((settings) => {
+          next.settings = settings;
+          next.at = Date.now();
+          next.promise = null;
+          return settings;
+        }, (error) => {
+          // Nothing is kept: the next attempt asks OpenSSH again.
+          if (this.resolvedSettings.get(profile.id) === next) this.resolvedSettings.delete(profile.id);
+          next.promise = null;
+          throw error;
+        });
+      this.resolvedSettings.set(profile.id, next);
+      entry = next;
+    }
+    if (!entry.promise) return entry.settings;
+    // disconnect() must also stop a connect() that is still waiting here.
+    const waiting = { cancelled: false };
+    const waiters = this.resolving.get(profile.id) || new Set();
+    this.resolving.set(profile.id, waiters.add(waiting));
+    const done = () => {
+      waiters.delete(waiting);
+      if (!waiters.size && this.resolving.get(profile.id) === waiters) this.resolving.delete(profile.id);
+    };
+    return entry.promise.then((settings) => {
+      done();
+      if (waiting.cancelled) throw new Error('SFTP connection cancelled');
+      return settings;
+    }, (error) => {
+      done();
+      throw waiting.cancelled ? new Error('SFTP connection cancelled') : error;
+    });
+  }
+
   async #connectInternal(holder) {
-    const profile = holder.profile;
+    const settings = holder.settings;
+    // With ~/.ssh/config in use, the destination, login, jump host and
+    // known-hosts names are the ones OpenSSH resolved for this profile.
+    const profile = settings ? {
+      ...holder.profile,
+      host: settings.host,
+      port: settings.port,
+      username: settings.username,
+      proxyJump: settings.proxyJump,
+      hostKeyAlias: settings.hostKeyAlias,
+      knownHostsFiles: settings.knownHostsFiles
+    } : holder.profile;
     const client = new Client();
     holder.client = client;
     const checkActive = () => { if (holder.cancelled) throw holder.error; };
@@ -358,7 +457,7 @@ class SftpService {
       host: profile.host,
       port: profile.port,
       username,
-      agent: process.env.SSH_AUTH_SOCK || undefined,
+      agent: (settings ? settings.agent : process.env.SSH_AUTH_SOCK) || undefined,
       keepaliveInterval: Math.max(0, profile.keepAliveSeconds * 1000),
       keepaliveCountMax: 3,
       // The handshake timeout is enforced below and pauses while a host-key or
@@ -374,8 +473,10 @@ class SftpService {
       )
     };
 
-    if (profile.proxyJump) {
-      holder.proxy = createOpenSshProxy(profile);
+    if (profile.proxyJump || settings?.proxyCommand) {
+      holder.proxy = profile.proxyJump
+        ? createOpenSshProxy(profile, { configFile: this.sshConfigFile })
+        : createProxyCommand(expandProxyCommand(settings));
       config.sock = holder.proxy.socket;
       config.sock.on('error', onError);
       delete config.host;
@@ -395,8 +496,18 @@ class SftpService {
       try { keys = [{ filename: keyPath, data: readKeyFile(keyPath) }]; }
       catch (error) { throw new Error(`Could not read SSH identity file: ${error.message}`); }
     } else {
-      // Like OpenSSH, fall back to the standard key files when none is set.
-      keys = this.defaultKeyFiles();
+      // Like OpenSSH, fall back to the standard key files when none is set;
+      // with ~/.ssh/config in use, OpenSSH has already listed them.
+      keys = settings ? [] : this.defaultKeyFiles();
+    }
+    if (settings) {
+      for (const filename of settings.identityFiles) {
+        try { keys.push({ filename, data: readKeyFile(filename) }); } catch { /* absent or unusable key file */ }
+      }
+      // IdentitiesOnly: the agent may sign only with the configured keys.
+      if (settings.identitiesOnly && config.agent) {
+        config.agent = identitiesOnlyAgent(config.agent, [profile.identityFile, ...settings.identityFiles].filter(Boolean)) || undefined;
+      }
     }
     let keyPassphrase = '';
     if (profile.credentialId && this.vaultService.has(profile.credentialId)) {
@@ -405,14 +516,18 @@ class SftpService {
       if (profile.credentialKind === 'passphrase') { config.passphrase = secret; keyPassphrase = secret; }
       else config.password = secret;
     }
-    const askSecret = async (label, instructions) => {
+    // label and instructions are source messages: sent in English and also
+    // as written, so the window can show them in the user's language.
+    const askSecret = async (label, instructions = null) => {
+      const title = message('SSH sign-in');
       const response = await whilePrompting(() => this.promptBroker.request('keyboard-interactive', {
         profileName: profile.name,
         host: profile.host,
-        name: 'SSH sign-in',
-        instructions,
+        name: english(title),
+        instructions: instructions ? english(instructions) : '',
         language: '',
-        prompts: [{ prompt: label, echo: false }]
+        prompts: [{ prompt: english(label), echo: false }],
+        messages: { name: title, instructions, prompts: [label] }
       }));
       return String(response?.answers?.[0] || '').slice(0, 32_768);
     };
@@ -427,10 +542,10 @@ class SftpService {
       password: config.password || '',
       isCancelled: () => holder.cancelled,
       askPassphrase: (filename, attempt) => askSecret(
-        `Passphrase for ${path.basename(filename)}`,
-        attempt > 1 ? `That passphrase did not unlock ${filename}. Try again, or cancel to skip this key.` : `The SSH key ${filename} is protected by a passphrase.`
+        message('Passphrase for {p0}', { p0: path.basename(filename) }),
+        message(attempt > 1 ? 'That passphrase did not unlock {p0}. Try again, or cancel to skip this key.' : 'The SSH key {p0} is protected by a passphrase.', { p0: filename })
       ).catch(() => ''),
-      askPassword: () => askSecret(`Password for ${username}@${profile.host}`, '').catch(() => '')
+      askPassword: () => askSecret(message('Password for {p0}', { p0: `${username}@${profile.host}` })).catch(() => '')
     });
 
     async function onKeyboardInteractive(name, instructions, language, prompts, finish) {
@@ -787,8 +902,10 @@ class SftpService {
   }
 
   disconnect(profileId) {
+    const waiters = this.resolving.get(profileId);
+    for (const waiting of waiters || []) waiting.cancelled = true;
     const connection = this.connections.get(profileId);
-    if (!connection) return false;
+    if (!connection) return Boolean(waiters?.size);
     connection.cancel();
     return true;
   }
@@ -803,4 +920,4 @@ class SftpService {
   }
 }
 
-module.exports = { SftpService, createGuardedHostVerifier, createOpenSshProxy, isDirectory, modeToString, progressReporter, replaceRemoteFile };
+module.exports = { SftpService, createGuardedHostVerifier, createOpenSshProxy, createProxyCommand, isDirectory, modeToString, progressReporter, replaceRemoteFile };

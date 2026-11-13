@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { UpdateRecovery } = require('./update-recovery.cjs');
+const { PackageUpdater } = require('./package-updater.cjs');
+const { packageArch, updaterMetadataName } = require('../lib/release-arch.cjs');
 
 const RELEASE_REPOSITORY = 'Auxillo-Tech/Aux-Command';
 const RELEASE_SIGNING_FINGERPRINT = 'FAC028574B9C6875D10DA4DC6443E86108ABD2A2';
@@ -12,11 +14,15 @@ function sha256(data) {
   return createHash('sha256').update(data).digest('hex');
 }
 
-async function verifyDownloadedArtifact(filename, manifest) {
+// `arch`: an AppImage the manifest or its file name assigns to another
+// architecture is never acceptable here.
+async function verifyDownloadedArtifact(filename, manifest, arch = process.arch) {
+  const builtFor = (item) => item.arch ?? packageArch(item.name);
   const stat = await fs.promises.stat(filename);
   if (!stat.isFile()) throw new Error('Downloaded update is not a regular file');
   const candidates = (manifest?.artifacts || []).filter((item) =>
-    item.kind === 'appimage' && item.size === stat.size && /^[0-9a-f]{64}$/u.test(item.sha256 || ''));
+    item.kind === 'appimage' && item.size === stat.size && /^[0-9a-f]{64}$/u.test(item.sha256 || '')
+    && (!builtFor(item) || builtFor(item) === arch));
   if (!candidates.length) throw new Error('Downloaded installer is not included in the signed release manifest');
   const hash = createHash('sha256');
   for await (const chunk of fs.createReadStream(filename)) hash.update(chunk);
@@ -44,7 +50,7 @@ async function verifyDetachedManifest(manifestBytes, signatureText, publicKeyTex
   return fingerprint;
 }
 
-function validateReleaseMetadata(release, manifest, updaterName, updaterBytes) {
+function validateReleaseMetadata(release, manifest, updaterName, updaterBytes, signedFiles = null) {
   if (!release || typeof release !== 'object' || release.draft || release.prerelease) throw new Error('GitHub did not return a stable published release');
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.artifacts)) throw new Error('Signed release manifest is invalid');
   const version = String(release.tag_name || '').replace(/^v/u, '');
@@ -61,7 +67,15 @@ function validateReleaseMetadata(release, manifest, updaterName, updaterBytes) {
   for (const required of ['release-manifest.json', 'release-manifest.json.asc', updaterName]) {
     if (!assetNames.has(required)) throw new Error(`GitHub release is missing required authenticated asset: ${required}`);
   }
-  return { version, updaterName, manifest };
+  // Download addresses of the release files, for installs that fetch a
+  // package named in the signed manifest (deb and rpm).
+  const assets = Object.create(null);
+  for (const asset of release.assets || []) {
+    if (typeof asset?.name === 'string' && typeof asset.browser_download_url === 'string') assets[asset.name] = asset.browser_download_url;
+  }
+  // The signed bytes themselves, for the root helper that verifies them again.
+  const signed = signedFiles ? { manifest: signedFiles.manifest, signature: signedFiles.signature } : null;
+  return { version, updaterName, manifest, assets, signed };
 }
 
 class UpdateService {
@@ -72,11 +86,17 @@ class UpdateService {
     this.updater = options.updater || require('electron-updater').autoUpdater;
     this.fetch = options.fetch || globalThis.fetch;
     this.repository = options.repository || RELEASE_REPOSITORY;
+    this.arch = options.arch || process.arch;
     this.publicKeyPath = options.publicKeyPath || path.join(app.getAppPath(), 'SIGNING_KEY.asc');
     this.verifiedRelease = null;
     this.downloadedFile = null;
     this.operation = null;
     this.recovery = app.getPath ? new UpdateRecovery(path.join(app.getPath('userData'), 'update-recovery')) : null;
+    // deb and rpm installs cannot replace themselves; they install the signed
+    // package through the system's administrator prompt instead.
+    this.packageUpdater = options.packageUpdater
+      || (app.getPath ? new PackageUpdater({ fetch: this.fetch, arch: this.arch, directory: path.join(app.getPath('userData'), 'update-packages') }) : null);
+    this.packagePlan = null;
     this.status = {
       supported: Boolean(app.isPackaged),
       checking: false,
@@ -89,6 +109,10 @@ class UpdateService {
       latestVersion: null,
       authenticated: false,
       signingFingerprint: RELEASE_SIGNING_FINGERPRINT,
+      // True while the administrator prompt or the package manager is working.
+      installing: false,
+      // 'check', 'download' or 'install': which step `error` belongs to.
+      errorStage: null,
       error: null
     };
 
@@ -100,11 +124,11 @@ class UpdateService {
       error: (msg) => process.stderr.write(`[updater:ERROR] ${msg}\n`)
     };
 
-    this.updater.on('checking-for-update', () => this.#merge({ checking: true, error: null }));
+    this.updater.on('checking-for-update', () => this.#merge({ checking: true, error: null, errorStage: null }));
     this.updater.on('update-available', (info) => {
       const version = info?.version || null;
       if (!this.verifiedRelease || version !== this.verifiedRelease.version) {
-        this.#merge({ checking: false, updateAvailable: false, downloaded: false, authenticated: false, error: 'Updater metadata version did not match the authenticated release.' });
+        this.#merge({ checking: false, updateAvailable: false, downloaded: false, authenticated: false, error: 'Updater metadata version did not match the authenticated release.', errorStage: 'check' });
         return;
       }
       this.#merge({ checking: false, updateAvailable: true, downloaded: false, latestVersion: version, authenticated: true, error: null });
@@ -119,7 +143,7 @@ class UpdateService {
     }));
     // An updater event alone cannot authorize installation. download() verifies
     // the actual installer bytes against the independently signed manifest.
-    this.updater.on('error', (error) => this.#merge({ checking: false, downloaded: false, error: error?.message || String(error) }));
+    this.updater.on('error', (error) => this.#merge({ checking: false, downloaded: false, error: error?.message || String(error), errorStage: 'check' }));
   }
 
   getStatus() {
@@ -145,12 +169,13 @@ class UpdateService {
 
   async #check() {
     if (!this.app.isPackaged) {
-      this.#merge({ supported: false, checking: false, authenticated: false, error: 'Update checks are only enabled in packaged releases.' });
+      this.#merge({ supported: false, checking: false, authenticated: false, error: 'Update checks are only enabled in packaged releases.', errorStage: 'check' });
       return this.getStatus();
     }
     this.verifiedRelease = null;
     this.downloadedFile = null;
-    this.#merge({ supported: true, checking: true, updateAvailable: false, downloaded: false, authenticated: false, lastCheckedAt: new Date().toISOString(), error: null });
+    this.packagePlan = null;
+    this.#merge({ supported: true, checking: true, updateAvailable: false, downloaded: false, authenticated: false, lastCheckedAt: new Date().toISOString(), error: null, errorStage: null });
     try {
       this.verifiedRelease = await this.#authenticateLatestRelease();
       this.#merge({ authenticated: true, latestVersion: this.verifiedRelease.version });
@@ -159,15 +184,18 @@ class UpdateService {
         // electron-updater is inactive on deb/rpm installs (no APPIMAGE): it
         // resolves null without firing any state events, so the checking flag
         // must be cleared here or the Updates UI spins forever.
-        const currentVersion = this.app.getVersion();
-        const newer = this.verifiedRelease.version !== currentVersion;
+        // A deb or rpm install is offered the signed package for its own
+        // format; when that is not possible the reason is shown instead.
+        const plan = this.packageUpdater
+          ? await this.packageUpdater.plan(this.verifiedRelease, this.app.getVersion())
+          : { available: false, reason: '' };
+        this.packagePlan = plan.available ? plan : null;
         this.#merge({
           checking: false,
-          updateAvailable: false,
+          updateAvailable: Boolean(plan.available),
           downloaded: false,
-          error: newer
-            ? `Aux Command ${this.verifiedRelease.version} is published; this install format updates through your package manager.`
-            : null
+          error: plan.available ? null : (plan.reason || null),
+          errorStage: plan.available || !plan.reason ? null : 'check'
         });
         return this.getStatus();
       }
@@ -177,7 +205,7 @@ class UpdateService {
       return this.getStatus();
     } catch (error) {
       this.verifiedRelease = null;
-      this.#merge({ checking: false, updateAvailable: false, downloaded: false, authenticated: false, error: error?.message || String(error) });
+      this.#merge({ checking: false, updateAvailable: false, downloaded: false, authenticated: false, error: error?.message || String(error), errorStage: 'check' });
       throw error;
     }
   }
@@ -189,26 +217,56 @@ class UpdateService {
       throw new Error('The available update has not passed signed release authentication.');
     }
     this.downloadedFile = null;
-    this.#merge({ downloaded: false, error: null });
+    this.#merge({ downloaded: false, error: null, errorStage: null });
+    if (this.packagePlan) {
+      try {
+        this.downloadedFile = await this.packageUpdater.download(this.packagePlan);
+        this.#merge({ downloaded: true, error: null });
+        return this.getStatus();
+      } catch (error) {
+        this.#merge({ downloaded: false, error: error?.message || String(error), errorStage: 'download' });
+        throw error;
+      }
+    }
     try {
       const files = await this.updater.downloadUpdate();
       if (!Array.isArray(files) || files.length !== 1) throw new Error('Updater did not return one downloaded installer');
-      this.downloadedFile = await verifyDownloadedArtifact(files[0], this.verifiedRelease.manifest);
+      this.downloadedFile = await verifyDownloadedArtifact(files[0], this.verifiedRelease.manifest, this.arch);
       this.#merge({ downloaded: true, error: null });
       return this.getStatus();
     } catch (error) {
-      this.#merge({ downloaded: false, error: error?.message || String(error) });
+      this.#merge({ downloaded: false, error: error?.message || String(error), errorStage: 'download' });
       throw error;
     }
   }
 
   async #install() {
     if (!this.status.downloaded || !this.status.authenticated) throw new Error('No authenticated downloaded update is ready to install.');
+    if (this.packagePlan) {
+      this.workspaceRecovery?.snapshot('Before application update');
+      this.#merge({ installing: true, error: null, errorStage: null });
+      try {
+        await this.packageUpdater.install(this.downloadedFile, this.packagePlan);
+      } catch (error) {
+        // The verified file is kept only when it can be tried again.
+        const kept = this.downloadedFile && fs.existsSync(this.downloadedFile);
+        if (!kept) this.downloadedFile = null;
+        this.#merge({ installing: false, downloaded: Boolean(kept), error: error?.message || String(error), errorStage: 'install' });
+        throw error;
+      }
+      this.downloadedFile = null;
+      this.packagePlan = null;
+      this.#merge({ installing: false, downloaded: false, updateAvailable: false, error: null, errorStage: null });
+      // The files on disk are now the new version; start it.
+      this.app.relaunch?.();
+      this.app.quit?.();
+      return true;
+    }
     try {
-      await verifyDownloadedArtifact(this.downloadedFile, this.verifiedRelease?.manifest);
+      await verifyDownloadedArtifact(this.downloadedFile, this.verifiedRelease?.manifest, this.arch);
     } catch (error) {
       this.downloadedFile = null;
-      this.#merge({ downloaded: false, error: error?.message || String(error) });
+      this.#merge({ downloaded: false, error: error?.message || String(error), errorStage: 'install' });
       throw error;
     }
     this.workspaceRecovery?.snapshot('Before application update');
@@ -265,9 +323,11 @@ class UpdateService {
     let manifest;
     try { manifest = JSON.parse(manifestBytes.toString('utf8')); }
     catch { throw new Error('Signed release manifest was not valid JSON'); }
-    const updaterName = 'latest-linux.yml';
+    // electron-updater reads a different description on each architecture;
+    // the one it will read here is the one checked against the signed manifest.
+    const updaterName = updaterMetadataName(this.arch);
     const updaterBytes = await this.#fetchBytes(asset(updaterName).browser_download_url, 2_000_000);
-    return validateReleaseMetadata(release, manifest, updaterName, updaterBytes);
+    return validateReleaseMetadata(release, manifest, updaterName, updaterBytes, { manifest: manifestBytes, signature: signatureBytes });
   }
 
   #merge(patch) {

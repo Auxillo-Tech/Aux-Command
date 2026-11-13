@@ -81,7 +81,7 @@ jobs:
       - name: Generate and verify unsigned CI release metadata
         run: |
           npm run release:manifest -- --no-sign
-          npm run release:verify -- --allow-unsigned
+          npm run release:verify -- --allow-unsigned --require-arch x64
 
       # Full package artifacts are ~330MB each. Uploading on every main push exhausted
       # GitHub Actions artifact storage and failed otherwise-green builds. Keep build
@@ -104,8 +104,87 @@ jobs:
             dist/release-manifest.json
           if-no-files-found: error
 
+  # The arm64 packages are built and tested on GitHub's hosted arm64 runner,
+  # natively: nothing is emulated or cross-compiled.
+  test-and-build-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Linux packaging and diagnostics dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 \
+            rpm \
+            libarchive-tools \
+            xz-utils \
+            iputils-ping \
+            traceroute \
+            dnsutils \
+            whois \
+            socat openssh-server mosh xvfb xauth x11vnc x11-utils \
+            freerdp2-x11 freerdp2-shadow-x11 python3-venv libgtk-3-0t64 clang
+          sudo mkdir -p /run/sshd
+
+      - name: Prepare isolated protocol test environment
+        run: |
+          python3 -m venv /tmp/aux-protocol-venv
+          /tmp/aux-protocol-venv/bin/pip install pyftpdlib==2.2.0 pyOpenSSL==26.4.0 websocket-client==1.9.2
+
+      - name: Install JavaScript dependencies deterministically
+        run: npm ci
+
+      - name: Install locked Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: Enable the Electron SUID sandbox helper on the runner
+        run: bash scripts/ci-enable-electron-sandbox.sh
+
+      - name: Validate source and tests
+        run: npm run check
+
+      - name: Qualify local protocol connections and recovery
+        env:
+          AUX_FTP_TEST_PYTHON: /tmp/aux-protocol-venv/bin/python
+        run: bash scripts/qualify-linux.sh
+
+      - name: Test import/export, recovery, keyboard access and session soak
+        run: /tmp/aux-protocol-venv/bin/python scripts/run-ui-qualification.py
+
+      - name: Build arm64 Linux packages and production SBOM without publishing
+        run: npm run dist:arm64 -- --publish never
+
+      - name: Verify installers on Debian, Ubuntu and Fedora
+        run: bash scripts/test-installers.sh dist
+
+      - name: Generate and verify unsigned CI release metadata
+        run: |
+          npm run release:manifest -- --no-sign
+          npm run release:verify -- --allow-unsigned --require-arch arm64
+
+      - name: Upload workflow artifacts
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aux-command-linux-arm64
+          retention-days: 5
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/latest*.yml
+            dist/SHA256SUMS
+            dist/release-manifest.json
+          if-no-files-found: error
+
   attest:
-    needs: test-and-build
+    needs: [test-and-build, test-and-build-arm64]
     if: github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -118,6 +197,10 @@ jobs:
         with:
           name: aux-command-linux-x64
           path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aux-command-linux-arm64
+          path: dist-arm64
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -131,3 +214,9 @@ jobs:
             dist/latest*.yml
             dist/SHA256SUMS
             dist/release-manifest.json
+            dist-arm64/*.AppImage
+            dist-arm64/*.deb
+            dist-arm64/*.rpm
+            dist-arm64/latest*.yml
+            dist-arm64/SHA256SUMS
+            dist-arm64/release-manifest.json

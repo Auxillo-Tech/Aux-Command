@@ -213,6 +213,33 @@ test('ProfileSync never lets a sync source plant commands, forwarding or local s
   }
 });
 
+test('ProfileSync shares the FTPS mode like the port, and it can never remove TLS', async () => {
+  const { ProfileSync } = require('../src/main/services/profile-sync.cjs');
+  const { ftpsModes } = require('../src/main/services/ftp-service.cjs');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-sync-test-'));
+  try {
+    const syncFile = path.join(tmpDir, 'profiles.json');
+    const store = createMockStore();
+    store.save({ id: 'kept', name: 'Kept', protocol: 'ftps', host: 'kept.example.com', port: 2121, ftpsMode: 'explicit' });
+    fs.writeFileSync(syncFile, JSON.stringify([
+      { name: 'Hosting', protocol: 'ftps', host: 'ftp.example.com', port: 2121, ftpsMode: 'explicit' },
+      { name: 'Odd', protocol: 'ftps', host: 'odd.example.com', port: 2121, ftpsMode: 'plain' },
+      { name: 'Kept', protocol: 'ftps', host: 'kept.example.com', port: 2121 }
+    ]));
+    const sync = new ProfileSync(store, noopWindow);
+    sync.configure({ type: 'file', url: syncFile });
+    await sync.syncNow();
+    const byName = (name) => store.list().find((p) => p.name === name);
+    assert.equal(byName('Hosting').ftpsMode, 'explicit', 'the form a server needs is shared with the team');
+    assert.equal(byName('Odd').ftpsMode, 'auto', 'an unknown value means automatic');
+    assert.equal(byName('Kept').ftpsMode, 'explicit', 'a source without the field leaves the local choice alone');
+    // Whatever a source sends, an FTPS profile only ever tries TLS forms.
+    for (const profile of store.list()) assert.equal(ftpsModes(profile).includes(false), false);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('ProfileSync allows plain HTTP only for this computer', () => {
   const { ProfileSync } = require('../src/main/services/profile-sync.cjs');
   const sync = new ProfileSync(createMockStore(), noopWindow);

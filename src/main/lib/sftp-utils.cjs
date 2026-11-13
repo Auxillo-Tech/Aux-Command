@@ -27,8 +27,11 @@ function safeTimestampToIso(seconds) {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 }
 
-function connectionSignature(profile) {
+// `resolved` carries the settings taken from ~/.ssh/config (if the profile
+// uses it), so editing that file replaces a cached connection too.
+function connectionSignature(profile, resolved = null) {
   return JSON.stringify({
+    resolved: resolved || undefined,
     host: profile.host,
     port: profile.port,
     username: profile.username,

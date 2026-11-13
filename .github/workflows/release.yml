@@ -20,8 +20,88 @@ env:
   ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
 
 jobs:
+  # Built and tested natively on GitHub's hosted arm64 runner. This job has no
+  # access to the signing key or to the release: it hands its packages to the
+  # x64 job, which writes and signs one manifest for both architectures.
+  linux-arm64:
+    name: Linux arm64 packages
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Linux packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libarchive-tools \
+            rpm \
+            xz-utils \
+            python3 \
+            iputils-ping \
+            traceroute \
+            dnsutils \
+            whois \
+            socat openssh-server mosh xvfb xauth x11vnc x11-utils \
+            freerdp2-x11 freerdp2-shadow-x11 python3-venv libgtk-3-0t64 clang
+          sudo mkdir -p /run/sshd
+
+      - name: Prepare isolated protocol test environment
+        run: |
+          python3 -m venv /tmp/aux-protocol-venv
+          /tmp/aux-protocol-venv/bin/pip install pyftpdlib==2.2.0 pyOpenSSL==26.4.0 websocket-client==1.9.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install locked Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: Enable the Electron SUID sandbox helper on the runner
+        run: bash scripts/ci-enable-electron-sandbox.sh
+
+      - name: Run validation suite
+        run: npm run check
+
+      - name: Qualify local protocol connections and recovery
+        env:
+          AUX_FTP_TEST_PYTHON: /tmp/aux-protocol-venv/bin/python
+        run: bash scripts/qualify-linux.sh
+
+      - name: Test import/export, recovery, keyboard access and session soak
+        run: /tmp/aux-protocol-venv/bin/python scripts/run-ui-qualification.py
+
+      - name: Build AppImage, deb and rpm
+        run: npm run dist:arm64 -- --publish never
+
+      - name: Verify installers on Debian, Ubuntu and Fedora
+        run: bash scripts/test-installers.sh dist
+
+      - name: Hand the arm64 packages to the release job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aux-command-linux-arm64-packages
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            dist/Aux-Command-*-arm64.AppImage
+            dist/Aux-Command-*-arm64.deb
+            dist/Aux-Command-*-aarch64.rpm
+            dist/latest-linux-arm64.yml
+
   linux-x64:
     name: Linux x64 release artifacts
+    needs: linux-arm64
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout immutable source
@@ -104,6 +184,15 @@ jobs:
       - name: Build corresponding source archives
         run: bash scripts/source-archives.sh
 
+      # The arm64 packages were built and tested by the arm64 job. They join
+      # this job's files before the manifest is written, so one signed manifest
+      # and one release cover both architectures.
+      - name: Add the arm64 packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aux-command-linux-arm64-packages
+          path: dist
+
       # The private key is imported only after dependencies are installed and
       # packages are built and tested, so build tooling never runs with it.
       - name: Import and verify release signing key
@@ -146,9 +235,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
-            npm run release:verify
+            npm run release:verify -- --require-arch x64,arm64
           else
-            node scripts/verify-release.cjs --allow-unsigned
+            node scripts/verify-release.cjs --allow-unsigned --require-arch x64,arm64
           fi
 
       - name: Verify source archive exclusions

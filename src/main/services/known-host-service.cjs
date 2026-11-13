@@ -30,13 +30,19 @@ class KnownHostService {
   }
 
   key(profile) {
-    return `${profile.host}:${profile.port}`;
+    return profile.hostKeyAlias ? `alias:${profile.hostKeyAlias}` : `${profile.host}:${profile.port}`;
+  }
+
+  // The name OpenSSH looks up in known_hosts: a HostKeyAlias is recorded as
+  // written, without the [name]:port form used for other ports than 22.
+  #lookupName(profile) {
+    return profile.hostKeyAlias ? [profile.hostKeyAlias, 22] : [profile.host, profile.port];
   }
 
   // Host key algorithm order that asks a server OpenSSH already knows for the
   // key type on record; null when OpenSSH has no entry for it.
   preferredHostKeyAlgorithms(profile) {
-    try { return preferredHostKeyAlgorithms(profile.host, profile.port, this.knownHostsFiles(profile)); }
+    try { return preferredHostKeyAlgorithms(...this.#lookupName(profile), this.knownHostsFiles(profile)); }
     catch { return null; }
   }
 
@@ -50,7 +56,7 @@ class KnownHostService {
       && Object.prototype.hasOwnProperty.call(hosts, key)
       ? hosts[key]
       : undefined;
-    const openssh = keyBlob ? checkOpenSshKnownHosts(profile.host, profile.port, keyBlob, this.knownHostsFiles(profile)) : { trusted: false, revoked: false, conflicts: [] };
+    const openssh = keyBlob ? checkOpenSshKnownHosts(...this.#lookupName(profile), keyBlob, this.knownHostsFiles(profile)) : { trusted: false, revoked: false, conflicts: [] };
     if (openssh.revoked) throw new Error('This host key is marked @revoked in OpenSSH known_hosts');
     if (known?.fingerprintHex === fingerprintHex) return true;
     if (openssh.trusted && !known) return true;

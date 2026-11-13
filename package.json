@@ -18,6 +18,7 @@
     "pack": "electron-builder --dir --linux",
     "dist": "electron-builder --linux AppImage deb rpm",
     "dist:x64": "node scripts/release-metadata.cjs && bash scripts/build-linux-x64.sh",
+    "dist:arm64": "node scripts/release-metadata.cjs && bash scripts/build-linux-arm64.sh",
     "smoke:cdp": "python3 scripts/e2e-cdp-smoke.py",
     "soak:cdp": "python3 scripts/soak-cdp.py",
     "release:metadata": "node scripts/release-metadata.cjs",
@@ -121,6 +122,7 @@
       "depends": [
         "openssh-client",
         "python3",
+        "gpgv",
         "iputils-ping",
         "traceroute",
         "dnsutils",
@@ -137,17 +139,25 @@
         "libasound2 | libasound2t64",
         "libgbm1"
       ],
+      "fpm": [
+        "--deb-user", "root", "--deb-group", "root",
+        "build/linux/aux-command-update-helper=/usr/lib/aux-command/update-helper",
+        "build/linux/release-signing-key.gpg=/usr/lib/aux-command/release-signing-key.gpg",
+        "build/linux/tech.auxillo.command.install-update.policy=/usr/share/polkit-1/actions/tech.auxillo.command.install-update.policy"
+      ],
       "recommends": [
         "freerdp2-x11 | freerdp3-x11",
         "xvfb",
         "x11vnc",
-        "mosh"
+        "mosh",
+        "pkexec | policykit-1"
       ]
     },
     "rpm": {
       "depends": [
         "openssh-clients",
         "python3",
+        "gnupg2",
         "iputils",
         "traceroute",
         "bind-utils",
@@ -163,12 +173,20 @@
         "libsecret",
         "alsa-lib",
         "mesa-libgbm"
+      ],
+      "fpm": [
+        "--rpm-user", "root", "--rpm-group", "root",
+        "--rpm-tag", "Recommends: polkit",
+        "build/linux/aux-command-update-helper=/usr/lib/aux-command/update-helper",
+        "build/linux/release-signing-key.gpg=/usr/lib/aux-command/release-signing-key.gpg",
+        "build/linux/tech.auxillo.command.install-update.policy=/usr/share/polkit-1/actions/tech.auxillo.command.install-update.policy"
       ]
     },
     "asarUnpack": [
       "src/main/helpers/process_guard.py",
       "src/main/helpers/pty_bridge.py",
       "src/main/helpers/serial_bridge.py",
+      "src/main/helpers/ssh_askpass.py",
       "src/main/helpers/telnet_bridge.py"
     ]
   },

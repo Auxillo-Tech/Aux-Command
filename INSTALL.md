@@ -1,6 +1,6 @@
 # Installing Aux Command
 
-Aux Command currently ships as a Linux x86_64 desktop application.
+Aux Command currently ships as a Linux desktop application for x86_64 and, from 0.5.0, ARM64 (aarch64).
 
 Supported package outputs for the 0.3.x release line:
 
@@ -10,7 +10,17 @@ Aux-Command-<version>-amd64.deb
 Aux-Command-<version>-x86_64.rpm
 ```
 
-No Windows, macOS, or ARM64 release package is currently produced.
+The same three formats for ARM64 (aarch64) machines:
+
+```text
+Aux-Command-<version>-arm64.AppImage
+Aux-Command-<version>-arm64.deb
+Aux-Command-<version>-aarch64.rpm
+```
+
+Pick the files that match your processor (`uname -m` prints `x86_64` or `aarch64`) and use the ARM64 file names in the commands below. The ARM64 packages are built and tested on GitHub's ARM64 runners; they have not yet been verified on physical ARM64 desktops, so treat them as a preview and report what you find. In-app updates always fetch the package for the processor the application is running on.
+
+No Windows or macOS release package is currently produced.
 
 ---
 
@@ -248,6 +258,12 @@ Build local x86_64 packages without publishing:
 npm run dist:x64 -- --publish never
 ```
 
+Build ARM64 packages without publishing, on an ARM64 machine or as a cross-build on x86_64 (no cross compiler is needed: the ARM64 packages contain no compiled Node modules):
+
+```bash
+npm run dist:arm64 -- --publish never
+```
+
 ---
 
 ## Verify release files
@@ -269,6 +285,15 @@ sha256sum -c SHA256SUMS
 For unsigned engineering releases, checksums detect corruption but do not authenticate publisher identity. A fully authenticated public release requires an Auxillo-controlled signing key and documented signature verification.
 
 ---
+
+## Updating
+
+Use **Updates** in the application (status bar or command palette), then **Check for updates**, **Download update** and **Restart and install**.
+
+- **AppImage:** the application replaces its own file after checking it against the signed release manifest. The previous version is kept for **Restore previous version**.
+- **deb and rpm:** the application downloads the package for your install, checks its size and SHA-256 against the signed release manifest, and installs it through your desktop's administrator prompt (`pkexec`), then restarts. You type your password once; no terminal is needed. The prompt runs only the update helper that the package installs at `/usr/lib/aux-command/update-helper` (root-owned, with the polkit action `tech.auxillo.command.install-update`), and that helper installs nothing that is not the signed, newer Aux Command package: it never downgrades. If `pkexec` is not installed, or the helper is missing, install the new package with your package manager as before.
+
+Every update is verified against the OpenPGP-signed manifest with the release signing key bundled in the application before anything is installed.
 
 ## Troubleshooting
 
@@ -305,4 +330,4 @@ Aux Command refuses to persist secrets if Electron reports an unsafe Linux `basi
 
 ### Background SSH tunnels fail immediately
 
-Managed tunnels run OpenSSH in `BatchMode=yes`. Use SSH keys or an unlocked SSH agent. Interactive password/MFA prompts cannot be completed invisibly in a background tunnel process.
+Managed tunnels sign in with the password or key passphrase saved in the profile, and show a dialog for anything else OpenSSH asks (a password that is not saved, a one-time code, an unknown host key). A tunnel that still fails immediately was refused by the server or the dialog was cancelled; the tunnel's error line says which. The saved credential is used with OpenSSH 8.7 or later on this computer (`ssh -V`). With OpenSSH 8.4 to 8.6 it is not used and the dialog asks for it each time, because those versions cannot tell their own password question from text sent by a server. Versions older than 8.4 ignore the setting that redirects prompts and can only use SSH keys or an unlocked SSH agent. A server that offers only keyboard-interactive login (PAM with `PasswordAuthentication no`) is asked about on the terminal or in a dialog instead of being answered from the saved credential: its question arrives as `(user@host) Password:`, text the server wrote, and an app that answered it could hand your password to a server or jump host that imitates the prompt. That is intended, not a fault.

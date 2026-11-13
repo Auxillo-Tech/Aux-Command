@@ -182,17 +182,17 @@
         </div>
         <button id="welcome-tour" class="tour-launch" type="button"><span aria-hidden="true">✦</span> <span data-i18n="welcome.tour">Take a 60-second tour</span></button>
         <div class="shortcut-strip">
-          <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick connect</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> Local shell</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd> Palette</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd> Duplicate</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd> Reconnect</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>±</kbd> Pane size</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd> Tile sessions</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd> Broadcast input</span>
-          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd> Log highlighting</span>
-          <span><kbd>Ctrl</kbd><kbd>F</kbd> Find terminal</span>
-          <span><kbd>Ctrl</kbd><kbd>W</kbd> Close tab</span>
+          <span><kbd>Ctrl</kbd><kbd>K</kbd> <span data-ui-message="Quick connect">Quick connect</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> <span data-ui-message="Local shell">Local shell</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd> <span data-ui-message="Palette">Palette</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd> <span data-ui-message="Duplicate">Duplicate</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd> <span data-ui-message="Reconnect">Reconnect</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>±</kbd> <span data-ui-message="Pane size">Pane size</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd> <span data-ui-message="Tile sessions">Tile sessions</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd> <span data-ui-message="Broadcast input">Broadcast input</span></span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd> <span data-ui-message="Log highlighting">Log highlighting</span></span>
+          <span><kbd>Ctrl</kbd><kbd>F</kbd> <span data-ui-message="Find terminal">Find terminal</span></span>
+          <span><kbd>Ctrl</kbd><kbd>W</kbd> <span data-ui-message="Close tab">Close tab</span></span>
         </div>
       </section>
       <section id="terminal-stack" class="terminal-stack" aria-label="Terminal sessions" data-ui-aria="Terminal sessions"></section>
@@ -201,8 +201,8 @@
         <h1 data-ui-message="Aux Command could not initialize.">Aux Command could not initialize.</h1>
         <p id="initialization-error-detail" data-ui-message="The application state could not be loaded.">The application state could not be loaded.</p>
         <div class="welcome-actions compact-actions">
-          <button id="retry-initialization" class="action-card" type="button"><span>↻</span><strong data-ui-message="Reload application">Reload application</strong><small>Retry initialization from a clean renderer state</small></button>
-          <button id="error-diagnostics" class="action-card" type="button"><span>◉</span><strong data-ui-message="Open diagnostics">Open diagnostics</strong><small>Inspect runtime tools and environment</small></button>
+          <button id="retry-initialization" class="action-card" type="button"><span>↻</span><strong data-ui-message="Reload application">Reload application</strong><small data-ui-message="Retry initialization from a clean renderer state">Retry initialization from a clean renderer state</small></button>
+          <button id="error-diagnostics" class="action-card" type="button"><span>◉</span><strong data-ui-message="Open diagnostics">Open diagnostics</strong><small data-ui-message="Inspect runtime tools and environment">Inspect runtime tools and environment</small></button>
         </div>
       </section>
     </main>
@@ -287,6 +287,7 @@
   <script src="./i18n.js"></script>
   <script src="./assist.js"></script>
   <script src="../shared/preferences.js"></script>
+  <script src="../shared/validation-messages.js"></script>
   <script src="./workspace-utils.js"></script>
   <script src="./renderer.js"></script>
 </body>

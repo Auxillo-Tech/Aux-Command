@@ -16,7 +16,7 @@ function fixture(clipboard = {}, shell = {}) {
     clipboard,
     shell,
     app: { getVersion: () => '0.1.0', getName: () => 'Aux Command' },
-    profileStore: { list: () => [], snippets: () => [] },
+    profileStore: { list: () => [], listAll: () => [], snippets: () => [] },
     settingsStore: { get: () => ({ version: 1, workspace: { layout: 'single', paneMinWidth: 320, paneMinHeight: 220 } }), saveWorkspace: (workspace) => ({ version: 1, workspace }) },
     terminalService: { list: () => [] },
     externalService: {},

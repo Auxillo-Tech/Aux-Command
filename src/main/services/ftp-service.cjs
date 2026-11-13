@@ -33,10 +33,14 @@ function ftpEntryMode(entry) {
 // Returns the basic-ftp `secure` values to try, in order. On other ports the
 // form is detected: an explicit server answers the implicit TLS handshake
 // with its plain-text greeting, which fails at once and selects explicit.
+// A profile can also force one form with ftpsMode; then only that form is
+// tried and a mismatch is reported instead of falling back.
 const IMPLICIT_FTPS_PORT = 990;
 const EXPLICIT_FTPS_PORT = 21;
 function ftpsModes(profile) {
   if (profile.protocol !== 'ftps') return [false];
+  if (profile.ftpsMode === 'implicit') return ['implicit'];
+  if (profile.ftpsMode === 'explicit') return [true];
   const port = Number(profile.port);
   if (port === IMPLICIT_FTPS_PORT) return ['implicit'];
   if (port === EXPLICIT_FTPS_PORT) return [true];
@@ -191,6 +195,7 @@ class FtpService {
       protocol: profile.protocol,
       host: profile.host,
       port: profile.port,
+      ftpsMode: profile.ftpsMode,
       username: profile.username,
       credentialId: profile.credentialId
     });

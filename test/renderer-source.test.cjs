@@ -23,7 +23,7 @@ test('renderer reattaches or closes existing main-process terminal sessions afte
 
 test('renderer disconnects graphical SFTP on panel close and owning tab close', () => {
   assert.match(renderer, /async function disconnectSftp\(profile = state\.sftp\.profile/u);
-  assert.match(renderer, /await disconnectSftp\(profile, \{ reset: true, status: 'SFTP disconnected' \}\)/u);
+  assert.match(renderer, /await disconnectSftp\(profile, \{ reset: true, status: uiText\('SFTP disconnected'\) \}\)/u);
   assert.match(renderer, /state\.sftp\.ownerTabId === tab\.id/u);
   assert.match(renderer, /const previousProfile = state\.sftp\.profile/u);
   assert.match(renderer, /await disconnectSftp\(previousProfile, \{ reset: true/u);
@@ -37,7 +37,7 @@ test('renderer preserves a keyboard route from Home back into the terminal tabli
 });
 
 test('renderer does not reinterpret an existing credential after its kind changes', () => {
-  assert.match(renderer, /credential kind changes/u);
+  assert.match(renderer, /Changing the credential type requires entering a replacement credential/u);
   assert.match(renderer, /secret\.setCustomValidity/u);
   assert.match(renderer, /secret\.reportValidity\(\)/u);
 });
@@ -399,7 +399,7 @@ test('UI separates session navigation from contextual commands and labels global
 
 test('profile rows expose separate Connect and Edit buttons', () => {
   assert.match(renderer, /className: 'profile-connect'/u);
-  assert.match(renderer, /className: 'profile-connect-label', text: uiText\('Connect'\)/u);
+  assert.match(renderer, /className: 'profile-connect-label', text: profile\.invalid \? uiText\('Needs fixing'\) : uiText\('Connect'\)/u);
   assert.match(renderer, /attrs: \{ role: 'listitem'/u);
   assert.doesNotMatch(renderer, /attrs: \{ role: 'button', tabindex: '0', 'aria-label': `\$\{profile\.name\}/u);
 });
@@ -543,7 +543,7 @@ test('pasted text cannot smuggle keypresses or run several lines unannounced', (
   assert.match(renderer, /state\.ui\.terminalPasteWarning === false \|\| \(!multiline && targets\.length < 2\)/u);
   const detached = fs.readFileSync(path.join(root, 'src/renderer/detached.js'), 'utf8');
   assert.match(detached, /const text=sanitize\(raw\)/u);
-  assert.match(detached, /window\.confirm\('Paste '\+lines\.length\+' lines\?/u);
+  assert.match(detached, /window\.confirm\(t\('Paste \{p0\} lines\?',\{p0:lines\.length\}\)\+'\\n\\n'\+lines\.slice\(0,20\)/u);
 });
 
 test('terminal query replies are kept out of the command guard, macros and broadcast', () => {
@@ -635,4 +635,10 @@ test('terminal report matching stays fast on hostile terminal output', () => {
   for (const input of hostile) assert.equal(isTerminalReport(input), false);
   const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
   assert.ok(elapsedMs < 1000, `matching took ${elapsedMs} ms`);
+});
+
+test('the connection editor offers the FTPS mode only for FTPS and saves it', () => {
+  assert.match(renderer, /selectInput\('ftpsMode', \[\s*\['auto', uiText\('Automatic \(recommended\)'\)\], \['explicit', uiText\('Explicit \(AUTH TLS\)'\)\], \['implicit', uiText\('Implicit \(TLS from the start\)'\)\]/u);
+  assert.match(renderer, /\[ftpsMode\.closest\('\.field'\), 'ftps'\]/u);
+  assert.match(renderer, /ftpsMode: selectedProtocol === 'ftps' \? String\(values\.get\('ftpsMode'\) \|\| 'auto'\) : 'auto'/u);
 });

@@ -124,12 +124,15 @@ function buildTerminalCommand(profileInput, { remoteCwd = '' } = {}) {
   }
 }
 
-function buildTunnelCommand(tunnelInput, profileInput) {
+// `interactive` is set when the caller answers OpenSSH's prompts through
+// askpass (see ssh-askpass.cjs); without it the tunnel must never wait for
+// an answer nobody can give, so BatchMode stays on.
+function buildTunnelCommand(tunnelInput, profileInput, { interactive = false } = {}) {
   const tunnel = normalizeTunnel(tunnelInput);
   const profile = normalizeProfile(profileInput, profileInput?.id);
   if (profile.protocol !== 'ssh') throw new Error('Tunnels require an SSH profile');
 
-  const args = sshBaseArgs(profile, { batchMode: true, exitOnForwardFailure: true });
+  const args = sshBaseArgs(profile, { batchMode: !interactive, exitOnForwardFailure: true });
   args.push('-v', '-N');
   if (tunnel.type === 'dynamic') {
     args.push('-D', `${tunnel.bindHost}:${tunnel.bindPort}`);

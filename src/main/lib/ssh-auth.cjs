@@ -45,9 +45,39 @@ function needsPassphrase(error) {
   return /no passphrase given|bad passphrase|encrypted/iu.test(String(error?.message || ''));
 }
 
+// IdentitiesOnly: the agent may only sign with keys that are also configured
+// as identity files. The public half comes from `<file>.pub`, or from the file
+// itself when it can be read without a passphrase. Returns '' (use no agent)
+// when no configured key can be identified.
+function identitiesOnlyAgent(socketPath, filenames, ssh2 = require('ssh2')) {
+  if (!socketPath || typeof ssh2.OpenSSHAgent !== 'function') return '';
+  const allowed = new Set();
+  for (const filename of filenames) {
+    for (const candidate of [`${filename}.pub`, filename]) {
+      try {
+        const parsed = ssh2.utils.parseKey(readKeyFile(candidate));
+        const key = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (key instanceof Error) continue;
+        allowed.add(key.getPublicSSH().toString('base64'));
+        break;
+      } catch { /* absent or not a key */ }
+    }
+  }
+  if (!allowed.size) return '';
+  class ConfiguredKeysAgent extends ssh2.OpenSSHAgent {
+    getIdentities(callback) {
+      super.getIdentities((error, keys) => {
+        if (error) callback(error);
+        else callback(null, keys.filter((key) => allowed.has(key.getPublicSSH().toString('base64'))));
+      });
+    }
+  }
+  return new ConfiguredKeysAgent(socketPath);
+}
+
 // options:
 //   username          login name
-//   agent             SSH agent socket path ('' when there is no agent)
+//   agent             SSH agent socket path or ssh2 agent object ('' when there is no agent)
 //   keys              [{ filename, data }] in the order to try
 //   keyPassphrase     stored passphrase for the profile's identity file ('' if none)
 //   password          stored account password ('' if none)
@@ -123,4 +153,4 @@ function createSshAuthHandler(options = {}) {
   };
 }
 
-module.exports = { createSshAuthHandler, defaultKeyFiles, readKeyFile, needsPassphrase, MAX_PASSPHRASE_ATTEMPTS };
+module.exports = { createSshAuthHandler, defaultKeyFiles, identitiesOnlyAgent, readKeyFile, needsPassphrase, MAX_PASSPHRASE_ATTEMPTS };

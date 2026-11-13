@@ -10,6 +10,7 @@ const { findExecutable } = require('../lib/executable-finder.cjs');
 const { validateHost } = require('./network-tools.cjs');
 const { trustedCertificateArgs } = require('../lib/rdp-certificate.cjs');
 const { credentialArgs, resolveRdpCredentials, sendCredentials } = require('../lib/rdp-credentials.cjs');
+const { createAskpassSession, supportsForcedAskpass, supportsSavedCredentialAnswers } = require('../lib/ssh-askpass.cjs');
 
 class RemoteDesktopGateway {
   constructor(options = {}) {
@@ -19,6 +20,9 @@ class RemoteDesktopGateway {
     this.useGuard = options.useGuard !== false;
     this.knownHostService = options.knownHostService || null;
     this.promptBroker = options.promptBroker || null;
+    // The gateway's SSH sign-in uses the gateway profile's saved credential;
+    // other prompts become dialogs. Without a prompt broker BatchMode stays on.
+    this.vaultService = options.vaultService || null;
     this.rdpCertificateArgs = options.rdpCertificateArgs
       || ((target, executable) => trustedCertificateArgs(target, this.knownHostService, executable));
     this.connectTimeout = Math.max(1000, Number(options.connectTimeout) || 20_000);
@@ -57,16 +61,35 @@ class RemoteDesktopGateway {
     if (!sshExecutable) throw new Error('OpenSSH is required for a remote desktop gateway');
 
     const id = randomUUID();
+    const interactive = Boolean(this.promptBroker) && supportsForcedAskpass(sshExecutable);
     const target = gatewayProfile.useSshConfig && gatewayProfile.sshAlias ? gatewayProfile.sshAlias : gatewayProfile.host;
     const sshArgs = [
-      ...sshBaseArgs(gatewayProfile, { batchMode: true, exitOnForwardFailure: true }),
+      ...sshBaseArgs(gatewayProfile, { batchMode: !interactive, exitOnForwardFailure: true }),
       '-v', '-N', '-L', `127.0.0.1:${localPort}:${targetHost}:${targetPort}`, '--', target
     ];
     const launch = this.#guardedCommand(sshExecutable, sshArgs);
-    const tunnel = spawn(launch.command, launch.args, {
-      stdio: this.useGuard ? ['ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
-      shell: false
-    });
+    const hooks = {};
+    const askpass = interactive ? createAskpassSession({
+      profile: gatewayProfile,
+      vaultService: this.vaultService,
+      promptBroker: this.promptBroker,
+      mode: 'dialog',
+      useVault: supportsSavedCredentialAnswers(sshExecutable),
+      onAbort: (reason) => hooks.abort?.(reason),
+      onPrompting: (open) => hooks.prompting?.(open)
+    }) : null;
+    let tunnel;
+    try {
+      tunnel = spawn(launch.command, launch.args, {
+        stdio: this.useGuard ? ['ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
+        shell: false,
+        env: askpass ? { ...process.env, ...askpass.env } : process.env
+      });
+    } catch (error) {
+      askpass?.close();
+      throw error;
+    }
+    askpass?.trackProcess(tunnel.pid);
     if (this.useGuard) tunnel.stdio[3].resume();
     const session = {
       id,
@@ -79,6 +102,7 @@ class RemoteDesktopGateway {
       status: 'connecting',
       startedAt: new Date().toISOString(),
       tunnel,
+      askpass,
       client: null,
       embedded,
       stopping: false,
@@ -98,9 +122,19 @@ class RemoteDesktopGateway {
         this.disconnect(id);
         reject(error);
       };
+      // The time the user spends in a sign-in dialog does not count towards
+      // the readiness timeout; a cancelled sign-in ends the gateway at once.
+      hooks.prompting = (open) => {
+        if (settled || session.launching) return;
+        clearTimeout(timer);
+        if (!open) armTimeout();
+      };
+      hooks.abort = (reason) => finishError(new Error(reason));
       const launchClient = () => {
         if (settled || session.stopping || session.client || session.launching) return;
         session.launching = true;
+        // Signed in: nothing further may be asked on this connection's behalf.
+        askpass?.close();
         if (embedded) {
           settled = true;
           clearTimeout(timer);
@@ -161,8 +195,12 @@ class RemoteDesktopGateway {
         const detail = stderr.trim().split('\n').slice(-4).join('\n');
         finishError(new Error(detail || `SSH gateway exited with code ${code}${signal ? ` (${signal})` : ''}`));
       });
-      const timer = setTimeout(() => finishError(new Error('SSH gateway did not confirm forwarding readiness')), this.connectTimeout);
-      timer.unref();
+      let timer = null;
+      const armTimeout = () => {
+        timer = setTimeout(() => finishError(new Error('SSH gateway did not confirm forwarding readiness')), this.connectTimeout);
+        timer.unref();
+      };
+      armTimeout();
     });
   }
 
@@ -172,6 +210,7 @@ class RemoteDesktopGateway {
     session.stopping = true;
     session.status = 'stopped';
     this.sessions.delete(id);
+    session.askpass?.close();
     this.#terminate(session.client);
     this.#terminate(session.tunnel);
     this.#emit(session);

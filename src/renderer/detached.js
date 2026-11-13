@@ -1,9 +1,14 @@
 'use strict';
 const api=window.detachedTerminal,terminal=new window.Terminal({fontSize:13,lineHeight:1.12,scrollback:20000,fontFamily:'JetBrains Mono, monospace',theme:{background:'#060b13',foreground:'#dcecf4'}}),fit=new window.FitAddon.FitAddon();
 terminal.loadAddon(fit);terminal.open(document.querySelector('#terminal'));
+// Text follows the workspace language, which the workspace window keeps in
+// this origin's storage; without it the window stays in English.
+let language='en';try{const saved=window.localStorage.getItem('aux-command-language')||'';if(/^[a-z]{2}$/u.test(saved))language=saved;}catch{/* storage unavailable */}
+const t=(text,values={})=>String(globalThis.AuxDialogMessages?.[text]?.[language]||text).replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/gu,(token,name)=>Object.hasOwn(values,name)?String(values[name]):token);
+document.documentElement.lang=language;for(const element of document.querySelectorAll('[data-t]'))element.textContent=t(element.textContent.trim());
 let ready=false,pending=[],timer,ended=false;
 api.onData(event=>{if(ready)terminal.write(event.data);else pending.push(event);});
-api.onExit(({exitCode})=>{ended=true;document.querySelector('#status').textContent='Session ended ('+exitCode+')';terminal.options.disableStdin=true;});
+api.onExit(({exitCode})=>{ended=true;document.querySelector('#status').textContent=t('Session ended ({p0})',{p0:exitCode});terminal.options.disableStdin=true;});
 terminal.onData(data=>api.write(data).catch(error=>{document.querySelector('#status').textContent=error.message;}));
 terminal.onResize(({cols,rows})=>api.resize(cols,rows).catch(()=>{}));
 new ResizeObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>fit.fit(),80);}).observe(document.querySelector('#terminal'));
@@ -24,7 +29,7 @@ let copyOnSelect=true,pasteWarning=true,baseFontSize=13;
 // embedded ESC[201~ cannot end bracketed paste early and run commands.
 const sanitize=text=>String(text||'').replace(/\r\n?/gu,'\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/gu,'');
 const copy=()=>{const text=terminal.getSelection();if(text)api.copy(text).catch(()=>{});return Boolean(text);};
-const paste=type=>{if(!ended)api.paste(type).then(raw=>{const text=sanitize(raw);if(!text)return;const lines=text.replace(/\n$/u,'').split('\n');if(pasteWarning&&lines.length>1&&!window.confirm('Paste '+lines.length+' lines?\n\n'+lines.slice(0,20).join('\n')))return;terminal.paste(text);terminal.focus();}).catch(()=>{});};
+const paste=type=>{if(!ended)api.paste(type).then(raw=>{const text=sanitize(raw);if(!text)return;const lines=text.replace(/\n$/u,'').split('\n');if(pasteWarning&&lines.length>1&&!window.confirm(t('Paste {p0} lines?',{p0:lines.length})+'\n\n'+lines.slice(0,20).join('\n')))return;terminal.paste(text);terminal.focus();}).catch(()=>{});};
 const element=document.querySelector('#terminal');
 const appOwnsMouse=event=>terminal.modes?.mouseTrackingMode&&terminal.modes.mouseTrackingMode!=='none'&&!event.shiftKey;
 element.addEventListener('mouseup',event=>{
@@ -38,4 +43,4 @@ api.init().then(snapshot=>{copyOnSelect=snapshot.copyOnSelect!==false;
  // Look like the workspace tab this terminal came from.
  const look=snapshot.appearance||{};if(look.fontFamily)terminal.options.fontFamily=look.fontFamily;if(look.fontSize){terminal.options.fontSize=look.fontSize;baseFontSize=look.fontSize;}if(look.lineHeight)terminal.options.lineHeight=look.lineHeight;if(look.scrollback)terminal.options.scrollback=look.scrollback;if(look.theme&&Object.keys(look.theme).length){terminal.options.theme=look.theme;document.body.style.background=look.theme.background||'';}if(look.title)document.title=look.title+' — Aux Command';
  // Measure cells with the real font once it has loaded.
- document.fonts?.load(`${terminal.options.fontSize}px "JetBrains Mono"`).then(()=>{const family=terminal.options.fontFamily;terminal.options.fontFamily="monospace";terminal.options.fontFamily=family;fit.fit();}).catch(()=>{});pasteWarning=snapshot.pasteWarning!==false;terminal.write(snapshot.text);for(const event of pending)if(event.sequence>snapshot.sequence)terminal.write(event.data);pending=[];ready=true;ended=ended||snapshot.closed;terminal.options.disableStdin=ended;document.querySelector('#status').textContent=ended?'Session ended':(look.title||snapshot.title);fit.fit();if(!ended)terminal.focus();}).catch(error=>{document.querySelector('#status').textContent=error.message;});
+ document.fonts?.load(`${terminal.options.fontSize}px "JetBrains Mono"`).then(()=>{const family=terminal.options.fontFamily;terminal.options.fontFamily="monospace";terminal.options.fontFamily=family;fit.fit();}).catch(()=>{});pasteWarning=snapshot.pasteWarning!==false;terminal.write(snapshot.text);for(const event of pending)if(event.sequence>snapshot.sequence)terminal.write(event.data);pending=[];ready=true;ended=ended||snapshot.closed;terminal.options.disableStdin=ended;document.querySelector('#status').textContent=ended?t('Session ended'):(look.title||snapshot.title);fit.fit();if(!ended)terminal.focus();}).catch(error=>{document.querySelector('#status').textContent=error.message;});

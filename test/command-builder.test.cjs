@@ -63,6 +63,15 @@ test('builds local and dynamic OpenSSH tunnels', () => {
   assert.ok(local.args.includes('BatchMode=yes'));
   assert.ok(local.args.includes('-v'));
 
+  // When the caller answers OpenSSH's prompts through askpass, the tunnel
+  // must be allowed to ask; nothing else about the command changes.
+  const interactive = buildTunnelCommand({
+    id: 't1', name: 'DB', type: 'local', profileId: 'ssh-1', bindHost: '127.0.0.1', bindPort: 15432, targetHost: 'db', targetPort: 5432
+  }, sshProfile, { interactive: true });
+  assert.equal(interactive.args.includes('BatchMode=yes'), false);
+  assert.ok(interactive.args.includes('ExitOnForwardFailure=yes'));
+  assert.equal(interactive.args.join('\n'), local.args.join('\n').replace('-o\nBatchMode=yes\n', ''));
+
   const dynamic = buildTunnelCommand({
     id: 't2', name: 'SOCKS', type: 'dynamic', profileId: 'ssh-1', bindHost: '127.0.0.1', bindPort: 1080
   }, sshProfile);
@@ -107,7 +116,7 @@ test('builds Mosh destinations with usernames and safely quoted SSH options', ()
 test('startup commands can never become local ssh or mosh options', () => {
   for (const protocol of ['ssh', 'mosh']) {
     for (const startupCommand of ['-oProxyCommand=touch /tmp/pwned', '--ssh=sh -c "touch /tmp/pwned"', '  -oLocalCommand=id']) {
-      assert.throws(() => buildTerminalCommand({ ...sshProfile, protocol, startupCommand }), /startupCommand cannot start with a hyphen/u);
+      assert.throws(() => buildTerminalCommand({ ...sshProfile, protocol, startupCommand }), /Startup command cannot start with a hyphen/u);
     }
   }
   const ssh = buildTerminalCommand({ ...sshProfile, startupCommand: 'uptime' });

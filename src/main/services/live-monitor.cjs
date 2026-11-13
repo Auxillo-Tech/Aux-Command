@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const { normalizeProfile } = require('../lib/validation.cjs');
 const { resolveHelper, sshBaseArgs } = require('../lib/command-builder.cjs');
 const { findExecutable } = require('../lib/executable-finder.cjs');
+const { createAskpassSession, supportsForcedAskpass, supportsSavedCredentialAnswers } = require('../lib/ssh-askpass.cjs');
 
 const MAX_OUTPUT_BYTES = 5_000_000;
 const SNAPSHOT_COMMAND = [
@@ -21,6 +22,14 @@ class LiveMonitorService {
     this.sshExecutable = options.sshExecutable || findExecutable(['ssh']) || 'ssh';
     this.useGuard = options.useGuard !== false;
     this.timeout = Math.max(1000, Number(options.timeout) || 30_000);
+    // With a prompt broker, sign-in prompts are answered from the profile's
+    // saved credential or shown as dialogs; without one BatchMode stays on.
+    this.vaultService = options.vaultService || null;
+    this.promptBroker = options.promptBroker || null;
+    // The monitor can refresh on a timer. After the user cancels a sign-in
+    // it does not ask again for this long; snapshots fail at once instead.
+    this.promptQuietMs = Number.isFinite(Number(options.promptQuietMs)) ? Math.max(0, Number(options.promptQuietMs)) : 60_000;
+    this.quietUntil = new Map();
     this.active = new Map();
   }
 
@@ -29,16 +38,36 @@ class LiveMonitorService {
     if (profile.protocol !== 'ssh') return Promise.reject(new Error('Live monitoring requires an SSH profile'));
     const id = randomUUID();
     const target = profile.useSshConfig && profile.sshAlias ? profile.sshAlias : profile.host;
-    const args = [...sshBaseArgs(profile, { batchMode: true, connectTimeout: 10 }), '--', target, SNAPSHOT_COMMAND];
+    const interactive = Boolean(this.promptBroker) && !((this.quietUntil.get(profile.id) || 0) > Date.now())
+      && supportsForcedAskpass(this.sshExecutable);
+    const args = [...sshBaseArgs(profile, { batchMode: !interactive, connectTimeout: 10 }), '--', target, SNAPSHOT_COMMAND];
 
     return new Promise((resolve, reject) => {
       const launch = this.#guardedCommand(args);
-      const child = spawn(launch.command, launch.args, {
-        stdio: this.useGuard ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
-        shell: false
-      });
+      const hooks = {};
+      const askpass = interactive ? createAskpassSession({
+        profile,
+        vaultService: this.vaultService,
+        promptBroker: this.promptBroker,
+        mode: 'dialog',
+        useVault: supportsSavedCredentialAnswers(this.sshExecutable),
+        onAbort: (reason) => hooks.abort?.(reason),
+        onPrompting: (open) => hooks.prompting?.(open)
+      }) : null;
+      let child;
+      try {
+        child = spawn(launch.command, launch.args, {
+          stdio: this.useGuard ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
+          shell: false,
+          env: askpass ? { ...process.env, ...askpass.env } : process.env
+        });
+      } catch (error) {
+        askpass?.close();
+        throw error;
+      }
+      askpass?.trackProcess(child.pid);
       if (this.useGuard) child.stdio[3].resume();
-      const entry = { child, cancelled: false, timedOut: false, killTimer: null };
+      const entry = { child, cancelled: false, timedOut: false, killTimer: null, signInError: '' };
       this.active.set(id, entry);
       let stdout = '';
       let stderr = '';
@@ -55,19 +84,37 @@ class LiveMonitorService {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        askpass?.close();
         if (entry.killTimer) clearTimeout(entry.killTimer);
         this.active.delete(id);
         if (error) reject(error);
         else resolve(result);
       };
-      const timer = setTimeout(() => {
-        entry.timedOut = true;
+      let timer = null;
+      const armTimeout = () => {
+        timer = setTimeout(() => {
+          entry.timedOut = true;
+          this.#terminate(entry);
+        }, this.timeout);
+        timer.unref();
+      };
+      armTimeout();
+      // The time the user spends in a sign-in dialog does not count.
+      hooks.prompting = (open) => {
+        if (settled) return;
+        clearTimeout(timer);
+        if (!open) armTimeout();
+      };
+      hooks.abort = (reason) => {
+        if (settled) return;
+        entry.signInError = reason;
+        this.quietUntil.set(profile.id, Date.now() + this.promptQuietMs);
         this.#terminate(entry);
-      }, this.timeout);
-      timer.unref();
+      };
       child.once('error', (error) => finish(error));
       child.once('exit', (code, signal) => {
         if (entry.cancelled) return finish(new Error('Monitor snapshot was cancelled'));
+        if (entry.signInError) return finish(new Error(entry.signInError));
         if (entry.timedOut) return finish(new Error('Monitor snapshot timed out'));
         if (code !== 0) {
           const error = new Error(stderr.trim() || `Remote monitor exited with code ${code}${signal ? ` (${signal})` : ''}`);
@@ -75,6 +122,7 @@ class LiveMonitorService {
           finish(error);
           return;
         }
+        this.quietUntil.delete(profile.id);
         const sections = this.#parseSnapshot(stdout);
         finish(null, { id, exitCode: code, signal: signal || null, capturedAt: new Date().toISOString(), sections, ...sections });
       });

@@ -40,6 +40,9 @@ function hostsFieldMatches(field, token) {
 }
 
 function defaultKnownHostsFiles(profile = {}) {
+  // Set when the connection follows ~/.ssh/config: the user and global files
+  // OpenSSH itself would read for this host.
+  if (Array.isArray(profile.knownHostsFiles)) return profile.knownHostsFiles;
   const files = [];
   if (profile.knownHostsFile) files.push(profile.knownHostsFile.replace(/^~(?=$|\/)/u, os.homedir()));
   else files.push(path.join(os.homedir(), '.ssh', 'known_hosts'), path.join(os.homedir(), '.ssh', 'known_hosts2'));

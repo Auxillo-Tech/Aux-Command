@@ -41,6 +41,26 @@ test('creates, updates, exports and deletes profiles without exporting credentia
   }
 });
 
+test('the FTPS mode survives save, reload, export and import', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-profiles-'));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-profiles-'));
+  try {
+    const store = new ProfileStore(directory);
+    const created = store.save({ name: 'Hosting', protocol: 'ftps', host: 'ftp.example.com', port: 2121, ftpsMode: 'explicit' });
+    assert.equal(created.ftpsMode, 'explicit');
+    assert.equal(new ProfileStore(directory).get(created.id).ftpsMode, 'explicit');
+    const exported = JSON.parse(JSON.stringify(store.exportSafe()));
+    assert.equal(exported.profiles.find((profile) => profile.id === created.id).ftpsMode, 'explicit');
+    const target = new ProfileStore(other);
+    target.importSafe(exported);
+    assert.equal(target.list().find((profile) => profile.name === 'Hosting').ftpsMode, 'explicit');
+    assert.equal(new ProfileStore(other).list().find((profile) => profile.name === 'Hosting').ftpsMode, 'explicit');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test('protects the default local shell profile', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-profiles-'));
   try {
@@ -60,7 +80,7 @@ test('rejects invalid save input through normal validation', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-profiles-'));
   try {
     const store = new ProfileStore(directory);
-    assert.throws(() => store.save(null), /name is required/u);
+    assert.throws(() => store.save(null), /Name is required/u);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -213,8 +233,37 @@ test('bulk edits validate all connections before writing and preserve credential
  try{const store=new ProfileStore(directory);const a=store.save({name:'a',host:'a.invalid',credentialId:'vault-a'}),b=store.save({name:'b',host:'b.invalid',credentialId:'vault-b'});
  assert.throws(()=>store.bulkUpdate([a.id,'missing'],{group:'changed'}),/no longer exists/);assert.equal(store.get(a.id).group,'Connections');
  assert.throws(()=>store.bulkUpdate([a.id],{credentialId:'wrong'}),/Unsupported/);
- assert.throws(()=>store.bulkUpdate([a.id,b.id],{group:Array(40).fill('a').join('/')}),/group/);
+ assert.throws(()=>store.bulkUpdate([a.id,b.id],{group:Array(40).fill('a').join('/')}),/Group is too long/);
  store.bulkUpdate([a.id,b.id],{group:'Production/ Europe /DB',tags:['db'],favorite:true});
  for(const p of [a,b]){const updated=store.get(p.id);assert.equal(updated.credentialId,p.credentialId);assert.equal(updated.group,'Production / Europe / DB');assert.deepEqual(updated.tags,['db']);assert.equal(updated.favorite,true);}
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
+});
+
+test('SSH import reports entries with shell syntax in the alias or in the resolved user, and never alters them', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-profile-hostile-'));
+  t.mock.method(os, 'homedir', () => directory);
+  fs.mkdirSync(path.join(directory, '.ssh'));
+  try {
+    fs.writeFileSync(path.join(directory, '.ssh/config'), 'Host good\n  HostName server.example\n  User deploy\nHost semi;colon\n  HostName other.example\nHost viauser\n  HostName third.example\n  User plain\n');
+    const store = new ProfileStore(path.join(directory, 'data'), {
+      sshConfigFile: path.join(directory, '.ssh/config'),
+      resolveSsh: async (profile) => ({ hostname: [profile.host], port: ['22'], user: [profile.sshAlias === 'viauser' ? 'x$IFS-oProxyCommand=touch\\ /tmp/f' : 'deploy'] })
+    });
+    const result = await store.importSshConfig();
+    assert.equal(result.added, 1);
+    assert.deepEqual(result.skipped.map((entry) => entry.alias).sort(), ['semi;colon', 'viauser']);
+    assert.ok(result.skipped.every((entry) => typeof entry.reason === 'string' && entry.reason.length > 0));
+    assert.deepEqual(store.list().filter((p) => p.protocol === 'ssh').map((p) => p.sshAlias), ['good']);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('a saved profile that holds shell syntax is skipped at load, never altered, and cannot be saved', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-profile-legacy-'));
+  try {
+    const store = new ProfileStore(path.join(directory, 'data'));
+    store.store.update((data) => { data.profiles.push({ id: 'old', name: 'old', protocol: 'ssh', host: 'h.example', port: 22, username: 'x$IFS-oProxyCommand=touch\\ /tmp/f' }); return data; });
+    assert.equal(store.list().some((p) => p.id === 'old'), false);
+    assert.equal(store.store.get().profiles.find((p) => p.id === 'old').username, 'x$IFS-oProxyCommand=touch\\ /tmp/f');
+    assert.throws(() => store.save({ id: 'new', name: 'new', protocol: 'ssh', host: 'h.example', username: 'a;b' }), /Username cannot contain/u);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

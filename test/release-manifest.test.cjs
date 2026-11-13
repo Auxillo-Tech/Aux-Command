@@ -281,3 +281,120 @@ test('release verifier pins signed releases to an external full fingerprint', ()
 test('package exposes release verification script', () => {
   assert.equal(packageJson.scripts['release:verify'], 'AUX_COMMAND_GPG_FINGERPRINT=FAC028574B9C6875D10DA4DC6443E86108ABD2A2 node scripts/verify-release.cjs');
 });
+
+function writeTwoArchitectureRelease(directory, version = packageJson.version) {
+  const artifacts = writeVerifierArtifacts(directory, version);
+  const arm = {
+    [`Aux-Command-${version}-arm64.AppImage`]: 'arm64 appimage\n',
+    [`Aux-Command-${version}-arm64.deb`]: 'arm64 deb\n',
+    [`Aux-Command-${version}-aarch64.rpm`]: 'arm64 rpm\n',
+    'latest-linux-arm64.yml': 'version: arm64 fixture\n'
+  };
+  for (const [name, content] of Object.entries(arm)) fs.writeFileSync(path.join(directory, name), content);
+  return { ...artifacts, ...arm };
+}
+
+function runCli(script, directory, ...args) {
+  return spawnSync(process.execPath, [path.join(root, 'scripts', script), '--dist', directory, ...args], { encoding: 'utf8', timeout: 10000 });
+}
+
+test('release manifest records the architecture of every package, and only of packages', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-arch-'));
+  try {
+    const version = packageJson.version;
+    const written = writeTwoArchitectureRelease(directory);
+    const result = runCli('release-manifest.cjs', directory, '--version', version, '--no-sign');
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'release-manifest.json'), 'utf8'));
+    assert.deepEqual(manifest.artifacts.map((artifact) => artifact.name), Object.keys(written).sort((a, b) => a.localeCompare(b)));
+    const arch = Object.fromEntries(manifest.artifacts.map((artifact) => [artifact.name, artifact.arch]));
+    assert.deepEqual(arch, {
+      [`Aux-Command-${version}-x86_64.AppImage`]: 'x64',
+      [`Aux-Command-${version}-amd64.deb`]: 'x64',
+      [`Aux-Command-${version}-x86_64.rpm`]: 'x64',
+      [`Aux-Command-${version}-arm64.AppImage`]: 'arm64',
+      [`Aux-Command-${version}-arm64.deb`]: 'arm64',
+      [`Aux-Command-${version}-aarch64.rpm`]: 'arm64',
+      [`Aux-Command-${version}.tar.gz`]: undefined,
+      [`Aux-Command-${version}.zip`]: undefined,
+      [`aux-command-${version}-sbom.cdx.json`]: undefined,
+      'latest-linux.yml': undefined,
+      'latest-linux-arm64.yml': undefined
+    });
+    for (const artifact of manifest.artifacts) assert.equal('arch' in artifact, ['appimage', 'deb', 'rpm'].includes(artifact.kind), artifact.name);
+    assert.equal(manifest.artifacts.filter((artifact) => artifact.kind === 'updater-metadata').length, 2);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('release verifier can require complete x64 and arm64 package sets', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-require-arch-'));
+  try {
+    const version = packageJson.version;
+    writeTwoArchitectureRelease(directory);
+    const regenerate = () => assert.equal(runCli('release-manifest.cjs', directory, '--version', version, '--no-sign').status, 0);
+    const verify = (...args) => runCli('verify-release.cjs', directory, '--allow-unsigned', ...args);
+    regenerate();
+    assert.equal(verify().status, 0);
+    assert.equal(verify('--require-arch', 'x64,arm64').status, 0, verify('--require-arch', 'x64,arm64').stderr);
+    assert.notEqual(verify('--require-arch', 'x64,riscv64').status, 0);
+    assert.notEqual(verify('--require-arch').status, 0);
+
+    // Each missing arm64 file is named.
+    for (const [name, message] of [
+      [`Aux-Command-${version}-arm64.deb`, /exactly one arm64 deb package, found 0/u],
+      [`Aux-Command-${version}-aarch64.rpm`, /exactly one arm64 rpm package, found 0/u],
+      [`Aux-Command-${version}-arm64.AppImage`, /exactly one arm64 appimage package, found 0/u],
+      ['latest-linux-arm64.yml', /missing latest-linux-arm64\.yml for arm64/u]
+    ]) {
+      const saved = fs.readFileSync(path.join(directory, name));
+      fs.rmSync(path.join(directory, name));
+      regenerate();
+      assert.equal(verify().status, 0, 'a single-architecture release still verifies when nothing more is required');
+      assert.equal(verify('--require-arch', 'x64').status, 0);
+      const incomplete = verify('--require-arch', 'x64,arm64');
+      assert.notEqual(incomplete.status, 0);
+      assert.match(incomplete.stderr, message);
+      fs.writeFileSync(path.join(directory, name), saved);
+    }
+    // Two packages of one kind for one architecture are refused as well.
+    fs.writeFileSync(path.join(directory, `Aux-Command-${version}-aarch64.deb`), 'second arm64 deb\n');
+    regenerate();
+    assert.match(verify('--require-arch', 'x64,arm64').stderr, /exactly one arm64 deb package, found 2/u);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('release verifier accepts manifests without the arch field and rejects a false one', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aux-command-legacy-arch-'));
+  try {
+    const version = packageJson.version;
+    writeVerifierArtifacts(directory);
+    assert.equal(runCli('release-manifest.cjs', directory, '--version', version, '--no-sign').status, 0);
+    const manifestPath = path.join(directory, 'release-manifest.json');
+    const original = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const rewrite = (change) => {
+      const manifest = structuredClone(original);
+      change(manifest.artifacts);
+      fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      return runCli('verify-release.cjs', directory, '--allow-unsigned');
+    };
+    // The format written before releases had more than one architecture.
+    assert.equal(rewrite((artifacts) => { for (const artifact of artifacts) delete artifact.arch; }).status, 0);
+    const deb = (artifacts) => artifacts.find((artifact) => artifact.kind === 'deb');
+    for (const change of [
+      (artifacts) => { deb(artifacts).arch = 'arm64'; },
+      (artifacts) => { deb(artifacts).arch = ''; },
+      (artifacts) => { deb(artifacts).arch = 'amd64'; },
+      (artifacts) => { artifacts.find((artifact) => artifact.kind === 'updater-metadata').arch = 'x64'; }
+    ]) {
+      const result = rewrite(change);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /architecture does not match the file name/u);
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

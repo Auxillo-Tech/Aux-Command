@@ -53,7 +53,7 @@ Aux Command is currently a **Linux desktop application**.
 | Other modern x86_64 Linux desktops | Best effort | AppImage | Requires a graphical session and standard Electron/Linux desktop dependencies. |
 | Windows | Not supported | - | No Windows package is currently produced. |
 | macOS | Not supported | - | No macOS package is currently produced. |
-| Linux ARM64 | Not currently shipped | - | The code is not intentionally x86-only, but current release artifacts are x86_64 only. |
+| Linux ARM64 (aarch64) | Preview from 0.5.0 | `.deb`, `.rpm` or AppImage | Built and tested on GitHub's ARM64 runners (Ubuntu 24.04) alongside x86_64 and covered by the same signed release manifest. Not yet verified on physical ARM64 desktops. |
 
 Desktop environments expected to work include GNOME, KDE Plasma, Xfce, Cinnamon, and other modern X11/Wayland desktops with the normal Electron runtime stack. Wayland and X11 both require target-distro validation before a public production claim.
 
@@ -191,10 +191,11 @@ Install optional runtime tools with:
   server; nothing is ever sent anywhere unless you ask, the API key is stored
   encrypted in the vault, and replies are inserted into the terminal, never
   executed.
-- Localized interface: workspace controls and dialog catalogs are available in English, Deutsch,
-  Español, Français, Italiano, 日本語, Português, Русский and 中文, switchable
-  live from the status bar. Dialog translations are machine-assisted with manual
-  corrections; server/backend errors may retain their original language.
+- Localized interface: workspace controls, dialogs, notifications and sign-in
+  prompts are available in English, Deutsch, Español, Français, Italiano, 日本語,
+  Português, Русский and 中文, switchable live from the status bar. Dialog
+  translations are machine-assisted with manual corrections; text sent by a
+  server and most background error messages keep their original language.
 
 ### Workspace navigation and file browsing
 
@@ -221,6 +222,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
   output and shell-directory events, plus detected DNS/network/authentication
   errors. Unreported phases are not marked successful.
 - SSH agent support through the user's existing environment.
+- A password or key passphrase saved in the profile signs the terminal session in without being typed; it is handed to OpenSSH directly and never passes through the terminal or its transcript. Everything else OpenSSH asks (an unknown host key, a one-time code) is asked in the terminal as usual. Needs OpenSSH 8.7 or later on this computer; with an older client the terminal asks as before.
 - `~/.ssh/config` import and refresh support. Reimport resolves current OpenSSH settings, updates connection fields and preserves profile names, groups, saved credentials and appearance. Explicitly consolidated aliases remain consolidated on reimport.
 - Connection status uses the effective SSH destination. ProxyJump/ProxyCommand routes show an unknown status with an explanation; a direct TCP failure is not treated as proof that a routed server is offline.
 - Identity files.
@@ -272,7 +274,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 ### FTP / FTPS
 
 - FTP and FTPS file-browser profiles backed by `basic-ftp`.
-- FTPS uses encrypted TLS transport in both forms: implicit TLS on port 990 and explicit `AUTH TLS` on port 21 (the form most hosting providers use). On other ports the form is detected. The login is never sent unencrypted.
+- FTPS uses encrypted TLS transport in both forms: implicit TLS on port 990 and explicit `AUTH TLS` on port 21 (the form most hosting providers use). On other ports the form is detected. The login is never sent unencrypted. A profile's FTPS mode setting can force either form instead of the automatic choice.
 - Plain FTP is guarded by an explicit insecure-transport warning because credentials and file contents are not encrypted.
 - FTP/FTPS reuse the graphical file-browser operations for browse, upload, drag-and-drop upload, download, inline UTF-8 text edit, mkdir, rename, and delete.
 - Persistent FTP/FTPS secrets use the same encrypted Linux safe-storage checks as SFTP secrets.
@@ -284,7 +286,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 - Dynamic SOCKS forwards.
 - Evidence-based tunnel readiness using OpenSSH readiness behavior, not elapsed-time guessing.
 - Stop controls and lifecycle tracking.
-- Background tunnel runs use `BatchMode=yes`, so invisible password prompts do not hang in the background.
+- Tunnels sign in with the profile's saved password or key passphrase. Anything else OpenSSH asks (a one-time code, a password that is not saved, an unknown host key) appears as a dialog instead of failing in the background; cancelling it stops the tunnel at once. The live monitor and the remote-desktop gateway sign in the same way. The saved credential is used with OpenSSH 8.7 or later; with 8.4 to 8.6 it is asked for in the dialog instead, and older clients need SSH keys or an agent. A server that offers only keyboard-interactive login (PAM with `PasswordAuthentication no`) is asked about on the terminal or in a dialog instead of being answered from the saved credential: its question arrives as `(user@host) Password:`, text the server wrote, and an app that answered it could hand your password to a server or jump host that imitates the prompt. That is intended, not a fault.
 
 ### Protocol launchers and bridges
 
@@ -311,7 +313,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 - GitHub Releases update path wired through `electron-updater`.
 - Top-level Updates toolbar control plus diagnostics UI for update state and package behavior.
 - GitHub Actions Linux build pipeline.
-- AppImage, `.deb`, and `.rpm` package outputs for x86_64.
+- AppImage, `.deb`, and `.rpm` package outputs for x86_64 and ARM64.
 - CycloneDX SBOM generation.
 - Release manifest and SHA-256 checksum verification.
 - Source archive generation with dependency/build/cache directories excluded.
@@ -337,6 +339,7 @@ Key controls:
 - App pages load from a private `app://aux` origin and the embedded remote-desktop viewer from its own isolated origin.
 - Pasted text is stripped of control characters; multi-line and broadcast pastes are confirmed first.
 - SFTP secrets are stored persistently only when encrypted desktop safe storage is available.
+- Saved SSH passwords and passphrases reach OpenSSH through its askpass mechanism over a private per-process socket, never on a command line or in an environment variable. Only OpenSSH's own password and passphrase prompts for the profile are answered, once; a host key is never accepted without the user typing `yes`. Nothing saved is released to an OpenSSH older than 8.7, which cannot tell its own prompts from text sent by a server.
 - Profile exports exclude secret material.
 - Telnet and some VNC deployments are recognized as potentially unencrypted legacy paths.
 
@@ -381,6 +384,12 @@ Build x86_64 Linux packages without publishing:
 
 ```bash
 npm run dist:x64 -- --publish never
+```
+
+Build ARM64 packages without publishing (on ARM64, or cross-built on x86_64; no cross compiler is needed):
+
+```bash
+npm run dist:arm64 -- --publish never
 ```
 
 The Fedora build wrapper handles common local packaging gaps by downloading build helpers under the ignored `.cache/` directory instead of installing system packages automatically.
