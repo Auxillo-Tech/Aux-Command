@@ -4,7 +4,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
   <name>Aux Command</name>
-  <summary>Linux-native remote operations workstation</summary>
+  <summary>Remote operations workstation</summary>
   <developer id="tech.auxillo">
     <name>Auxillo</name>
   </developer>
@@ -12,27 +12,46 @@
     <p>
       Aux Command is a Linux-native remote operations workstation. It brings
       SSH, SFTP, FTP/FTPS, SSH tunnels, RDP, VNC, Mosh, Telnet, serial consoles
-      and local shells together in one polished workspace without hiding the
-      Linux tools you already trust.
+      and local shells together in one workspace without hiding the Linux
+      tools you already trust.
     </p>
     <p>Highlights:</p>
     <ul>
-      <li>Real PTY terminals for local, SSH, Mosh, Telnet and serial sessions</li>
+      <li>Real PTY terminals for SSH, Telnet and serial sessions</li>
       <li>Graphical SFTP with drag-and-drop, inline editing and a resumable transfer queue</li>
-      <li>Embedded VNC and embedded RDP tabs, with native-client fallback</li>
       <li>Local, remote and dynamic SSH tunnels with live status</li>
       <li>Keyword highlighting for log triage and per-connection reachability</li>
       <li>Encrypted credential vault, host-key verification and profile import/export</li>
     </ul>
+    <p>
+      In the Flatpak version, RDP, VNC, Mosh and the network lookup tools use
+      programs that are not part of the sandbox, so those features are limited
+      there, and local shells open inside the sandbox rather than on the host.
+      SSH, SFTP, FTP, tunnels, Telnet and serial work fully.
+    </p>
   </description>
   <launchable type="desktop-id">tech.auxillo.command.desktop</launchable>
   <url type="homepage">https://auxillo.tech</url>
   <url type="bugtracker">https://github.com/Auxillo-Tech/Aux-Command/issues</url>
   <url type="vcs-browser">https://github.com/Auxillo-Tech/Aux-Command</url>
+  <url type="contact">https://auxillo.tech</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Welcome screen</caption>
+      <image type="source" width="3200" height="2000">https://raw.githubusercontent.com/Auxillo-Tech/Aux-Command/v0.4.0/website/screenshots/01-welcome.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Tiled terminals with keyword highlighting</caption>
+      <image type="source" width="3200" height="2000">https://raw.githubusercontent.com/Auxillo-Tech/Aux-Command/v0.4.0/website/screenshots/02-tiled-highlight.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Command palette</caption>
+      <image type="source" width="3200" height="2000">https://raw.githubusercontent.com/Auxillo-Tech/Aux-Command/v0.4.0/website/screenshots/03-palette.png</image>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
   <categories>
     <category>Network</category>
-    <category>System</category>
   </categories>
   <keywords>
     <keyword>ssh</keyword>
@@ -44,8 +63,22 @@
     <keyword>tunnel</keyword>
     <keyword>serial</keyword>
   </keywords>
+  <provides>
+    <binary>aux-command</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <releases>
-    <release version="0.5.0" date="2026-10-14">
+    <!-- 0.5.0 is not released yet (CHANGELOG.md says RELEASE-DATE-TBD), so this
+         entry is marked as a development release and its date is a stand-in.
+         When v0.5.0 is tagged, remove type="development" and set the real
+         publication date. -->
+    <release version="0.5.0" type="development" date="2026-10-14">
       <description>
         <p>Linux-style terminal copy and paste, draggable and renamable tabs, a colour per connection, terminal zoom, RDP certificate confirmation and pinning, SFTP that honours OpenSSH known_hosts, safer paste and sync, and many fixes across tunnels, file transfer, workspaces and translations.</p>
       </description>

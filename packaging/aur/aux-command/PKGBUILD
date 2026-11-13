@@ -1,5 +1,7 @@
 # Maintainer: Auxillo <https://auxillo.tech>
 # From-source AUR package: builds the unpacked Electron app with electron-builder.
+# pkgver follows the source tag. The build downloads npm packages and the
+# Electron binary, so it needs network access while makepkg runs.
 pkgname=aux-command
 pkgver=0.5.0
 pkgrel=1
@@ -7,8 +9,11 @@ pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels,
 arch=('x86_64')
 url="https://auxillo.tech"
 license=('AGPL-3.0-or-later')
-depends=('openssh' 'python')
-makedepends=('nodejs>=22' 'npm' 'git')
+# openssh and python are what the application runs; the rest are the system
+# libraries the bundled Electron needs (a clean Arch install has none of them).
+depends=('openssh' 'python' 'alsa-lib' 'cairo' 'dbus' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libcups' 'libxkbcommon' 'mesa' 'nss' 'pango')
+# Node 22 LTS, the version the project is built and tested with.
+makedepends=('nodejs-lts-jod' 'npm' 'git')
 optdepends=(
   'freerdp: RDP sessions (native and embedded)'
   'tigervnc: external VNC viewer fallback'
@@ -20,32 +25,40 @@ optdepends=(
 )
 provides=('aux-command')
 conflicts=('aux-command-bin')
-options=('!strip')
+options=('!strip' '!debug')
 source=("git+https://github.com/Auxillo-Tech/Aux-Command.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 
 build() {
   cd "Aux-Command"
-  npm ci
+  # Arch's npm 12 skips dependency install scripts unless they are approved;
+  # the native modules (cpu-features, ssh2) need theirs. The lockfile pins
+  # every dependency, so this matches the behaviour of earlier npm versions.
+  npm ci --dangerously-allow-all-scripts
   # Unpacked directory build; the AUR package installs the resulting tree.
   npm run pack
 }
 
 check() {
   cd "Aux-Command"
-  npm run check || true
+  npm run check
 }
 
 package() {
   cd "Aux-Command"
   install -dm755 "${pkgdir}/opt/${pkgname}"
   cp -a dist/linux-unpacked/. "${pkgdir}/opt/${pkgname}/"
+  chmod -R u+rwX,go+rX,go-w,g-s "${pkgdir}/opt/${pkgname}"
+  # Chromium's setuid sandbox helper must be root-owned and setuid.
+  chmod 4755 "${pkgdir}/opt/${pkgname}/chrome-sandbox"
 
   install -dm755 "${pkgdir}/usr/bin"
   ln -s "/opt/${pkgname}/aux-command" "${pkgdir}/usr/bin/aux-command"
 
   install -Dm644 "packaging/flatpak/tech.auxillo.command.desktop" \
     "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
+  install -Dm644 "packaging/flatpak/tech.auxillo.command.metainfo.xml" \
+    "${pkgdir}/usr/share/metainfo/tech.auxillo.command.metainfo.xml"
   for size in 16 24 32 48 64 96 128 256 512; do
     install -Dm644 "build/icons/${size}x${size}.png" \
       "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/tech.auxillo.command.png"

@@ -1,49 +1,68 @@
 # Flatpak manifest for Aux Command.
 #
-# This wraps the released x86_64 AppImage so the Flatpak build does not need a
-# full Node/Electron toolchain. Update `url` and `sha256` for each release
-# (scripts/release-manifest.cjs prints the AppImage SHA-256), then build with:
+# This repackages the released x86_64 AppImage on top of the Electron base app,
+# so the Flatpak build needs no Node or Electron toolchain. The AppImage is
+# unpacked at build time (no FUSE needed) and run through zypak, which keeps
+# Chromium's own sandbox working inside the Flatpak sandbox.
+#
+# Pinning: the committed pin is the latest PUBLISHED release (the same pin the
+# AUR binary package carries; docs/RELEASE_STATUS.md says which). When 0.5.0 is
+# published, change `url` and `sha256` below to the 0.5.0 asset and its
+# SHA-256 (packaging/README.md lists the exact values to replace).
+#
+# Local build, from the repository root:
 #
 #   flatpak-builder --user --install --force-clean build-dir \
 #     packaging/flatpak/tech.auxillo.command.yml
 #
-# Submission to Flathub uses this same manifest with a pinned release URL.
+# Flathub submission uses this manifest, the .desktop file and the metainfo
+# file from this directory, with a pinned release URL.
 app-id: tech.auxillo.command
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 base: org.electronjs.Electron2.BaseApp
-base-version: '23.08'
+base-version: '26.08'
 command: aux-command
 separate-locales: false
 
 finish-args:
   - --share=ipc
   - --share=network
-  - --socket=x11
   - --socket=wayland
-  - --socket=pulseaudio
-  - --device=dri
+  - --socket=fallback-x11
+  # The credential vault uses the desktop Secret Service through Electron
+  # safeStorage; without it credentials stay in memory only.
+  - --talk-name=org.freedesktop.secrets
   # Serial consoles need access to TTY character devices.
   - --device=all
-  # Aux Command reads the user's SSH configuration and identities.
+  # SSH client configuration, keys and known_hosts, and the agent socket.
   - --filesystem=~/.ssh
+  - --socket=ssh-auth
+  # Default location for SFTP/FTP downloads. Other files go through the file
+  # chooser portal.
   - --filesystem=xdg-download
-  - --filesystem=host
-  - --talk-name=org.freedesktop.secrets
-  - --talk-name=org.kde.kwalletd5
-  - --env=TMPDIR=/var/tmp
 
 modules:
   - name: aux-command
     buildsystem: simple
     build-commands:
-      - install -Dm755 apprun.sh /app/bin/aux-command
+      - chmod +x Aux-Command.AppImage
+      - ./Aux-Command.AppImage --appimage-extract
+      - install -d /app/aux-command
+      - cp -a squashfs-root/. /app/aux-command/
+      # The AppImage launcher, its desktop entry and the SUID helper are not
+      # used: zypak provides the sandbox and Flatpak provides the launcher.
+      - rm -f /app/aux-command/AppRun /app/aux-command/aux-command.desktop /app/aux-command/.DirIcon /app/aux-command/aux-command.png /app/aux-command/chrome-sandbox
+      - install -Dm755 aux-command.sh /app/bin/aux-command
       - install -Dm644 tech.auxillo.command.desktop /app/share/applications/tech.auxillo.command.desktop
       - install -Dm644 tech.auxillo.command.metainfo.xml /app/share/metainfo/tech.auxillo.command.metainfo.xml
-      - install -Dm644 icon-256.png /app/share/icons/hicolor/256x256/apps/tech.auxillo.command.png
-      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/tech.auxillo.command.png
-      - install -Dm755 Aux-Command.AppImage /app/extra/Aux-Command.AppImage
+      - |
+        for size in 16 32 48 64 128 256 512; do
+          icon="squashfs-root/usr/share/icons/hicolor/${size}x${size}/apps/aux-command.png"
+          [ -f "$icon" ] && install -Dm644 "$icon" "/app/share/icons/hicolor/${size}x${size}/apps/tech.auxillo.command.png"
+        done
+        true
     sources:
       - type: file
         # Published binary pin is independent of the source version.
@@ -52,18 +71,13 @@ modules:
         dest-filename: Aux-Command.AppImage
         only-arches: [x86_64]
       - type: script
-        dest-filename: apprun.sh
+        dest-filename: aux-command.sh
         commands:
           - '#!/bin/sh'
-          # --appimage-extract-and-run avoids needing FUSE inside the sandbox.
-          - exec /app/extra/Aux-Command.AppImage --appimage-extract-and-run "$@"
+          - export TMPDIR="$XDG_RUNTIME_DIR/app/$FLATPAK_ID"
+          - mkdir -p "$TMPDIR"
+          - exec zypak-wrapper /app/aux-command/aux-command "$@"
       - type: file
         path: tech.auxillo.command.desktop
       - type: file
         path: tech.auxillo.command.metainfo.xml
-      - type: file
-        path: ../../build/icons/256x256.png
-        dest-filename: icon-256.png
-      - type: file
-        path: ../../build/icons/512x512.png
-        dest-filename: icon-512.png

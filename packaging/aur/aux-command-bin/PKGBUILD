@@ -1,5 +1,7 @@
 # Maintainer: Auxillo <https://auxillo.tech>
-# Binary AUR package: repackages the released x86_64 AppImage.
+# Binary AUR package: repackages the released x86_64 AppImage (unpacked, so it
+# needs no FUSE). pkgver is the latest PUBLISHED release; see packaging/README.md
+# for the values to change when a new release is published.
 pkgname=aux-command-bin
 _appname='Aux Command'
 pkgver=0.4.0
@@ -8,7 +10,9 @@ pkgdesc="Linux-native remote operations workstation for SSH, SFTP, FTP, tunnels,
 arch=('x86_64')
 url="https://auxillo.tech"
 license=('AGPL-3.0-or-later')
-depends=('openssh' 'python' 'fuse2')
+# openssh and python are what the application runs; the rest are the system
+# libraries the bundled Electron needs (a clean Arch install has none of them).
+depends=('openssh' 'python' 'alsa-lib' 'cairo' 'dbus' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libcups' 'libxkbcommon' 'mesa' 'nss' 'pango')
 optdepends=(
   'freerdp: RDP sessions (native and embedded)'
   'tigervnc: external VNC viewer fallback'
@@ -20,7 +24,7 @@ optdepends=(
 )
 provides=('aux-command')
 conflicts=('aux-command')
-options=('!strip')
+options=('!strip' '!debug')
 source=("https://github.com/Auxillo-Tech/Aux-Command/releases/download/v${pkgver}/Aux-Command-${pkgver}-x86_64.AppImage")
 # Published AppImage pin; independent of the development source version.
 sha256sums=('8cde5ab68c9186ffe52d86eedb6525b1f1a1cb3bad15f3f0c886ceda9ddd044a')
@@ -33,20 +37,38 @@ prepare() {
 package() {
   install -dm755 "${pkgdir}/opt/${pkgname}"
   cp -a squashfs-root/. "${pkgdir}/opt/${pkgname}/"
+  # AppImage extraction leaves the tree owner-only (0700); make it readable.
+  chmod -R u+rwX,go+rX,go-w,g-s "${pkgdir}/opt/${pkgname}"
+  # The AppImage launcher, its desktop entry and its top-level icon links are
+  # not used: the desktop entry below starts the program directly.
+  rm -f "${pkgdir}/opt/${pkgname}/AppRun" \
+    "${pkgdir}/opt/${pkgname}/aux-command.desktop" \
+    "${pkgdir}/opt/${pkgname}/.DirIcon" \
+    "${pkgdir}/opt/${pkgname}/aux-command.png"
+  # Chromium's setuid sandbox helper must be root-owned and setuid.
+  chmod 4755 "${pkgdir}/opt/${pkgname}/chrome-sandbox"
 
   install -dm755 "${pkgdir}/usr/bin"
-  ln -s "/opt/${pkgname}/AppRun" "${pkgdir}/usr/bin/aux-command"
+  ln -s "/opt/${pkgname}/aux-command" "${pkgdir}/usr/bin/aux-command"
 
-  # Desktop entry and icons from the extracted AppImage.
-  if [ -f "squashfs-root/aux-command.desktop" ]; then
-    install -Dm644 "squashfs-root/aux-command.desktop" \
-      "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
-    sed -i "s|^Exec=.*|Exec=aux-command %U|" \
-      "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop"
-  fi
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/tech.auxillo.command.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Aux Command
+GenericName=Remote Operations Workstation
+Comment=SSH, SFTP, FTP, tunnels, RDP, VNC, Mosh, Telnet and serial from one Linux workspace
+Exec=aux-command %U
+Icon=tech.auxillo.command
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=ssh;sftp;ftp;terminal;rdp;vnc;mosh;tunnel;serial;telnet;
+StartupWMClass=aux-command
+StartupNotify=true
+EOF
   for size in 16 32 48 64 128 256 512; do
-    icon=$(find squashfs-root -path "*/${size}x${size}/*aux-command.png" -o -path "*/${size}x${size}/*command.png" 2>/dev/null | head -1)
-    [ -n "$icon" ] && install -Dm644 "$icon" \
+    icon="squashfs-root/usr/share/icons/hicolor/${size}x${size}/apps/aux-command.png"
+    [ -f "$icon" ] || continue
+    install -Dm644 "$icon" \
       "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/tech.auxillo.command.png"
   done
 }
