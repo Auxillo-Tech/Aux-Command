@@ -163,16 +163,22 @@ frame() {
   cat "$1" "$2"
   [ -z "${3:-}" ] || cat "$3"
 }
-# manifest FILE PACKAGE FINGERPRINT [VERSION] [NAME_VERSION]: the manifest scripts/release-manifest.cjs would write.
+# The Node architecture name release-manifest.cjs writes for this machine's package spelling.
+case "$arch_spelling" in
+  amd64|x86_64) node_arch=x64 ;;
+  arm64|aarch64) node_arch=arm64 ;;
+  *) echo "no Aux Command package for $arch_spelling" >&2; exit 1 ;;
+esac
+# manifest FILE PACKAGE FINGERPRINT [VERSION]: the manifest scripts/release-manifest.cjs would write.
 manifest() {
-  python3 - "$@" "$kind" "$arch_spelling" <<'PY'
+  python3 - "$@" "$kind" "$arch_spelling" "$node_arch" <<'PY'
 import hashlib, json, sys
-out, package, fingerprint, version, kind, spelling = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[-2], sys.argv[-1]
+out, package, fingerprint, version, kind, spelling, node_arch = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[-3], sys.argv[-2], sys.argv[-1]
 data = open(package, 'rb').read()
 json.dump({
     'productName': 'Aux Command', 'packageName': 'aux-command', 'version': version,
     'signing': {'status': 'signed-detached-gpg', 'key': fingerprint},
-    'artifacts': [{'name': f'Aux-Command-{version}-{spelling}.{kind}', 'kind': kind, 'arch': 'x64',
+    'artifacts': [{'name': f'Aux-Command-{version}-{spelling}.{kind}', 'kind': kind, 'arch': node_arch,
                    'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}],
 }, open(out, 'w'))
 PY

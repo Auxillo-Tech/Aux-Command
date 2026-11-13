@@ -32,7 +32,7 @@ No Windows or macOS release package is currently produced.
 | Ubuntu LTS | `.deb` | AppImage |
 | Debian 12+ | `.deb` | AppImage |
 | RHEL / Rocky / AlmaLinux | `.rpm` | AppImage |
-| openSUSE | `.rpm` | AppImage |
+| openSUSE | AppImage (the `.rpm` is not supported in 0.5.0) | - |
 | Arch / EndeavourOS / Manjaro | AppImage | Source build |
 | Other modern x86_64 Linux desktops | AppImage | Source build |
 
@@ -169,18 +169,7 @@ Some enterprise images may require enabling the appropriate desktop, EPEL, or op
 
 ## openSUSE installation
 
-Expected target family: openSUSE Leap/Tumbleweed x86_64.
-
-```bash
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
-aux-command
-```
-
-Optional tools:
-
-```bash
-sudo zypper install python3 openssh-clients mosh freerdp tigervnc
-```
+The `.rpm` cannot be installed on openSUSE Leap or Tumbleweed in 0.5.0: its `gnupg2` dependency has no match there (the package is called `gpg2`), and on Leap 15.6 `mesa-libgbm` has none either. Use the AppImage instead.
 
 ---
 
@@ -291,7 +280,7 @@ For unsigned engineering releases, checksums detect corruption but do not authen
 Use **Updates** in the application (status bar or command palette), then **Check for updates**, **Download update** and **Restart and install**.
 
 - **AppImage:** the application replaces its own file after checking it against the signed release manifest. The previous version is kept for **Restore previous version**.
-- **deb and rpm:** the application downloads the package for your install, checks its size and SHA-256 against the signed release manifest, and installs it through your desktop's administrator prompt (`pkexec`), then restarts. You type your password once; no terminal is needed. The prompt runs only the update helper that the package installs at `/usr/lib/aux-command/update-helper` (root-owned, with the polkit action `tech.auxillo.command.install-update`), and that helper installs nothing that is not the signed, newer Aux Command package: it never downgrades. If `pkexec` is not installed, or the helper is missing, install the new package with your package manager as before.
+- **deb and rpm:** the application downloads the package for your install, checks its size and SHA-256 against the signed release manifest, and installs it through your desktop's administrator prompt (`pkexec`), then restarts. You type your password once; no terminal is needed. The prompt runs only the update helper that the package installs at `/usr/lib/aux-command/update-helper` (root-owned, with the polkit action `tech.auxillo.command.install-update`), and that helper installs nothing that is not the signed, newer Aux Command package: it never downgrades. If `pkexec` is not installed, or the helper is missing, install the new package with your package manager as before. The helper first arrives with 0.5.0, so a 0.4.0 deb or rpm install moves to 0.5.0 through the package manager and the one-click update works from 0.5.0 onwards. So far the helper is proven by automated tests on Debian 12, Ubuntu 24.04 and Fedora 44 and by review runs through real `pkexec` and polkitd in containers; a real desktop administrator prompt (GNOME or KDE) has not been tested yet.
 
 Every update is verified against the OpenPGP-signed manifest with the release signing key bundled in the application before anything is installed.
 

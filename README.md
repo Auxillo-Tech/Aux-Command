@@ -48,7 +48,7 @@ Aux Command is currently a **Linux desktop application**.
 | Ubuntu LTS x86_64 | Supported engineering target | `.deb` or AppImage | CI builds on Ubuntu 24.04. Runtime tools install through `apt`. |
 | Debian 12+ x86_64 | Expected supported | `.deb` or AppImage | Uses the Debian package dependency model; verify on the target desktop before production rollout. |
 | RHEL / Rocky / AlmaLinux x86_64 | Expected supported | `.rpm` or AppImage | Requires modern desktop libraries and OpenSSH/Python runtime packages. |
-| openSUSE x86_64 | Expected supported | `.rpm` or AppImage | Runtime tools install through `zypper`; validate package policy locally. |
+| openSUSE x86_64 | AppImage only in 0.5.0 | AppImage | The `.rpm` cannot be installed on openSUSE in 0.5.0: its `gnupg2` dependency has no match there (the package is called `gpg2`), and on Leap 15.6 `mesa-libgbm` has none either. |
 | Arch Linux / EndeavourOS / Manjaro x86_64 | Source/AppImage path | AppImage or source | No native pacman package is produced yet; runtime tools install through `pacman`. |
 | Other modern x86_64 Linux desktops | Best effort | AppImage | Requires a graphical session and standard Electron/Linux desktop dependencies. |
 | Windows | Not supported | - | No Windows package is currently produced. |
@@ -91,7 +91,7 @@ The Debian package declares the core runtime dependencies:
 - `python3`
 - `openssh-client`
 
-### Fedora / RHEL / Rocky / AlmaLinux / openSUSE
+### Fedora / RHEL / Rocky / AlmaLinux
 
 Fedora / RHEL-style systems:
 
@@ -100,12 +100,7 @@ sudo dnf install ./Aux-Command-0.5.0-x86_64.rpm
 aux-command
 ```
 
-openSUSE-style systems:
-
-```bash
-sudo zypper install ./Aux-Command-0.5.0-x86_64.rpm
-aux-command
-```
+openSUSE: the `.rpm` is not supported in 0.5.0 (see the support table); use the AppImage.
 
 The RPM declares the core runtime dependencies:
 
@@ -227,7 +222,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 - Connection status uses the effective SSH destination. ProxyJump/ProxyCommand routes show an unknown status with an explanation; a direct TCP failure is not treated as proof that a routed server is offline.
 - Identity files.
 - Advanced per-profile OpenSSH known-hosts-file override for isolated lab or fixture profiles.
-- ProxyJump support.
+- ProxyJump support. Host, user, SSH alias and jump-host names that contain shell characters are refused; write a Windows domain user as `user@domain`, not `DOMAIN\user`. A saved profile that fails these checks stays in the list, marked with what to change, and can be edited or deleted.
 - Compression, keepalive, X11 forwarding, and agent forwarding controls.
 - Literal remote startup commands passed safely as OpenSSH arguments.
 - Optional SSH working-directory tracking in the profile editor uses Bash 5.1+
@@ -242,6 +237,7 @@ its descendants. Searches cover all profiles, including rows not rendered yet.
 - Graphical SFTP browser backed by `ssh2`.
 - Explicit host-key fingerprint confirmation; a server OpenSSH knows under a different key is reported as changed.
 - Signs in like OpenSSH: SSH agent, the profile's key or the standard `~/.ssh` keys, then a saved or typed password. A passphrase-protected key asks for its passphrase.
+- For profiles that use `~/.ssh/config`, the file panel follows it the way the terminal does (aliases, keys, ProxyJump, ProxyCommand, known hosts). If the configuration cannot be read the connection stops with a message; only a missing `ssh` falls back to the profile's own fields.
 - Upload, drag-and-drop upload, download, inline UTF-8 text file view/edit, folder creation, rename, and delete operations.
 - Two-pane local/remote browsing supports selected files and recursive folders,
   including empty folders, with review before upload/download. Existing folders
@@ -408,7 +404,10 @@ Still open for broader product qualification:
 
 - live qualification across representative SSH/SFTP/tunnel/Mosh/RDP/VNC/X11/serial environments;
 - assistive-technology coverage with a real screen reader;
-- broader Wayland/X11, desktop-environment, high-DPI, and multi-monitor coverage.
+- broader Wayland/X11, desktop-environment, high-DPI, and multi-monitor coverage;
+- the deb/rpm one-click update through a real desktop administrator prompt and from a real newer signed release (first possible from 0.5.0 to the next release);
+- the ARM64 packages on physical ARM64 hardware;
+- an rpm that installs on openSUSE (0.5.0 users there need the AppImage).
 
 Artifact trust path: GPG-signed release manifests and checksums (fingerprint in `SIGNING_KEY.asc`). GitHub artifact attestations may be enabled when the org/plan supports them; they are optional and do not replace Auxillo GPG verification.
 
