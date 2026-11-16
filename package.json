@@ -34,7 +34,7 @@
     "electron-updater": "6.8.11",
     "openpgp": "6.3.2",
     "ssh2": "1.17.0",
-    "ws": "^8.22.2"
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@electron/fuses": "2.1.3",
